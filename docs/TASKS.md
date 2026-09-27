@@ -24,6 +24,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | P1-03     | Implementar domínio e adaptadores Alfa/Beta                      | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                            |
 | FIX-01    | Estabilizar validação e limites de REVIEW-01                     | concluída                      | Claude      | REVIEW-01; sete achados corrigidos com regressão; libera P1-04          |
 | FIX-02    | Verificação pós-FIX-01: vazamento de origem e notações sem teste | concluída                      | Claude      | Dois defeitos corrigidos; notação por campo fica para decisão           |
+| FIX-03    | Fechar riscos residuais de REVIEW-02 e REVIEW-03                 | em andamento                   | Claude      | Amplificação por expoente, identidade no domínio, glob de teste         |
 | P1-04     | Integrar API, conferência e relatório paginado                   | aguardando                     | —           | P1-02; P1-03 e FIX-01 concluídas; combinar responsabilidade por arquivo |
 | P1-05     | Validar desafio e registrar marco parte-1                        | aguardando                     | —           | P1-04; persistência, concorrência, precisão e paginação                 |
 | P2-01     | Integrar Gama/Delta e documentar mudanças                        | aguardando                     | —           | P1-05                                                                   |
@@ -184,3 +185,11 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: passada adversarial sobre o que FIX-01 entregou, com cobertura medida. Dois defeitos encontrados nos leitores e as notações que Alfa e Beta não exercitam. Sem mudança de contrato.
 - Dependências: FIX-01. Não toca `src/domain/`, `package.json` nem arquivos de P1-02.
 - Evidência: [handoff FIX-02](handoffs/FIX-02-claude.md); `npm run check` verde com 86 testes; cobertura 98,07% de linhas e 87,11% de branches. Um problema de contrato ficou registrado sem correção: `numberFormat` é único por cliente e o Gama não cabe nisso.
+
+## FIX-03 — riscos residuais de REVIEW-02 e REVIEW-03
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `src/domain/{decimal,schemas,conference-rules}.ts`, `src/infrastructure/integrations/field-parsers.ts`, `package.json` (só o script `test`), `docs/STATUS.md`, `tests/*.test.ts`, `docs/TASKS.md`, `docs/handoffs/FIX-03-claude.md`.
+- Escopo: os defeitos inequívocos dos dois reviews — amplificação por expoente antes do schema, identidade de fornecedor comparada com leniência no domínio, máscara híbrida de CNPJ, `isoInstantSchema` só sintático, e o glob de teste que ignora subpastas em silêncio. **Não** resolve o que exige decisão: notação por campo, teto de memória do Beta, `query_timeout` e lint type-aware.
+- Dependências: REVIEW-02, REVIEW-03. `package.json` volta a ficar reservado; P1-02 deve aguardar ou alinhar antes de mexer nele.
