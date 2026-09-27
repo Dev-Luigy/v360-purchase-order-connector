@@ -37,6 +37,55 @@ export type NumberFormat =
   | 'cents';
 
 /**
+ * Onde cada campo do contrato mora no vocabulário do cliente. Caminho com
+ * ponto navega objeto aninhado (`vendor.tax_id`); em CSV é o nome da coluna.
+ *
+ * Isto é rótulo, não estrutura, e por isso mora no perfil (ADR-008): o Delta
+ * usa exatamente os mesmos nomes do Alfa e só muda a forma de entrega, então
+ * um cliente novo em forma conhecida precisa de perfil novo, não de código.
+ */
+export interface OrderFieldMap {
+  readonly externalNumber: string;
+  readonly issuedOn: string;
+  readonly status: string;
+  /** `null` quando o cliente não envia moeda; vale então `assumedCurrency`. */
+  readonly currency: string | null;
+  readonly supplierTaxId: string;
+  readonly supplierName: string;
+}
+
+export interface ItemFieldMap {
+  /** Onde o item diz a que pedido pertence. `null` quando já vem aninhado. */
+  readonly orderNumber: string | null;
+  readonly externalLine: string;
+  readonly material: string;
+  readonly description: string;
+  readonly purchaseUnit: string;
+  readonly quantityOrdered: string;
+  readonly quantityReceived: string;
+  readonly unitPrice: string;
+  /** `null` quando o cliente não trabalha com caixa: o fator é 1. */
+  readonly conversionFactor: string | null;
+  /** `null` quando a linha não tem data própria, como no Alfa e no Beta. */
+  readonly lineCreatedOn: string | null;
+}
+
+export interface ClientFieldMap {
+  /**
+   * Chave do array de pedidos dentro da parte. `null` quando a parte já é o
+   * array na raiz, ou quando a forma não é JSON.
+   */
+  readonly ordersArray: string | null;
+  /**
+   * Onde estão os itens: caminho dentro do pedido quando aninhados, chave da
+   * parte de itens quando separados, `null` quando a forma não é JSON.
+   */
+  readonly itemsArray: string | null;
+  readonly order: OrderFieldMap;
+  readonly item: ItemFieldMap;
+}
+
+/**
  * Perfil de integração de um cliente: tudo que é rótulo, e não estrutura.
  * Cliente novo em forma de entrega conhecida vira um perfil novo, sem código
  * novo (ADR-008).
@@ -71,4 +120,6 @@ export interface ClientProfile {
     readonly delimiter: string;
     readonly encoding: 'utf-8' | 'windows-1252';
   } | null;
+  /** Onde cada campo do contrato mora no vocabulário deste cliente. */
+  readonly fields: ClientFieldMap;
 }

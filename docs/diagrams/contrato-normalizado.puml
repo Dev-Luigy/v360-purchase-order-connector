@@ -51,6 +51,36 @@ package "Perfil do cliente — o que e rotulo, nao estrutura" as pkgPerfil {
     +assumedCurrency : CurrencyCode | null
     +statusVocabulary : Record<string, PurchaseOrderStatus>
     +csv : CsvOptions | null
+    +fields : ClientFieldMap
+  }
+
+  interface ClientFieldMap {
+    +ordersArray : string | null
+    +itemsArray : string | null
+    +order : OrderFieldMap
+    +item : ItemFieldMap
+  }
+
+  interface OrderFieldMap {
+    +externalNumber : string
+    +issuedOn : string
+    +status : string
+    +currency : string | null
+    +supplierTaxId : string
+    +supplierName : string
+  }
+
+  interface ItemFieldMap {
+    +orderNumber : string | null
+    +externalLine : string
+    +material : string
+    +description : string
+    +purchaseUnit : string
+    +quantityOrdered : string
+    +quantityReceived : string
+    +unitPrice : string
+    +conversionFactor : string | null
+    +lineCreatedOn : string | null
   }
 
   interface CsvOptions {
@@ -244,6 +274,9 @@ ClientProfile --> DeliveryFormat : deliveryFormat
 ClientProfile --> DateFormat : dateFormat
 ClientProfile --> NumberFormat : numberFormat
 ClientProfile "1" *-- "0..1" CsvOptions : csv
+ClientProfile "1" *-- "1" ClientFieldMap : fields
+ClientFieldMap "1" *-- "1" OrderFieldMap : order
+ClientFieldMap "1" *-- "1" ItemFieldMap : item
 ClientProfile ..> PurchaseOrderStatus : statusVocabulary\ntraduz para
 
 ' ---------- entrada ----------
@@ -299,6 +332,14 @@ note bottom of InvoiceLine
   quantity sempre em unidade de consumo:
   fornecedor nao fatura em caixa. A conversao
   contra purchaseUnit e do dominio. ADR-007.
+end note
+
+note right of ClientFieldMap
+  Onde cada campo do contrato mora no vocabulario do
+  cliente: caminho com ponto no JSON, nome de coluna
+  no CSV. E rotulo, nao estrutura, e por isso esta no
+  perfil: o Delta usa os mesmos nomes do Alfa e so
+  muda a forma de entrega. ADR-008.
 end note
 
 note bottom of ConferenceRecord
