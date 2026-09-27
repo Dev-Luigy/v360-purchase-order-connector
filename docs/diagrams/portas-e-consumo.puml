@@ -1,0 +1,164 @@
+@startuml portas-e-consumo
+' Portas da aplicacao (P1-01) e quem produz ou consome cada objeto do contrato.
+' Fonte da verdade: src/application/ports/**. Decisoes: ADR-008, ADR-009, ADR-010.
+' Os objetos de dados estao detalhados em contrato-normalizado.puml; aqui sao so referencias.
+
+title Portas e consumo — quem produz e quem consome cada objeto
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 12
+skinparam packageStyle rectangle
+skinparam ArrowColor #45526B
+skinparam class {
+  BackgroundColor #FCFDFE
+  BorderColor #45526B
+  HeaderBackgroundColor #E7EDF4
+}
+skinparam package {
+  BackgroundColor #F7F9FB
+  BorderColor #A9B4C4
+}
+hide circle
+hide empty members
+
+package "Portas — src/application/ports" as pkgPortas {
+
+  interface ClientProfiles <<porta>> {
+    +find(clientId) : ClientProfile | null
+    +list() : ClientProfile[]
+  }
+
+  interface SourceAdapter <<porta>> {
+    +deliveryFormat : DeliveryFormat
+    +read(payload, profile) : AsyncIterable<AdapterBatch>
+  }
+
+  interface PurchaseOrderRepository <<porta>> {
+    +replaceSnapshot(snapshot) : PurchaseOrder
+    +findById(id) : PurchaseOrder | null
+    +findByExternalNumber(clientId, externalNumber) : PurchaseOrder | null
+    +list(filters, page) : Page<PurchaseOrderSummary>
+  }
+
+  interface ConferenceRepository <<porta>> {
+    +save(record) : ConferenceRecord
+    +list(filters, page) : Page<ConferenceRecord>
+    +summarize(filters) : ConferenceSummary
+  }
+
+  interface DatabaseHealth <<porta>> {
+    +ping() : void
+  }
+}
+
+package "Filtros e paginacao" as pkgPagina {
+
+  interface PurchaseOrderFilters {
+    +clientId : ClientId | null
+    +supplierTaxId : TaxId | null
+    +status : PurchaseOrderStatus | null
+    +onlyPending : boolean
+  }
+
+  interface ConferenceFilters {
+    +clientId : ClientId | null
+    +outcome : ConferenceOutcome | null
+    +divergenceCode : DivergenceCode | null
+    +from : IsoInstant | null
+    +to : IsoInstant | null
+  }
+
+  interface ConferenceSummary {
+    +checked : number
+    +approved : number
+    +rejected : number
+    +divergencesByCode : Record<DivergenceCode, number>
+  }
+
+  interface PageRequest {
+    +limit : number
+    +cursor : string | null
+  }
+
+  interface "Page<T>" as Page {
+    +data : T[]
+    +page : PageInfo
+  }
+
+  interface PageInfo {
+    +limit : number
+    +cursor : string | null
+    +nextCursor : string | null
+    +hasMore : boolean
+  }
+}
+
+package "Objetos do contrato — detalhe em contrato-normalizado.puml" as pkgContrato {
+  class ClientProfile <<contrato>>
+  class SourcePayload <<contrato>>
+  class AdapterBatch <<contrato>>
+  class NormalizedPurchaseOrder <<contrato>>
+  class PurchaseOrder <<contrato>>
+  class PurchaseOrderSummary <<contrato>>
+  class ConferenceRecord <<contrato>>
+}
+
+package "Implementacao — quem cumpre a porta" as pkgImpl {
+  class "perfis em codigo\n(P1-03)" as implPerfis <<adaptador>>
+  class "adaptadores por forma\nde entrega (P1-03)" as implAdapters <<adaptador>>
+  class "repositorios Prisma\n(P1-02)" as implRepos <<adaptador>>
+  class "PostgresHealth\n(existe, ENV-01)" as implHealth <<adaptador>>
+}
+
+' ---------- quem cumpre ----------
+implPerfis ..|> ClientProfiles
+implAdapters ..|> SourceAdapter
+implRepos ..|> PurchaseOrderRepository
+implRepos ..|> ConferenceRepository
+implHealth ..|> DatabaseHealth
+
+' ---------- entrada ----------
+' Os rotulos ficam so onde a assinatura nao conta a historia sozinha.
+ClientProfiles --> ClientProfile
+SourceAdapter --> SourcePayload
+SourceAdapter --> ClientProfile
+SourceAdapter --> AdapterBatch
+AdapterBatch --> NormalizedPurchaseOrder : orders
+
+' ---------- pedido ----------
+PurchaseOrderRepository --> NormalizedPurchaseOrder : recebe o retrato
+PurchaseOrderRepository --> PurchaseOrder : devolve com identidade\ne versao de ingestao
+PurchaseOrderRepository --> PurchaseOrderSummary
+PurchaseOrderRepository ..> PurchaseOrderFilters
+
+' ---------- conferencia ----------
+ConferenceRepository --> ConferenceRecord
+ConferenceRepository ..> ConferenceFilters
+ConferenceRepository --> ConferenceSummary
+
+' ---------- paginacao ----------
+' Page aparece nas assinaturas dos dois repositorios; a aresta seria ruido.
+Page "1" *-- "1" PageInfo : page
+PageRequest ..> Page : limit 50 por padrao, teto 100
+
+note bottom of pkgImpl
+  IngestionReport nao aparece aqui de proposito: nenhuma porta o produz.
+  Quem o monta e o caso de uso de ingestao, a partir dos lotes do adaptador
+  e do resultado do repositorio, e ele e a resposta HTTP da carga.
+end note
+
+note right of PageRequest
+  O cursor carrega a posicao e a impressao dos filtros:
+  trocar de filtro no meio da varredura e recusado, em vez
+  de devolver pagina incoerente. ADR-010.
+end note
+
+note right of implAdapters
+  Um adaptador por forma de entrega, nao por cliente.
+  Cliente novo em forma conhecida e perfil novo, sem
+  codigo novo. ADR-008.
+end note
+
+@enduml

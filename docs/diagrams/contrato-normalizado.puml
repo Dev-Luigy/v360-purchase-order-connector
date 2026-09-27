@@ -1,0 +1,310 @@
+@startuml contrato-normalizado
+' Objetos e relacoes do contrato normalizado (P1-01).
+' Fonte da verdade: src/domain/** e src/application/ports/**. Decisoes: ADR-006 a ADR-010.
+' Este diagrama e derivado do codigo: se divergir do codigo, o codigo esta certo.
+' Renderizacao: docs/diagrams/README.md.
+
+title Contrato normalizado — objetos e relacoes (P1-01)
+
+caption As portas que produzem e consomem estes objetos estao em portas-e-consumo.puml
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 12
+skinparam packageStyle rectangle
+skinparam nodesep 32
+skinparam ranksep 48
+skinparam ArrowColor #45526B
+skinparam class {
+  BackgroundColor #FCFDFE
+  BorderColor #45526B
+  HeaderBackgroundColor #E7EDF4
+}
+skinparam enum {
+  BackgroundColor #FFF9EC
+  BorderColor #9A7B2F
+}
+skinparam package {
+  BackgroundColor #F7F9FB
+  BorderColor #A9B4C4
+}
+hide circle
+hide empty members
+
+legend top left
+  Tipos primitivos, todos apelidos de string validados na borda (ADR-007):
+  DecimalText "1200.000" · IsoDate "2026-08-15" · IsoInstant "2026-09-27T12:00:00.000Z"
+  TaxId "12345678000190" (14 digitos, sem mascara) · CurrencyCode "BRL" · ClientId "alfa"
+endlegend
+
+package "Perfil do cliente — o que e rotulo, nao estrutura" as pkgPerfil {
+
+  interface ClientProfile {
+    +clientId : ClientId
+    +name : string
+    +deliveryFormat : DeliveryFormat
+    +formatVersion : string
+    +dateFormat : DateFormat
+    +numberFormat : NumberFormat
+    +taxIdMasked : boolean
+    +assumedCurrency : CurrencyCode | null
+    +statusVocabulary : Record<string, PurchaseOrderStatus>
+    +csv : CsvOptions | null
+  }
+
+  interface CsvOptions {
+    +delimiter : string
+    +encoding : 'utf-8' | 'windows-1252'
+  }
+
+  enum DeliveryFormat {
+    nested-json  .. Alfa
+    paired-csv   .. Beta
+    flat-json    .. Gama
+    split-json   .. Delta
+  }
+
+  enum DateFormat {
+    iso-date
+    br-date
+    unix-seconds
+  }
+
+  enum NumberFormat {
+    plain
+    br
+    cents
+  }
+}
+
+package "Entrada — uma carga" as pkgEntrada {
+
+  interface SourcePayload {
+    +clientId : ClientId
+    +formatVersion : string
+    +parts : Map<string, () => AsyncIterable<Uint8Array>>
+  }
+
+  interface AdapterBatch {
+    +orders : NormalizedPurchaseOrder[]
+    +rejected : RejectedRecord[]
+    +staged : StagedRecord[]
+  }
+
+  interface RejectedRecord {
+    +reference : string
+    +reason : string
+  }
+
+  interface StagedRecord {
+    +reference : string
+    +reason : 'cabecalho-ausente' | 'itens-ausentes'
+    +raw : string
+  }
+
+  interface IngestionReport {
+    +ingestionId : string
+    +clientId : ClientId
+    +formatVersion : string
+    +startedAt : IsoInstant
+    +finishedAt : IsoInstant
+    +ordersAccepted : number
+    +itemsAccepted : number
+    +rejected : RejectedRecord[]
+    +staged : StagedRecord[]
+  }
+}
+
+package "Pedido" as pkgPedido {
+
+  interface Supplier {
+    +taxId : TaxId
+    +name : string
+  }
+
+  enum PurchaseOrderStatus {
+    aberto
+    encerrado
+    bloqueado
+  }
+
+  interface NormalizedPurchaseOrder {
+    +clientId : ClientId
+    +externalNumber : string
+    +supplier : Supplier
+    +currency : CurrencyCode
+    +status : PurchaseOrderStatus
+    +issuedOn : IsoDate
+    +items : NormalizedPurchaseOrderItem[] | null
+  }
+
+  interface NormalizedPurchaseOrderItem {
+    +externalLine : number
+    +material : string
+    +description : string
+    +purchaseUnit : string
+    +conversionFactor : DecimalText
+    +quantityOrdered : DecimalText
+    +quantityReceived : DecimalText
+    +unitPrice : DecimalText
+    +lineCreatedOn : IsoDate | null
+  }
+
+  interface PurchaseOrder {
+    +id : string
+    +clientId : ClientId
+    +externalNumber : string
+    +supplier : Supplier
+    +currency : CurrencyCode
+    +status : PurchaseOrderStatus
+    +issuedOn : IsoDate
+    +ingestionVersion : number
+    +ingestedAt : IsoInstant
+    +hasPendingBalance : boolean
+    +items : PurchaseOrderItem[]
+  }
+
+  interface PurchaseOrderItem {
+    +id : string
+    +quantityPending : DecimalText
+  }
+
+  interface PurchaseOrderSummary {
+    +id : string
+    +clientId : ClientId
+    +externalNumber : string
+    +supplier : Supplier
+    +currency : CurrencyCode
+    +status : PurchaseOrderStatus
+    +issuedOn : IsoDate
+    +itemCount : number
+    +pendingItemCount : number
+    +hasPendingBalance : boolean
+    +ingestionVersion : number
+  }
+}
+
+package "Conferencia" as pkgConferencia {
+
+  interface InvoiceCheckRequest {
+    +clientId : ClientId
+    +purchaseOrderNumber : string
+    +supplierTaxId : TaxId
+    +lines : InvoiceLine[]
+  }
+
+  interface InvoiceLine {
+    +material : string
+    +quantity : DecimalText
+    +totalValue : DecimalText
+  }
+
+  enum ConferenceOutcome {
+    aprovada
+    reprovada
+  }
+
+  interface ConferenceResult {
+    +outcome : ConferenceOutcome
+    +divergences : Divergence[]
+  }
+
+  interface Divergence {
+    +code : DivergenceCode
+    +field : string
+    +invoiceLineIndex : number | null
+    +purchaseOrderLine : number | null
+    +expected : string | null
+    +received : string | null
+  }
+
+  enum DivergenceCode {
+    FORNECEDOR_DIVERGENTE
+    PEDIDO_NAO_ABERTO
+    MATERIAL_NAO_ENCONTRADO
+    MATERIAL_AMBIGUO
+    QUANTIDADE_NAO_POSITIVA
+    QUANTIDADE_ACIMA_DO_SALDO
+    VALOR_TOTAL_DIVERGENTE
+  }
+
+  interface ConferenceRecord {
+    +id : string
+    +purchaseOrderId : string
+    +purchaseOrderIngestionVersion : number
+    +clientId : ClientId
+    +checkedAt : IsoInstant
+    +invoice : InvoiceCheckRequest
+  }
+}
+
+' ---------- perfil ----------
+ClientProfile --> DeliveryFormat : deliveryFormat
+ClientProfile --> DateFormat : dateFormat
+ClientProfile --> NumberFormat : numberFormat
+ClientProfile "1" *-- "0..1" CsvOptions : csv
+ClientProfile ..> PurchaseOrderStatus : statusVocabulary\ntraduz para
+
+' ---------- entrada ----------
+AdapterBatch "1" o-- "0..*" NormalizedPurchaseOrder : orders
+AdapterBatch "1" o-- "0..*" RejectedRecord : rejected
+AdapterBatch "1" o-- "0..*" StagedRecord : staged
+IngestionReport "1" o-- "0..*" RejectedRecord : rejected
+IngestionReport "1" o-- "0..*" StagedRecord : staged
+
+' ---------- pedido ----------
+NormalizedPurchaseOrder "1" *-- "1" Supplier : supplier
+NormalizedPurchaseOrder "1" *-- "0..* ou null" NormalizedPurchaseOrderItem : items
+NormalizedPurchaseOrder --> PurchaseOrderStatus : status
+PurchaseOrderItem --|> NormalizedPurchaseOrderItem
+PurchaseOrder "1" *-- "1" Supplier : supplier
+PurchaseOrder "1" *-- "0..*" PurchaseOrderItem : items
+PurchaseOrder --> PurchaseOrderStatus : status
+PurchaseOrderSummary ..> PurchaseOrder : projecao sem itens
+
+' ---------- conferencia ----------
+InvoiceCheckRequest "1" *-- "1..*" InvoiceLine : lines
+ConferenceResult "1" o-- "0..*" Divergence : divergences
+ConferenceResult --> ConferenceOutcome : outcome
+Divergence --> DivergenceCode : code
+ConferenceRecord --|> ConferenceResult
+ConferenceRecord "1" *-- "1" InvoiceCheckRequest : invoice (retrato)
+ConferenceRecord ..> PurchaseOrder : purchaseOrderId +\npurchaseOrderIngestionVersion
+
+' ---------- notas das decisoes ----------
+note bottom of NormalizedPurchaseOrder
+  Sem identidade interna. Quem resolve e o
+  repositorio, por (clientId, externalNumber).
+  items = null: carga so de cabecalho, preserva
+  os itens ja conhecidos (Delta).
+  items = []: o cliente afirma que nao ha itens,
+  e eles sao removidos. ADR-006, ADR-008.
+end note
+
+note bottom of PurchaseOrderItem
+  quantityPending = quantityOrdered - quantityReceived,
+  na unidade de compra. Persistido, nao calculado na
+  consulta: comparar duas colunas nao usa indice.
+  ADR-006.
+end note
+
+note bottom of NormalizedPurchaseOrderItem
+  unitPrice e por unidade de compra; a divisao pelo
+  conversionFactor pode ser dizima. O fator vem por
+  item, nao por cliente. ADR-007.
+end note
+
+note bottom of InvoiceLine
+  quantity sempre em unidade de consumo:
+  fornecedor nao fatura em caixa. A conversao
+  contra purchaseUnit e do dominio. ADR-007.
+end note
+
+note bottom of ConferenceRecord
+  Guarda a nota conferida e a versao do pedido usada.
+  Sem esse retrato, uma reingestao mudaria
+  retroativamente o sentido do historico. ADR-009.
+end note
+
+@enduml
