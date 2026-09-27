@@ -67,4 +67,4 @@ Custos reais: cada worktree precisa do seu `npm ci` (o `node_modules` não é co
 
 ## Estado inicial
 
-O repositório começou com um commit base único importando a base existente, autorizado pelo usuário: a maior parte é trabalho do Codex (ENV-01, COL-01, COL-02, ARCH-01 a ARCH-04) e o restante é DOC-01 do Claude. Separar autoria retroativamente exigiria dividir arquivos que os dois editaram, com risco maior que o ganho. A branch principal chama `main`. Dali em diante, toda tarefa passa por branch.
+O repositório começou com um commit base único importando a base existente, autorizado pelo usuário: a maior parte é trabalho do Codex (ENV-01, COL-01, COL-02, ARCH-01 a ARCH-04) e o restante é DOC-01 do Claude. Separar autoria retroativamente exigiria dividir arquivos que os dois editaram, com risco maior que o ganho. A branch principal chama `main`. O fechamento documental de REPO-01 também foi direto em `main`, por ser a tarefa que criou a branch. Dali em diante, toda tarefa passa por branch.

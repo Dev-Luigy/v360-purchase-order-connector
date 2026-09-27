@@ -3,7 +3,7 @@
 - Agente e data: Claude, 2026-09-27.
 - Estado: concluída.
 - Objetivo e resultado: o enunciado deixou de depender de link externo autenticado. `docs/CASE.pdf` é a exportação entregue pelo usuário e `docs/CASE.md` a transcrição consultável; as amostras dos quatro clientes viraram fixtures. Implementado: referência e dados. Não implementado: nenhuma decisão de contrato, regra ou modelo.
-- Arquivos alterados: `docs/CASE.md` (transcrição e pontos abertos), `docs/CASE.pdf` (movido da raiz, nome sem espaços), `tests/fixtures/{alfa,beta,gama,delta}/` e `tests/fixtures/README.md` (amostras), `.prettierignore` (fixtures JSON preservadas na forma do cliente), `README.md` (link para o enunciado local), `docs/TASKS.md` (registro). Sem commit: o repositório ainda não tem o primeiro commit (REPO-01).
+- Arquivos alterados: `docs/CASE.md` (transcrição e pontos abertos), `docs/CASE.pdf` (movido da raiz, nome sem espaços), `tests/fixtures/{alfa,beta,gama,delta}/` e `tests/fixtures/README.md` (amostras), `.prettierignore` (fixtures JSON preservadas na forma do cliente), `README.md` (link para o enunciado local), `docs/TASKS.md` (registro). Entrou no commit base `f957d5d` (REPO-01).
 - Contratos e decisões: nenhum contrato alterado. Nenhuma ADR criada; as decisões pendentes estão listadas em "O que o enunciado não fecha" (`docs/CASE.md`) como entrada para P1-01.
 - Validação: `npm run check` passou (tipagem, lint, formatação, 2 testes, build). Os quatro JSON de fixture foram validados com `JSON.parse`. Formatação aplicada só aos arquivos desta tarefa. Nenhuma fixture é lida por teste ainda — elas não provam parsing, só registram a entrada.
 - Divergências encontradas entre o enunciado e o plano existente, para quem seguir:
