@@ -57,18 +57,27 @@ export async function* streamCsvRecords(
 
   // `.pipe()` não propaga erro da fonte para o destino: sem encaminhar, uma
   // falha de decodificação vira erro não tratado e o consumidor fica esperando.
-  pipeSource(Readable.from(decode(chunks, options.encoding)), parser);
+  const source = Readable.from(decode(chunks, options.encoding));
+  pipeSource(source, parser);
 
-  for await (const row of parser) {
-    const { info, record } = row as {
-      info: { lines: number };
-      record: Record<string, string>;
-    };
-    yield toRecord(record, info.lines);
-  }
+  try {
+    for await (const row of parser) {
+      const { info, record } = row as {
+        info: { lines: number };
+        record: Record<string, string>;
+      };
+      yield toRecord(record, info.lines);
+    }
 
-  if (!sawHeader) {
-    throw new SyntaxError('CSV vazio: nem o cabeçalho foi encontrado');
+    if (!sawHeader) {
+      throw new SyntaxError('CSV vazio: nem o cabeçalho foi encontrado');
+    }
+  } finally {
+    // Quem consome pode parar antes do fim — limite de lote, erro, desconexão.
+    // Sem destruir os dois lados, a origem fica aberta: em arquivo, é
+    // descritor vazado.
+    source.destroy();
+    parser.destroy();
   }
 }
 
@@ -91,11 +100,24 @@ async function* decode(
   // virar U+FFFD. Um código de material com caractere de substituição é dado
   // corrompido que atravessa toda a validação (REVIEW-01, achado 7).
   const decoder = new TextDecoder(encoding, { fatal: true });
+  // O laço fica fora do try de propósito: erro vindo da origem da carga não é
+  // erro de encoding, e anunciá-lo como tal manda quem depura para o lado
+  // errado.
+  for await (const chunk of chunks) {
+    yield decodeOrExplain(decoder, chunk, encoding);
+  }
+  yield decodeOrExplain(decoder, undefined, encoding);
+}
+
+function decodeOrExplain(
+  decoder: TextDecoder,
+  chunk: Uint8Array | undefined,
+  encoding: CsvEncoding,
+): string {
   try {
-    for await (const chunk of chunks) {
-      yield decoder.decode(chunk, { stream: true });
-    }
-    yield decoder.decode();
+    return chunk === undefined
+      ? decoder.decode()
+      : decoder.decode(chunk, { stream: true });
   } catch (cause) {
     throw new SyntaxError(
       `conteúdo não é ${encoding} válido; confira o encoding declarado no perfil`,

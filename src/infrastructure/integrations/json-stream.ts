@@ -57,14 +57,22 @@ export async function* streamArrayAtKey(
   });
   source.pipe(pipeline);
 
-  for await (const entry of pipeline) {
-    yield (entry as { key: number; value: JsonValue }).value;
-  }
+  try {
+    for await (const entry of pipeline) {
+      yield (entry as { key: number; value: JsonValue }).value;
+    }
 
-  if (!found) {
-    throw new SyntaxError(
-      `campo ${JSON.stringify(key)} não encontrado como array no JSON`,
-    );
+    if (!found) {
+      throw new SyntaxError(
+        `campo ${JSON.stringify(key)} não encontrado como array no JSON`,
+      );
+    }
+  } finally {
+    // Quem consome pode parar antes do fim — limite de lote, erro, desconexão.
+    // Sem destruir os dois lados, a origem fica aberta: em arquivo, é
+    // descritor vazado.
+    source.destroy();
+    pipeline.destroy();
   }
 }
 
