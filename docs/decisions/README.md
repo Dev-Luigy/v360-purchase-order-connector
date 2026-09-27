@@ -12,6 +12,16 @@ Consultar este índice apenas quando a tarefa envolver contratos, schema, depend
 
 - [ADR-005 — Observabilidade com Grafana e Prometheus](ADR-005-observabilidade.md): direção aceita pelo usuário; implementação diferida para depois do marco `parte-1`, porque os labels dependem de P1-01 e P1-03.
 
+- [ADR-006 — Modelo normalizado, identidade e situação canônica](ADR-006-modelo-normalizado.md): aceita; base de P1-02, P1-03 e P1-04.
+
+- [ADR-007 — Decimal, dinheiro e unidade de compra](ADR-007-decimal-e-unidade.md): aceita; define precisão, arredondamento e por que o preço fica na unidade de compra.
+
+- [ADR-008 — Ingestão: cliente, adaptadores, reenvio e cargas parciais](ADR-008-ingestao.md): aceita; um adaptador por forma de entrega e perfil por cliente.
+
+- [ADR-009 — Conferência e taxonomia de divergências](ADR-009-conferencia.md): aceita; regras de negócio e códigos de divergência.
+
+- [ADR-010 — Paginação por cursor](ADR-010-paginacao.md): aceita; rebaixa a proposta de instantâneo do TECHNICAL_PLAN, item 4.
+
 ## Como registrar
 
 Antes do trabalho dependente, reservar no quadro o arquivo `ADR-NNN-titulo.md` e este índice. Adicionar aqui um link com título, estado e tarefas afetadas. Usar o próximo número livre.
