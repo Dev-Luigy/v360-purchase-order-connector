@@ -9,6 +9,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | COL-02    | Estruturar contexto compartilhado e leitura sob demanda   | concluída                      | Codex       | Documentação; registro e arquivos abaixo                             |
 | DOC-01    | Versionar o enunciado e as amostras dos clientes          | concluída                      | Claude      | Nenhuma; enunciado e fixtures, sem código de negócio                 |
 | DOC-02    | Reestruturar README como artefato avaliado                | aguardando                     | —           | P1-01; o enunciado cobra as defesas no README (docs/CASE.md)         |
+| DOC-03    | Diagramar objetos e relacoes do contrato normalizado      | em andamento                   | Claude      | P1-01; diagramas em docs/diagrams, sem codigo de negocio             |
 | ARCH-04   | Registrar escolha do ORM Prisma 7                         | concluída                      | Codex       | ADR-001, ADR-002 e ADR-003; documentação apenas                      |
 | ARCH-05   | Registrar desenho de observabilidade (Grafana/Prometheus) | aceita, implementação diferida | Claude      | Pedido do usuário; decisão apenas, sem dependência instalada         |
 | ENV-02    | Instalar ferramentas do sistema                           | aguardando                     | Usuário     | docs/SETUP.md                                                        |
@@ -131,3 +132,11 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: modelo normalizado, identidade, situação canônica, política decimal e de unidade, contrato de ingestão, taxonomia de divergências, paginação e contrato HTTP. Contrato em tipos e portas, sem implementação: adaptadores são P1-03 e schema é P1-02.
 - Dependências: nenhuma. Libera P1-02 e P1-03 para trabalho paralelo. Entrada: pontos abertos de `docs/CASE.md` e achados de `docs/handoffs/REVIEW-02-claude.md`.
 - Evidência: [handoff P1-01](handoffs/P1-01-claude.md); `npm run check` verde; sem teste novo, porque o entregável é tipo e decisão, não comportamento.
+
+## DOC-03 — diagramas de objetos e relacoes
+
+- Responsavel: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `docs/diagrams/**`, `docs/COLLABORATION.md` (uma linha do mapa), `README.md` (um link), `docs/TASKS.md`, `docs/handoffs/DOC-03-claude.md`.
+- Escopo: representar em PlantUML os objetos de P1-01 e suas relacoes, com fonte versionada e SVG renderizado. Diagrama derivado do contrato: nao altera tipo, porta nem decisao. O modelo entidade-relacionamento das tabelas pertence a P1-02.
+- Dependencias: P1-01 concluida. Nao toca `src/**`, `package.json`, `docs/STATUS.md` nem os arquivos reservados por REVIEW-01.
