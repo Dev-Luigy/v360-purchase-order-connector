@@ -146,6 +146,7 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 
 - Responsável: Claude.
 - Estado: em andamento.
-- Arquivos reservados: `src/domain/decimal.ts`, `src/domain/conference-rules.ts`, `src/infrastructure/integrations/**`, `tests/*.test.ts` (novos), `docs/TASKS.md`, `docs/handoffs/P1-03-claude.md`.
+- Arquivos reservados: `src/domain/decimal.ts`, `src/domain/conference-rules.ts`, `src/domain/client.ts` (mapa de campos do perfil), `src/infrastructure/integrations/**`, `tests/*.test.ts` (novos), `package.json` e `package-lock.json` (tres dependencias), `docs/decisions/ADR-011-bibliotecas-p1-03.md`, `docs/decisions/README.md`, `docs/diagrams/**` (regerar), `docs/TASKS.md`, `docs/handoffs/P1-03-claude.md`.
+- **Lockfile reservado:** decimal.js, stream-json e csv-parse entram nesta tarefa, por decisao do usuario registrada em ADR-011. Nenhum outro agente deve mexer em `package.json` ate a liberacao.
 - Escopo: aritmética decimal sem ponto flutuante, as sete regras de conferência de ADR-009, leitores de fluxo JSON e CSV, os adaptadores `nested-json` (Alfa) e `paired-csv` (Beta) e os perfis em código. Implementa o contrato de P1-01 sem alterá-lo.
 - Dependências: P1-01. **Não toca** `prisma/`, `src/infrastructure/database/`, `src/presentation/`, `src/main/` nem `package.json`, que são P1-02 e P1-04. Se o Codex assumir P1-02, os dois andam em paralelo; combinar antes de mexer em `package.json`.
