@@ -17,8 +17,12 @@ const hundred = Decimal.parse('100');
  */
 const brazilianNumber = /^[+-]?(?:\d{1,3}(?:\.\d{3})*|\d+)(?:,\d+)?$/;
 
-/** CNPJ limpo, ou com a pontuação da máscara brasileira, e nada além. */
-const maskedTaxId = /^\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}$/;
+/**
+ * CNPJ limpo, ou com a máscara brasileira completa. Tudo ou nada: com a
+ * pontuação opcional campo a campo, `12.345678/0001-90` passava, o que não é
+ * nem uma coisa nem outra e contradizia este comentário (REVIEW-03, 4).
+ */
+const maskedTaxId = /^(?:\d{14}|\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})$/;
 
 /**
  * Tradutores de notação, um por rótulo declarado no perfil. Todos recusam o

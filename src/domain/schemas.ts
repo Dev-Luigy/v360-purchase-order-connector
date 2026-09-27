@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { divergenceCodes, type InvoiceCheckRequest } from './conference.js';
+import { maxDecimalPlaces, maxIntegerDigits } from './decimal.js';
 import type { NormalizedPurchaseOrder } from './purchase-order.js';
 
 /**
@@ -19,12 +20,14 @@ import type { NormalizedPurchaseOrder } from './purchase-order.js';
  * `toFixed`. E o tamanho tem teto: sem ele, um expoente grande gera uma string
  * de milhares de dígitos que atravessa o serviço inteiro (REVIEW-01, achado 5).
  */
-export const decimalTextSchema = z
-  .string()
-  .regex(
-    /^-?\d{1,24}(?:\.\d{1,12})?$/,
-    'decimal fora do contrato: até 24 dígitos inteiros, 12 decimais, sem expoente',
-  );
+export const decimalTextSchema = z.string().regex(
+  // Construído a partir das constantes do domínio: o limite do schema e o
+  // limite que `Decimal.parse` aplica precisam ser o mesmo número.
+  new RegExp(
+    `^-?\\d{1,${maxIntegerDigits}}(?:\\.\\d{1,${maxDecimalPlaces}})?$`,
+  ),
+  `decimal fora do contrato: até ${maxIntegerDigits} dígitos inteiros, ${maxDecimalPlaces} decimais, sem expoente`,
+);
 
 /** Decimal do contrato que não pode ser negativo: quantidade, preço, saldo. */
 export const nonNegativeDecimalSchema = decimalTextSchema.refine(
@@ -41,6 +44,15 @@ export const positiveDecimalSchema = decimalTextSchema.refine(
   (value) => !value.startsWith('-') && /[1-9]/.test(value),
   'precisa ser maior que zero',
 );
+
+/**
+ * Instante que existe. `toISOString` lança quando a data é inválida, então o
+ * `NaN` precisa ser filtrado antes — senão o refine estoura em vez de recusar.
+ */
+export function isCalendarInstant(value: string): boolean {
+  const instant = new Date(value);
+  return !Number.isNaN(instant.getTime()) && instant.toISOString() === value;
+}
 
 /**
  * Data que existe no calendário, e não só uma que tem a forma de data.
@@ -65,7 +77,11 @@ export const isoInstantSchema = z
   .regex(
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
     'instante fora de ISO UTC',
-  );
+  )
+  // Aparência não basta: `2026-99-99T99:99:99.999Z` tem a forma certa e não
+  // existe. O irmão `isoDateSchema` já era semântico; este ficou para trás
+  // (REVIEW-03, 5).
+  .refine(isCalendarInstant, 'instante inexistente no calendário');
 
 /** CNPJ com 14 dígitos, sem máscara. Dígito verificador não é conferido: o dado é do ERP do cliente e recusar por checksum criaria rejeição que ninguém corrige do nosso lado. */
 export const taxIdSchema = z

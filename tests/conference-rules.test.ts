@@ -74,7 +74,10 @@ test('nota dentro do saldo e com valor exato é aprovada', () => {
   assert.deepEqual(result.divergences, []);
 });
 
-test('CNPJ mascarado de um lado e limpo do outro é o mesmo fornecedor', () => {
+test('o domínio compara identidade estritamente: máscara é da fronteira', () => {
+  // Normalizar aqui tornava a validação da borda contornável — `checkInvoice`
+  // chamado direto aprovava CNPJ com lixo em volta. Tirar máscara é trabalho
+  // do adaptador (arquivo) e do schema (HTTP), testados em outro lugar.
   const result = checkInvoice(
     order(),
     invoice(
@@ -82,7 +85,8 @@ test('CNPJ mascarado de um lado e limpo do outro é o mesmo fornecedor', () => {
       '23.456.789/0001-01',
     ),
   );
-  assert.equal(result.outcome, 'aprovada');
+  assert.deepEqual(codes(result.divergences), ['FORNECEDOR_DIVERGENTE']);
+  assert.equal(result.divergences[0]?.received, '23.456.789/0001-01');
 });
 
 test('fornecedor diferente reprova a nota inteira', () => {

@@ -292,12 +292,14 @@ test('achado 7: moeda sem centavo não é arredondada como se tivesse', () => {
   assert.equal(currencyScale('BRL'), 2);
 });
 
-test('achado 7: a guarda de exatidão deixou de recusar operação trivial', () => {
-  // Com sessenta dígitos significativos isto era recusado, embora caiba.
-  assert.equal(
-    Decimal.parse('1e59').add(Decimal.parse('1')).toText(),
-    '100000000000000000000000000000000000000000000000000000000001',
+test('achado 7: a guarda de exatidão tem margem para o que é computado', () => {
+  // A entrada absurda agora para na porta, pelo limite de grandeza do
+  // contrato; a margem de 120 dígitos serve ao que a aritmética produz.
+  assert.throws(() => Decimal.parse('1e59'), /dígitos inteiros/);
+  const produto = Decimal.parse('9'.repeat(24)).multiply(
+    Decimal.parse('9'.repeat(24)),
   );
+  assert.equal(produto.add(Decimal.parse('1')).toText().length, 48);
 });
 
 test('achado 8, encontrado ao corrigir o 7: erro na origem chega a quem consome', async () => {

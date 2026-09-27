@@ -35,13 +35,21 @@ export function checkInvoice(
   };
 }
 
-/** Regra 1: fornecedor da nota igual ao do pedido, por CNPJ normalizado. */
+/**
+ * Regra 1: fornecedor da nota igual ao do pedido.
+ *
+ * Comparação estrita, sem normalizar. Normalizar aqui tornava a validação da
+ * borda contornável: `checkInvoice` chamado direto aprovava
+ * `abc12.345.678/0001-90xyz` (REVIEW-03, 3). Tirar máscara é trabalho da
+ * fronteira — o adaptador para arquivo de cliente, o schema para HTTP — e o
+ * domínio compara `TaxId` que já chegou normalizado.
+ */
 function checkSupplier(
   order: PurchaseOrder,
   invoice: InvoiceCheckRequest,
 ): Divergence[] {
-  const expected = digitsOf(order.supplier.taxId);
-  const received = digitsOf(invoice.supplierTaxId);
+  const expected = order.supplier.taxId;
+  const received = invoice.supplierTaxId;
   if (expected === received) return [];
   return [
     {
@@ -213,9 +221,4 @@ function groupOrderItemsByMaterial(
     }
   }
   return grouped;
-}
-
-/** CNPJ pode chegar mascarado de uma ponta e limpo da outra; comparamos dígitos. */
-function digitsOf(taxId: string): string {
-  return taxId.replace(/\D/g, '');
 }
