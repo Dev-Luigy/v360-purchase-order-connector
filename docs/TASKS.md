@@ -19,8 +19,9 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-01 | Revisar base e plano técnico                                     | concluída                      | Codex       | Limites de P1-03 e HTTP testados; achados no handoff                        |
 | REVIEW-02 | Revisar arquitetura contra o enunciado                           | concluída                      | Claude      | Achados para P1-01, P1-02 e ENV-03; sem editar código                       |
 | REVIEW-03 | Consolidar verificação pós-FIX-02 para a outra IA                | concluída                      | Codex       | Handoff documental; riscos residuais e retomada                             |
+| REVIEW-04 | Preparar plano de fix: arquitetura, segurança, CI/CD e Docker    | em andamento                   | Codex       | Revisão documental; não altera código nem arquivos reservados por FIX-04/05 |
 | P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03        |
-| P1-02     | Implementar schema, migrações e repositórios                     | disponível                     | —           | P1-01; sugestão: Codex                                                      |
+| P1-02     | Implementar schema, migrações e repositórios                     | em andamento                   | Claude      | P1-01, ADR-004 e ADR-012; validação real depende de ENV-03                  |
 | P1-03     | Implementar domínio e adaptadores Alfa/Beta                      | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                                |
 | FIX-01    | Estabilizar validação e limites de REVIEW-01                     | concluída                      | Claude      | REVIEW-01; sete achados corrigidos com regressão; libera P1-04              |
 | FIX-02    | Verificação pós-FIX-01: vazamento de origem e notações sem teste | concluída                      | Claude      | Dois defeitos corrigidos; notação por campo fica para decisão               |
@@ -50,6 +51,14 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: consolidar para a outra IA o que foi corrigido, os riscos residuais reproduzidos e a ordem recomendada de retomada; sem editar código.
 - Dependências: FIX-01 e FIX-02 concluídas.
 - Evidência: [handoff REVIEW-03](handoffs/REVIEW-03-codex.md).
+
+## REVIEW-04 — plano de fix de arquitetura e operação
+
+- Responsável: Codex.
+- Estado: em andamento.
+- Arquivos reservados: `docs/TASKS.md`, `docs/handoffs/REVIEW-04-arquitetura-seguranca-cicd-docker-codex.md`.
+- Escopo: consolidar achados de arquitetura e ampliar a revisão para segurança, CI/CD e Docker, com prioridade e critérios de aceite; nenhuma correção de código ou configuração nesta tarefa.
+- Dependências: considera FIX-04 e FIX-05 já concluídas para não pedir novamente correções que o Claude acabou de entregar.
 
 ## COL-02 — contexto compartilhado e leitura sob demanda
 
@@ -214,3 +223,12 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: `poolOptionsFor` devolvia o preset compartilhado por referência; mutar o retorno corrompia o preset para todo mundo. Mesma classe do perfil mutável de REVIEW-03. Sem mudança de contrato.
 - Dependências: FIX-04.
 - Evidência: [handoff FIX-05](handoffs/FIX-05-claude.md); `npm run check` verde com 97 testes.
+
+## P1-02 — schema, migrações e repositórios
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `prisma/**`, `database/migrations/README.md`, `src/infrastructure/database/**`, `src/application/ports/pagination.ts` (só se o cursor exigir), `package.json` e `package-lock.json` (Prisma 7), `.gitignore`, `Dockerfile`, `compose.yaml`, `tests/*.test.ts`, `docs/TASKS.md`, `docs/handoffs/P1-02-claude.md`.
+- Escopo: schema Prisma, migração inicial com os índices que o requisito 1 exige, e as implementações de `PurchaseOrderRepository` e `ConferenceRepository`. Resolve também os achados 1, 2, 3 e 8 de [REVIEW-02](handoffs/REVIEW-02-claude.md).
+- Dependências: P1-01 (contrato), ADR-004 (Prisma 7), ADR-012 (pool por propósito). **A validação contra PostgreSQL real é ENV-03** e depende de o usuário autorizar subir o Compose; até lá, migração e consultas não são exercitadas contra banco.
+- Nota de posse: `package.json` volta a ficar reservado enquanto durar.
