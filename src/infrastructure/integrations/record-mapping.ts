@@ -74,8 +74,22 @@ export function readItem(
   profile: ClientProfile,
 ): NormalizedPurchaseOrderItem {
   const map = profile.fields.item;
-  const number = (path: string): string =>
-    parseDecimal(source.text(path), profile.numberFormat, path, quantityScale);
+  // Medida e dinheiro têm notações próprias: o Gama manda quantidade em
+  // inteiro simples e preço em centavos na mesma linha (ADR-012).
+  const measure = (path: string): string =>
+    parseDecimal(
+      source.text(path),
+      profile.numberFormat.quantity,
+      path,
+      quantityScale,
+    );
+  const money = (path: string): string =>
+    parseDecimal(
+      source.text(path),
+      profile.numberFormat.money,
+      path,
+      quantityScale,
+    );
 
   return {
     externalLine: parseInteger(source.text(map.externalLine), map.externalLine),
@@ -87,10 +101,10 @@ export function readItem(
     conversionFactor:
       map.conversionFactor === null
         ? neutralFactor
-        : number(map.conversionFactor),
-    quantityOrdered: number(map.quantityOrdered),
-    quantityReceived: number(map.quantityReceived),
-    unitPrice: number(map.unitPrice),
+        : measure(map.conversionFactor),
+    quantityOrdered: measure(map.quantityOrdered),
+    quantityReceived: measure(map.quantityReceived),
+    unitPrice: money(map.unitPrice),
     lineCreatedOn:
       map.lineCreatedOn === null
         ? null

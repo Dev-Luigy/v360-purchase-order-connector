@@ -27,7 +27,7 @@ export type DeliveryFormat =
 /** Como o cliente escreve datas. */
 export type DateFormat = 'iso-date' | 'br-date' | 'unix-seconds';
 
-/** Como o cliente escreve números. */
+/** Como o cliente escreve um número. */
 export type NumberFormat =
   /** `45.9`, ponto decimal, sem separador de milhar. */
   | 'plain'
@@ -86,6 +86,26 @@ export interface ClientFieldMap {
 }
 
 /**
+ * Notação numérica por natureza do campo.
+ *
+ * Uma notação só por cliente não descreve a realidade: no Gama, `qtd_ped` é
+ * `10` e `fator_conv` é `12` em inteiro simples, enquanto
+ * `preco_unit_centavos` é `120000` em centavos, tudo na mesma linha. Declarar
+ * `cents` para o cliente inteiro converteria também quantidade e fator, que
+ * virariam `0,10` e `0,12` (ADR-012).
+ *
+ * A divisão é por natureza e não por campo porque é assim que os ERPs tratam:
+ * dinheiro tem uma convenção, medida tem outra. Se algum cliente precisar de
+ * notação por campo individual, o mapa de campos é o lugar, não aqui.
+ */
+export interface NumberFormats {
+  /** Quantidade pedida, recebida e fator de conversão. */
+  readonly quantity: NumberFormat;
+  /** Preço unitário e qualquer valor monetário. */
+  readonly money: NumberFormat;
+}
+
+/**
  * Perfil de integração de um cliente: tudo que é rótulo, e não estrutura.
  * Cliente novo em forma de entrega conhecida vira um perfil novo, sem código
  * novo (ADR-008).
@@ -101,7 +121,7 @@ export interface ClientProfile {
    */
   readonly formatVersion: string;
   readonly dateFormat: DateFormat;
-  readonly numberFormat: NumberFormat;
+  readonly numberFormat: NumberFormats;
   /** `true` quando o CNPJ vem mascarado, como no Beta. */
   readonly taxIdMasked: boolean;
   /**

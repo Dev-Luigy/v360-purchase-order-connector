@@ -49,7 +49,17 @@ export const csvItemsPart = 'items';
 export class PairedCsvAdapter implements SourceAdapter {
   readonly deliveryFormat = 'paired-csv' as const;
 
-  constructor(private readonly batchSize = 200) {}
+  constructor(
+    private readonly batchSize = 200,
+    /**
+     * Teto de cabeçalhos indexados. O índice é o preço de agrupar itens sem
+     * carregar o arquivo inteiro, e ele cresce com o número de pedidos da
+     * carga. Sem teto, uma carga grande demais derruba o processo por memória;
+     * com teto, ela é recusada com motivo, e quem opera divide a carga ou
+     * decide subir o limite (REVIEW-03, 2).
+     */
+    private readonly maxIndexedHeaders = 100_000,
+  ) {}
 
   async *read(
     payload: SourcePayload,
@@ -65,7 +75,13 @@ export class PairedCsvAdapter implements SourceAdapter {
     }
 
     const rejected: RejectedRecord[] = [];
-    const headers = await indexHeaders(payload, profile, csv, rejected);
+    const headers = await indexHeaders(
+      payload,
+      profile,
+      csv,
+      rejected,
+      this.maxIndexedHeaders,
+    );
 
     let orders: NormalizedPurchaseOrder[] = [];
     let current: Group | null = null;
@@ -201,6 +217,7 @@ async function indexHeaders(
   profile: ClientProfile,
   csv: NonNullable<ClientProfile['csv']>,
   rejected: RejectedRecord[],
+  maxIndexedHeaders: number,
 ): Promise<Map<string, OrderHeader>> {
   const headers = new Map<string, OrderHeader>();
   for await (const record of streamCsvRecords(
@@ -222,6 +239,16 @@ async function indexHeaders(
         reference: `${csvHeadersPart} linha ${record.line}`,
         reason: reasonOf(cause),
       });
+    }
+    // Fora do `try` de propósito: estourar o teto é falha da carga inteira, e
+    // não mais um registro rejeitado. Dentro, viraria uma linha de relatório e
+    // a carga seguiria consumindo memória.
+    if (headers.size > maxIndexedHeaders) {
+      throw new FieldError(
+        csvHeadersPart,
+        `carga com mais de ${maxIndexedHeaders} pedidos; divida o arquivo ou ` +
+          'aumente o teto do adaptador',
+      );
     }
   }
   return headers;

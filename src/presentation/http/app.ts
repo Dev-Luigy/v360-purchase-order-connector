@@ -10,7 +10,7 @@ export function buildApp(dependencies: {
       redact: ['req.headers.authorization'],
     },
   });
-  app.get('/health', async () => ({ status: 'ok' }));
+  app.get('/health', () => ({ status: 'ok' }));
   app.get('/ready', async (_request, reply) => {
     const ready = await dependencies.readiness.execute();
     return reply

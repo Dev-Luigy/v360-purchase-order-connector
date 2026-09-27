@@ -24,6 +24,8 @@ Consultar este índice apenas quando a tarefa envolver contratos, schema, depend
 
 - [ADR-011 — Bibliotecas de precisão, leitura em fluxo e validação](ADR-011-bibliotecas-p1-03.md): aceita por escolha do usuário; decimal.js, stream-json, csv-parse e o alcance do Zod. Fecha a pendência que ADR-007 deixou para P1-03. Afeta P1-03, P1-02 e P1-04.
 
+- [ADR-012 — Notação numérica por natureza do campo, e pool por caminho](ADR-012-notacao-por-campo.md): aceita por autorização do usuário; desbloqueia o Gama e separa o caminho de carga do de requisição. Afeta FIX-04, P1-04 e P2-01.
+
 ## Como registrar
 
 Antes do trabalho dependente, reservar no quadro o arquivo `ADR-NNN-titulo.md` e este índice. Adicionar aqui um link com título, estado e tarefas afetadas. Usar o próximo número livre.
