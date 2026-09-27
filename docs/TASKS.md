@@ -16,7 +16,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | ENV-03    | Validar Compose, conexão e reinício do banco              | aguardando                     | —           | ENV-02; ambiente, sem código de negócio                              |
 | ENV-04    | Verificar portas e isolar o Compose antes de subir        | concluída                      | Claude      | Pedido do usuário; preflight, nome fixo do projeto e portas por env  |
 | REPO-01   | Inicializar Git, commit base e fluxo de branches          | concluída                      | Claude      | Commit base autorizado pelo usuário; docs/GIT_WORKFLOW.md            |
-| REVIEW-01 | Revisar base e plano técnico                              | em andamento                   | Codex       | Revisão solicitada pelo usuário; sem editar código                   |
+| REVIEW-01 | Revisar base e plano técnico                              | concluída                      | Codex       | Limites de P1-03 e HTTP testados; achados no handoff                 |
 | REVIEW-02 | Revisar arquitetura contra o enunciado                    | concluída                      | Claude      | Achados para P1-01, P1-02 e ENV-03; sem editar código                |
 | P1-01     | Definir contrato normalizado e decisões de negócio        | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03 |
 | P1-02     | Implementar schema, migrações e repositórios              | disponível                     | —           | P1-01; sugestão: Codex                                               |
@@ -30,9 +30,11 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## REVIEW-01 — revisão da base
 
 - Responsável: Codex.
-- Arquivos reservados: `docs/TASKS.md`, `docs/STATUS.md`, `docs/handoffs/REVIEW-01-codex.md`.
-- Escopo: inspeção do código e configuração, checks locais e disponibilidade das ferramentas; sem instalação ou mudança de serviço.
-- Dependências: nenhuma para revisão local; validação real do banco depende de ENV-02/ENV-03.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `docs/TASKS.md`, `docs/STATUS.md`, `docs/handoffs/REVIEW-01-codex.md`.
+- Escopo: inspeção do código e configuração, checks locais, cobertura e testes exploratórios de limites; nenhum código de produção ou teste do projeto alterado.
+- Dependências: persistência real continua dependendo de P1-02 e ENV-03.
+- Evidência: [handoff REVIEW-01](handoffs/REVIEW-01-codex.md); `npm run check` verde, cobertura medida e sondas temporárias executadas.
 
 ## COL-02 — contexto compartilhado e leitura sob demanda
 
