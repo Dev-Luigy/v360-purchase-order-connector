@@ -1,8 +1,12 @@
+# O nome fixo isola este stack: sem ele, o Compose deriva o projeto do nome do
+# diretório, e um worktree ou uma cópia da pasta viraria outro projeto.
+name: v360-purchase-order-connector
+
 services:
   api:
     build: .
     ports:
-      - '127.0.0.1:3000:3000'
+      - '127.0.0.1:${API_PORT:-3000}:3000'
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
@@ -31,7 +35,7 @@ services:
       POSTGRES_PASSWORD: v360
       POSTGRES_DB: v360
     ports:
-      - '127.0.0.1:5432:5432'
+      - '127.0.0.1:${DB_PORT:-55432}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

@@ -15,10 +15,14 @@ Ambiente preparado com TypeScript estrito, Fastify, PostgreSQL via Docker Compos
 Com Docker Engine e o plugin Compose disponíveis:
 
 ```sh
-docker compose up --build
+npm run up
 ```
 
-A API atende em `http://localhost:3000`. O PostgreSQL usa volume persistente; `docker compose down` preserva os dados. `docker compose down -v` apaga o volume. As credenciais do Compose são exclusivas para desenvolvimento local.
+`npm run up` executa `npm run preflight` antes de `docker compose up --build`. A verificação existe porque este é um serviço de integração e a máquina pode já estar rodando algo: ela confere o daemon, se as portas publicadas estão livres, quem as ocupa quando não estão, e se não existe outro projeto Compose com o mesmo nome. Em caso de conflito ela **aborta sem tocar em nada** — só lê estado, nunca para, remove ou recria container. `docker compose up --build` continua funcionando direto, sem a verificação.
+
+A API atende em `http://localhost:3000`. O PostgreSQL é publicado no host em `55432`, não em 5432, para nunca disputar a porta de um banco já em execução na máquina; dentro da rede do Compose ele continua em 5432. As duas portas do host são configuráveis por `API_PORT` e `DB_PORT` no `.env`.
+
+O volume é persistente: `docker compose down` preserva os dados, `docker compose down -v` apaga o volume. Esse `-v` é a única forma de perder o que foi carregado e nenhuma verificação o impede. As credenciais do Compose são exclusivas para desenvolvimento local.
 
 Para desenvolvimento com Node.js 24 e npm:
 
@@ -28,6 +32,8 @@ npm ci
 npm run db:up
 npm run dev
 ```
+
+`npm run db:up` também passa pela verificação de portas.
 
 Neste workspace também foi instalado um Node isolado em `.tools/node` (ignorado pelo Git). Para ativá-lo no Bash, a partir da pasta do projeto:
 
