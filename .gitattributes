@@ -1,0 +1,7 @@
+* text=auto eol=lf
+
+# Fixtures valem como entrada externa do cliente: preservar bytes,
+# inclusive quando existir variante em CRLF.
+tests/fixtures/** -text
+
+*.pdf binary

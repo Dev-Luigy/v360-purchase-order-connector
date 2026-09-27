@@ -1,0 +1,21 @@
+# Handoff: DOC-01 — enunciado e amostras versionados
+
+- Agente e data: Claude, 2026-09-27.
+- Estado: concluída.
+- Objetivo e resultado: o enunciado deixou de depender de link externo autenticado. `docs/CASE.pdf` é a exportação entregue pelo usuário e `docs/CASE.md` a transcrição consultável; as amostras dos quatro clientes viraram fixtures. Implementado: referência e dados. Não implementado: nenhuma decisão de contrato, regra ou modelo.
+- Arquivos alterados: `docs/CASE.md` (transcrição e pontos abertos), `docs/CASE.pdf` (movido da raiz, nome sem espaços), `tests/fixtures/{alfa,beta,gama,delta}/` e `tests/fixtures/README.md` (amostras), `.prettierignore` (fixtures JSON preservadas na forma do cliente), `README.md` (link para o enunciado local), `docs/TASKS.md` (registro). Sem commit: o repositório ainda não tem o primeiro commit (REPO-01).
+- Contratos e decisões: nenhum contrato alterado. Nenhuma ADR criada; as decisões pendentes estão listadas em "O que o enunciado não fecha" (`docs/CASE.md`) como entrada para P1-01.
+- Validação: `npm run check` passou (tipagem, lint, formatação, 2 testes, build). Os quatro JSON de fixture foram validados com `JSON.parse`. Formatação aplicada só aos arquivos desta tarefa. Nenhuma fixture é lida por teste ainda — elas não provam parsing, só registram a entrada.
+- Divergências encontradas entre o enunciado e o plano existente, para quem seguir:
+  - `docs/TECHNICAL_PLAN.md` item 4 não cobre o endpoint de detalhe de um pedido, que o requisito 1 exige ("o que já foi recebido e o que ainda falta em cada item").
+  - O mesmo item 4 se compromete a resolver varredura consistente com snapshot persistido ou versionamento consultável antes de concluir a Parte 1. O enunciado não pede isso: pede paginação com filtros, cursor defendido, padrão e teto. Sugestão: rebaixar a decisão documentada.
+  - O enunciado cobra defesas no próprio README (regras de conferência, reenvio, Delta sem correspondência e, na Parte 2, o que mudou incluindo migrações). Registrado como DOC-02.
+  - `docs/SETUP.md` e `docs/STATUS.md` afirmam que Docker não foi encontrado e que Node existe apenas em `.tools/node`. Verificado nesta sessão: Node 24.21.0, npm 12.1.0, Git 2.55.0, Docker 29.8.1 e Docker Compose 5.5.1 no PATH, com daemon respondendo sem `sudo` (`docker info`, 0 containers). ENV-02 está de fato concluída e ENV-03 desbloqueada. Não corrigi: `STATUS.md` está reservado por REVIEW-01 e ambiente é frente do Codex.
+- Pendências ou bloqueios: falta amostra de nota fiscal e variantes do CSV do Beta em Windows-1252/CRLF, que dependem de decisão em P1-01. O `npm test` usa o glob `tests/*.test.ts`: um futuro `tests/adapters/*.test.ts` seria ignorado em silêncio.
+- Efeito do ADR-004 (Prisma 7), registrado pelo Codex durante esta tarefa, sobre os pontos abertos:
+  - O ponto 5 de `docs/CASE.md` (decimal a partir de JSON) continua valendo e fica a montante do ORM: `Prisma.Decimal` aceita string, mas `JSON.parse` já produziu ponto flutuante antes de chegar ao repositório. A decisão pertence ao adaptador, não ao Prisma.
+  - O índice parcial para saldo pendente previsto no `TECHNICAL_PLAN.md` não é declarável no schema do Prisma; exige SQL manual dentro da migração gerada. Vale confirmar em P1-02.
+  - `database/migrations/README.md` reserva a pasta para migrações versionadas, enquanto Prisma Migrate usa `prisma/migrations/`. Duas pastas de migração é ambiguidade a resolver em P1-02, junto da confirmação operacional já registrada na ADR-004.
+- Próxima ação: P1-01, partindo dos nove pontos abertos de `docs/CASE.md`. Linguagem, runtime, framework e ORM deixaram de ser pendência: ADR-002, ADR-003 e ADR-004 foram aceitos pelo usuário.
+- Posse: reservas de DOC-01 liberadas. REVIEW-01 preservada; não editei `docs/STATUS.md`, `docs/SETUP.md` nem código de aplicação.
+- Revisão: não realizada por outro agente.

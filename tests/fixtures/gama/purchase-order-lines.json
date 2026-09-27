@@ -1,0 +1,47 @@
+[
+  {
+    "ped": "GL-778",
+    "item": 1,
+    "cnpj_fornecedor": "34567890000112",
+    "nome_fornecedor": "Transportes Ideal ME",
+    "dt_criacao": 1786752000,
+    "cod_mat": "TRP-01",
+    "desc_mat": "Pallet de madeira",
+    "um": "CX",
+    "fator_conv": 12,
+    "qtd_ped": 10,
+    "qtd_rec": 2,
+    "preco_unit_centavos": 120000,
+    "situacao": 1
+  },
+  {
+    "ped": "GL-778",
+    "item": 2,
+    "cnpj_fornecedor": "34567890000112",
+    "nome_fornecedor": "Transportes Ideal ME",
+    "dt_criacao": 1786752000,
+    "cod_mat": "TRP-09",
+    "desc_mat": "Caixa organizadora",
+    "um": "CX",
+    "fator_conv": 3,
+    "qtd_ped": 4,
+    "qtd_rec": 0,
+    "preco_unit_centavos": 10000,
+    "situacao": 1
+  },
+  {
+    "ped": "GL-779",
+    "item": 1,
+    "cnpj_fornecedor": "56789012000134",
+    "nome_fornecedor": "Armazéns Rio Claro Ltda",
+    "dt_criacao": 1784160000,
+    "cod_mat": "ARM-10",
+    "desc_mat": "Estrado metálico",
+    "um": "UN",
+    "fator_conv": 1,
+    "qtd_ped": 100,
+    "qtd_rec": 100,
+    "preco_unit_centavos": 3500,
+    "situacao": 2
+  }
+]
