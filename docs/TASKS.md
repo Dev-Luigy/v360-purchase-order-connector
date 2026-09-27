@@ -19,7 +19,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-01 | Revisar base e plano técnico                                     | concluída                      | Codex       | Limites de P1-03 e HTTP testados; achados no handoff                        |
 | REVIEW-02 | Revisar arquitetura contra o enunciado                           | concluída                      | Claude      | Achados para P1-01, P1-02 e ENV-03; sem editar código                       |
 | REVIEW-03 | Consolidar verificação pós-FIX-02 para a outra IA                | concluída                      | Codex       | Handoff documental; riscos residuais e retomada                             |
-| REVIEW-04 | Preparar plano de fix: arquitetura, segurança, CI/CD e Docker    | em andamento                   | Codex       | Revisão documental; não altera código nem arquivos reservados por FIX-04/05 |
+| REVIEW-04 | Preparar plano de fix: arquitetura, segurança, CI/CD e Docker    | concluída                      | Codex       | Revisão documental; não altera código nem arquivos reservados por FIX-04/05 |
 | P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03        |
 | P1-02     | Implementar schema, migrações e repositórios                     | em andamento                   | Claude      | P1-01, ADR-004 e ADR-012; validação real depende de ENV-03                  |
 | P1-03     | Implementar domínio e adaptadores Alfa/Beta                      | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                                |
@@ -55,10 +55,11 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## REVIEW-04 — plano de fix de arquitetura e operação
 
 - Responsável: Codex.
-- Estado: em andamento.
-- Arquivos reservados: `docs/TASKS.md`, `docs/handoffs/REVIEW-04-arquitetura-seguranca-cicd-docker-codex.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `docs/TASKS.md`, `docs/handoffs/REVIEW-04-arquitetura-seguranca-cicd-docker-codex.md`.
 - Escopo: consolidar achados de arquitetura e ampliar a revisão para segurança, CI/CD e Docker, com prioridade e critérios de aceite; nenhuma correção de código ou configuração nesta tarefa.
 - Dependências: considera FIX-04 e FIX-05 já concluídas para não pedir novamente correções que o Claude acabou de entregar.
+- Evidência: [handoff REVIEW-04](handoffs/REVIEW-04-arquitetura-seguranca-cicd-docker-codex.md); `npm run check`, `docker compose config --quiet` e `docker build --check .` verdes; `npm audit --audit-level=low` sem vulnerabilidades conhecidas na data da revisão.
 
 ## COL-02 — contexto compartilhado e leitura sob demanda
 
