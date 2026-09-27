@@ -200,6 +200,6 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 
 - Responsável: Claude.
 - Estado: em andamento.
-- Arquivos reservados: `src/domain/client.ts`, `src/infrastructure/integrations/{record-mapping,client-profiles,paired-csv-adapter}.ts`, `src/infrastructure/config/env.ts`, `src/main/server.ts`, `eslint.config.js`, `docs/decisions/ADR-012-notacao-por-campo.md` e o índice, `docs/diagrams/**` (regerar), `tests/*.test.ts`, `docs/TASKS.md`, `docs/handoffs/FIX-04-claude.md`.
+- Arquivos reservados: `src/domain/client.ts`, `src/infrastructure/integrations/{record-mapping,client-profiles,paired-csv-adapter}.ts`, `src/infrastructure/database/pool.ts` (novo), `src/presentation/http/app.ts` (uma linha), `src/main/server.ts`, `eslint.config.js`, `docs/decisions/ADR-012-notacao-por-campo.md` e o índice, `docs/diagrams/**` (regerar), `tests/*.test.ts`, `docs/TASKS.md`, `docs/handoffs/FIX-04-claude.md`.
 - Escopo: os quatro pontos que FIX-03 deixou abertos por exigirem decisão, autorizados pelo usuário. Muda contrato (`ClientProfile`), então exige ADR e regeração dos diagramas.
 - Dependências: FIX-03. `src/main/server.ts` é composição e encosta em P1-02: alinhar se o Codex assumir P1-02 antes do merge.
