@@ -18,6 +18,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REPO-01   | Inicializar Git, commit base e fluxo de branches                 | concluída                      | Claude      | Commit base autorizado pelo usuário; docs/GIT_WORKFLOW.md               |
 | REVIEW-01 | Revisar base e plano técnico                                     | concluída                      | Codex       | Limites de P1-03 e HTTP testados; achados no handoff                    |
 | REVIEW-02 | Revisar arquitetura contra o enunciado                           | concluída                      | Claude      | Achados para P1-01, P1-02 e ENV-03; sem editar código                   |
+| REVIEW-03 | Consolidar verificação pós-FIX-02 para a outra IA                | concluída                      | Codex       | Handoff documental; riscos residuais e retomada                         |
 | P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03    |
 | P1-02     | Implementar schema, migrações e repositórios                     | disponível                     | —           | P1-01; sugestão: Codex                                                  |
 | P1-03     | Implementar domínio e adaptadores Alfa/Beta                      | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                            |
@@ -37,6 +38,15 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: inspeção do código e configuração, checks locais, cobertura e testes exploratórios de limites; nenhum código de produção ou teste do projeto alterado.
 - Dependências: persistência real continua dependendo de P1-02 e ENV-03.
 - Evidência: [handoff REVIEW-01](handoffs/REVIEW-01-codex.md); `npm run check` verde, cobertura medida e sondas temporárias executadas.
+
+## REVIEW-03 — handoff pós-FIX-02
+
+- Responsável: Codex.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `docs/TASKS.md`, `docs/handoffs/REVIEW-03-codex.md`.
+- Escopo: consolidar para a outra IA o que foi corrigido, os riscos residuais reproduzidos e a ordem recomendada de retomada; sem editar código.
+- Dependências: FIX-01 e FIX-02 concluídas.
+- Evidência: [handoff REVIEW-03](handoffs/REVIEW-03-codex.md).
 
 ## COL-02 — contexto compartilhado e leitura sob demanda
 
