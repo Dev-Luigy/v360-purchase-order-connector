@@ -95,16 +95,17 @@ test('timestamp Unix é lido em UTC, não no fuso local', () => {
 });
 
 test('cliente novo em forma conhecida entra só com perfil, sem código novo', async () => {
-  // É a promessa de ADR-008. Este perfil é sintético e existe para exercitar os
-  // três campos que Alfa e Beta deixam nulos: fator de conversão por item, data
-  // própria da linha e moeda assumida.
+  // É a promessa de ADR-008, e o teste usa a notação real do Gama para provar
+  // também ADR-012: quantidade e fator em inteiro simples, preço em centavos e
+  // data em timestamp Unix, tudo na mesma linha. Antes de FIX-04 isto era
+  // inexprimível — `numberFormat: 'cents'` converteria também a quantidade.
   const sigma: ClientProfile = {
     clientId: 'sigma',
-    name: 'Sigma (sintético)',
+    name: 'Sigma (sintético, notação do Gama)',
     deliveryFormat: 'nested-json',
     formatVersion: '1',
-    dateFormat: 'iso-date',
-    numberFormat: 'plain',
+    dateFormat: 'unix-seconds',
+    numberFormat: { quantity: 'plain', money: 'cents' },
     taxIdMasked: false,
     assumedCurrency: 'BRL',
     statusVocabulary: { '1': 'aberto', '2': 'encerrado', '3': 'bloqueado' },
@@ -113,9 +114,9 @@ test('cliente novo em forma conhecida entra só com perfil, sem código novo', a
       ordersArray: 'pedidos',
       itemsArray: 'linhas',
       order: {
-        externalNumber: 'num',
-        issuedOn: 'emissao',
-        status: 'sit',
+        externalNumber: 'ped',
+        issuedOn: 'dt_criacao',
+        status: 'situacao',
         currency: null,
         supplierTaxId: 'forn.cnpj',
         supplierName: 'forn.nome',
@@ -123,13 +124,13 @@ test('cliente novo em forma conhecida entra só com perfil, sem código novo', a
       item: {
         orderNumber: null,
         externalLine: 'item',
-        material: 'cod',
-        description: 'desc',
+        material: 'cod_mat',
+        description: 'desc_mat',
         purchaseUnit: 'um',
-        quantityOrdered: 'qtd',
-        quantityReceived: 'rec',
-        unitPrice: 'preco',
-        conversionFactor: 'fator',
+        quantityOrdered: 'qtd_ped',
+        quantityReceived: 'qtd_rec',
+        unitPrice: 'preco_unit_centavos',
+        conversionFactor: 'fator_conv',
         lineCreatedOn: 'dt_linha',
       },
     },
@@ -139,21 +140,21 @@ test('cliente novo em forma conhecida entra só com perfil, sem código novo', a
   const payload = JSON.stringify({
     pedidos: [
       {
-        num: 'S-1',
-        emissao: '2026-03-01',
-        sit: '1',
+        ped: 'GL-778',
+        dt_criacao: 1786752000,
+        situacao: 1,
         forn: { cnpj: '34567890000112', nome: 'Transportes Ideal ME' },
         linhas: [
           {
             item: 1,
-            cod: 'TRP-01',
-            desc: 'Pallet de madeira',
+            cod_mat: 'TRP-01',
+            desc_mat: 'Pallet de madeira',
             um: 'CX',
-            fator: 12,
-            qtd: 10,
-            rec: 2,
-            preco: 1200.5,
-            dt_linha: '2026-03-05',
+            fator_conv: 12,
+            qtd_ped: 10,
+            qtd_rec: 2,
+            preco_unit_centavos: 120000,
+            dt_linha: 1786752000,
           },
         ],
       },
@@ -187,12 +188,20 @@ test('cliente novo em forma conhecida entra só com perfil, sem código novo', a
     'moeda assumida, o payload não traz',
   );
   assert.equal(orders[0]?.status, 'aberto', 'vocabulário numérico do cliente');
+  assert.equal(orders[0]?.issuedOn, '2026-08-15', 'timestamp lido em UTC');
   assert.equal(orders[0]?.supplier.taxId, '34567890000112');
+  // O ponto de ADR-012: a mesma linha, duas notações.
+  assert.equal(
+    item?.quantityOrdered,
+    '10.000000',
+    'inteiro simples, não centavos',
+  );
+  assert.equal(item?.quantityReceived, '2.000000');
   assert.equal(
     item?.conversionFactor,
     '12.000000',
-    'fator por item, não por cliente',
+    'fator é medida, não dinheiro',
   );
-  assert.equal(item?.lineCreatedOn, '2026-03-05', 'data própria da linha');
-  assert.equal(item?.unitPrice, '1200.500000');
+  assert.equal(item?.unitPrice, '1200.000000', '120000 centavos = R$ 1.200,00');
+  assert.equal(item?.lineCreatedOn, '2026-08-15', 'data própria da linha');
 });

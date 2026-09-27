@@ -46,7 +46,7 @@ package "Perfil do cliente — o que e rotulo, nao estrutura" as pkgPerfil {
     +deliveryFormat : DeliveryFormat
     +formatVersion : string
     +dateFormat : DateFormat
-    +numberFormat : NumberFormat
+    +numberFormat : NumberFormats
     +taxIdMasked : boolean
     +assumedCurrency : CurrencyCode | null
     +statusVocabulary : Record<string, PurchaseOrderStatus>
@@ -105,6 +105,11 @@ package "Perfil do cliente — o que e rotulo, nao estrutura" as pkgPerfil {
     plain
     br
     cents
+  }
+
+  interface NumberFormats {
+    +quantity : NumberFormat
+    +money : NumberFormat
   }
 }
 
@@ -272,7 +277,8 @@ package "Conferencia" as pkgConferencia {
 ' ---------- perfil ----------
 ClientProfile --> DeliveryFormat : deliveryFormat
 ClientProfile --> DateFormat : dateFormat
-ClientProfile --> NumberFormat : numberFormat
+ClientProfile "1" *-- "1" NumberFormats : numberFormat
+NumberFormats --> NumberFormat : quantity e money
 ClientProfile "1" *-- "0..1" CsvOptions : csv
 ClientProfile "1" *-- "1" ClientFieldMap : fields
 ClientFieldMap "1" *-- "1" OrderFieldMap : order

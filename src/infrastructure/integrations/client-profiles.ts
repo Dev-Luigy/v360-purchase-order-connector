@@ -25,7 +25,7 @@ export const alfaProfile: ClientProfile = {
   deliveryFormat: 'nested-json',
   formatVersion: '1',
   dateFormat: 'iso-date',
-  numberFormat: 'plain',
+  numberFormat: { quantity: 'plain', money: 'plain' },
   taxIdMasked: false,
   assumedCurrency: null,
   statusVocabulary: {
@@ -66,7 +66,7 @@ export const betaProfile: ClientProfile = {
   deliveryFormat: 'paired-csv',
   formatVersion: '1',
   dateFormat: 'br-date',
-  numberFormat: 'br',
+  numberFormat: { quantity: 'br', money: 'br' },
   taxIdMasked: true,
   assumedCurrency: null,
   statusVocabulary: {
@@ -152,7 +152,10 @@ const profileSchema = z
     ]),
     formatVersion: z.string().min(1, 'versão de formato vazia'),
     dateFormat: z.enum(['iso-date', 'br-date', 'unix-seconds']),
-    numberFormat: z.enum(['plain', 'br', 'cents']),
+    numberFormat: z.object({
+      quantity: z.enum(['plain', 'br', 'cents']),
+      money: z.enum(['plain', 'br', 'cents']),
+    }),
     taxIdMasked: z.boolean(),
     assumedCurrency: currencySchema.nullable(),
     statusVocabulary: z

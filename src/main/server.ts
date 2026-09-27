@@ -1,15 +1,12 @@
-import pg from 'pg';
+import { createPool } from '../infrastructure/database/pool.js';
 import { CheckReadiness } from '../application/use-cases/check-readiness.js';
 import { parseEnvironment } from '../infrastructure/config/env.js';
 import { PostgresHealth } from '../infrastructure/database/postgres-health.js';
 import { buildApp } from '../presentation/http/app.js';
 const env = parseEnvironment(process.env);
-const pool = new pg.Pool({
-  connectionString: env.DATABASE_URL,
-  connectionTimeoutMillis: 3000,
-  query_timeout: 3000,
-  max: 10,
-});
+// O caminho de carga tem pool próprio, sem tempo limite de consulta; entra
+// com o endpoint de ingestão, em P1-04 (ADR-012).
+const pool = createPool(env.DATABASE_URL, 'request');
 const app = buildApp({
   readiness: new CheckReadiness(new PostgresHealth(pool)),
   logLevel: env.LOG_LEVEL,

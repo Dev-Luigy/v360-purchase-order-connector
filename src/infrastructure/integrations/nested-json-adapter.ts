@@ -84,7 +84,7 @@ function toNormalizedOrder(
   const rawItems = readPath(raw, itemsPath);
   // Nesta forma os itens vêm dentro do pedido. Ausência é payload malformado,
   // e não "esta carga não trouxe os itens" — esse caso é do `split-json`.
-  if (!Array.isArray(rawItems)) {
+  if (!isJsonArray(rawItems)) {
     throw new FieldError(itemsPath, 'itens ausentes ou não são uma lista');
   }
   return validateNormalizedOrder({
@@ -180,6 +180,16 @@ export function jsonFieldSource(value: JsonValue): FieldSource {
     },
     optionalText: (path) => textOf(readPath(value, path)),
   };
+}
+
+/**
+ * `Array.isArray` sozinho estreita para `any[]` quando a união tem array
+ * somente-leitura, e o `any` se espalha silenciosamente pelo `map`.
+ */
+function isJsonArray(
+  value: JsonValue | undefined,
+): value is readonly JsonValue[] {
+  return Array.isArray(value);
 }
 
 function readPath(value: JsonValue, path: string): JsonValue | undefined {
