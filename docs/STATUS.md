@@ -1,6 +1,6 @@
 # Estado do projeto
 
-Atualizado por Codex em 2026-09-27.
+Atualizado por Claude em 2026-09-27, após FIX-01.
 
 ## Implementado
 
@@ -16,21 +16,22 @@ Atualizado por Codex em 2026-09-27.
 
 ## Evidências e limitações
 
-- `npm run check` passou após P1-03: tipagem, lint, formatação, 66 casos em sete arquivos de teste e build.
+- `npm run check` passou após FIX-01: tipagem, lint, formatação, 81 casos em oito arquivos de teste e build.
 - Cobertura medida em REVIEW-01: 96,00% de linhas, 81,53% de branches e 99,15% de funções no código carregado pela suíte.
 - Duas mil combinações aritméticas inteiras comparadas com `BigInt` passaram; `/health` e `/ready` foram exercitados via `inject` nos limites atuais.
-- REVIEW-01 encontrou riscos de validação e volume antes de P1-04: CNPJ contaminado aceito, fator de conversão inválido chegando à regra, notação brasileira permissiva, datas só sintáticas e lote Beta sem limite no caminho de cabeçalhos sem itens. Evidência e demais achados no [handoff](handoffs/REVIEW-01-codex.md).
+- Os sete achados de [REVIEW-01](handoffs/REVIEW-01-codex.md) foram reproduzidos e corrigidos em [FIX-01](handoffs/FIX-01-claude.md), cada um com teste de regressão; um oitavo defeito apareceu durante a correção e também foi corrigido. Nenhum era falso positivo.
+- Cobertura não foi medida de novo depois de FIX-01; o número acima é de REVIEW-01.
 - Os testes substituem banco e conexão; não validam PostgreSQL real, persistência ou reinício.
 - Docker e Compose estão instalados, mas a tentativa de validação real foi interrompida e o usuário pediu para ignorá-la por enquanto. Não havia container do projeto depois da interrupção.
 - `scripts/activate-node.sh` está apagado no working tree por alteração preexistente, preservada nesta revisão; o README ainda o referencia.
 
 ## Ainda não implementado
 
-Tabelas, migrações e repositórios; casos de uso e rotas de ingestão, consulta, paginação, conferência e relatórios; correções dos limites levantados em REVIEW-01. Gama/Delta somente após o marco da Parte 1.
+Tabelas, migrações e repositórios; casos de uso e rotas de ingestão, consulta, paginação, conferência e relatórios. Gama/Delta somente após o marco da Parte 1.
 
 ## Próxima retomada
 
-Priorizar uma tarefa de estabilização para os achados de REVIEW-01, em especial os que podem virar dados inválidos ou consumo sem limite. P1-02 segue disponível; ENV-03 continua pendente e P1-04 depende de P1-02. Consultar o quadro antes de reservar arquivos.
+P1-02 é o caminho crítico: é a única coisa entre o estado atual e P1-04, que agora só depende dela. ENV-03 continua pendente e destrava a validação real de banco e Compose. Limites de corpo, página e multipart ficam para P1-04, como REVIEW-01 apontou. Consultar o quadro antes de reservar arquivos.
 
 ## Colaboração
 
