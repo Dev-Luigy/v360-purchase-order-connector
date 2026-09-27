@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { deepFreeze } from '../deep-freeze.js';
+
 import type { ClientProfiles } from '../../application/ports/client-profiles.js';
 import type { ClientId, ClientProfile } from '../../domain/client.js';
 import {
@@ -19,7 +21,7 @@ import { normalizeStatusKey } from './field-parsers.js';
  * já é assíncrona para que a troca não mexa em quem consome.
  */
 
-export const alfaProfile: ClientProfile = {
+export const alfaProfile: ClientProfile = deepFreeze({
   clientId: 'alfa',
   name: 'Alfa Energia',
   deliveryFormat: 'nested-json',
@@ -58,9 +60,9 @@ export const alfaProfile: ClientProfile = {
       lineCreatedOn: null,
     },
   },
-};
+});
 
-export const betaProfile: ClientProfile = {
+export const betaProfile: ClientProfile = deepFreeze({
   clientId: 'beta',
   name: 'Beta Alimentos',
   deliveryFormat: 'paired-csv',
@@ -103,7 +105,7 @@ export const betaProfile: ClientProfile = {
       lineCreatedOn: null,
     },
   },
-};
+});
 
 /** Os clientes da Parte 1. Gama e Delta entram na Parte 2, com a forma deles. */
 export const configuredProfiles: readonly ClientProfile[] = [
@@ -239,20 +241,6 @@ export function assertValidProfile(profile: ClientProfile): void {
   if (!result.success) {
     throw new ProfileError(profile.clientId, describeIssues(result.error));
   }
-}
-
-/**
- * Congela o perfil por inteiro. `readonly` é só de compilação: sem isto, quem
- * receber o perfil pela porta pode alterá-lo em tempo de execução e contornar
- * a validação do start (REVIEW-01, achado 6).
- */
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== 'object' || Object.isFrozen(value)) {
-    return value;
-  }
-  Object.freeze(value);
-  for (const nested of Object.values(value)) deepFreeze(nested);
-  return value;
 }
 
 /** Implementação da porta sobre os perfis em código. */

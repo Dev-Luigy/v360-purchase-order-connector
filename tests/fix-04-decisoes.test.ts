@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { poolOptionsFor } from '../src/infrastructure/database/pool.js';
-import { betaProfile } from '../src/infrastructure/integrations/client-profiles.js';
+import {
+  createPool,
+  poolOptionsFor,
+} from '../src/infrastructure/database/pool.js';
+import {
+  alfaProfile,
+  betaProfile,
+} from '../src/infrastructure/integrations/client-profiles.js';
 import {
   PairedCsvAdapter,
   csvHeadersPart,
@@ -84,4 +90,29 @@ test('o caminho de carga não herda o tempo limite do caminho de requisição', 
       (poolOptionsFor('request').max ?? 0),
     'a carga não deve competir com a requisição pelo banco',
   );
+});
+
+test('preset de pool e perfil exportado não podem ser alterados por quem os recebe', () => {
+  // `Readonly` é só de compilação. Sem congelar, mutar o objeto devolvido
+  // mudava o preset para todo mundo — a mesma classe de defeito que os perfis
+  // de cliente tiveram em REVIEW-03.
+  const opcoes = poolOptionsFor('request');
+  assert.equal(Object.isFrozen(opcoes), true);
+  assert.throws(() => {
+    (opcoes as { max?: number }).max = 999;
+  }, TypeError);
+  assert.equal(poolOptionsFor('request').max, 10);
+
+  assert.equal(Object.isFrozen(alfaProfile), true);
+  assert.equal(Object.isFrozen(alfaProfile.numberFormat), true);
+  assert.throws(() => {
+    (alfaProfile as { clientId: string }).clientId = 'outro';
+  }, TypeError);
+});
+
+test('createPool aplica o preset sem deixar o chamador alterá-lo', () => {
+  // A cópia que vai para o pg é nova; o preset segue intacto.
+  const pool = createPool('postgres://localhost:5432/x', 'ingestion');
+  assert.equal(poolOptionsFor('ingestion').max, 4);
+  void pool.end();
 });
