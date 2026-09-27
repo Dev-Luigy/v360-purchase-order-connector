@@ -16,6 +16,10 @@ git switch -c feat/p1-03-adaptadores-alfa-beta
 - **O ID da branch é o ID de [TASKS.md](TASKS.md).** Sem tarefa registrada, não se abre branch. O responsável da tarefa é o único que commita naquela branch.
 - Branch de tarefa é curta: nasce de `main` atualizada e volta para `main` ao fim da tarefa. Não acumular tarefas na mesma branch.
 
+### A reserva do quadro vai direto para `main`
+
+Branch por tarefa tem um custo: o que está na branch é invisível para o outro agente até o merge, e o quadro é justamente o mecanismo que evita dois agentes no mesmo arquivo. Então a linha de reserva em [TASKS.md](TASKS.md) — ID, responsável, arquivos reservados — é commitada direto em `main`, antes de abrir a branch. O resto do trabalho da tarefa, incluindo o handoff e a atualização final do quadro, vai na branch e chega por merge.
+
 ## Commits
 
 Formato `<tipo>(<id>): resumo no imperativo`, em português, assunto até ~72 caracteres:

@@ -2,25 +2,26 @@
 
 Estados: disponível, aguardando, em andamento, em revisão, concluída. Responsável `—` significa que ninguém assumiu.
 
-| ID        | Tarefa                                                  | Estado       | Responsável | Dependência / escopo                                                |
-| --------- | ------------------------------------------------------- | ------------ | ----------- | ------------------------------------------------------------------- |
-| ENV-01    | Criar base TypeScript/Fastify e Compose                 | concluída    | Codex       | Arquivos existentes; execução real do Compose pendente em ENV-02    |
-| COL-01    | Organizar colaboração e instalação                      | concluída    | Codex       | AGENTS.md, CLAUDE.md, docs e link no README                         |
-| COL-02    | Estruturar contexto compartilhado e leitura sob demanda | concluída    | Codex       | Documentação; registro e arquivos abaixo                            |
-| DOC-01    | Versionar o enunciado e as amostras dos clientes        | concluída    | Claude      | Nenhuma; enunciado e fixtures, sem código de negócio                |
-| DOC-02    | Reestruturar README como artefato avaliado              | aguardando   | —           | P1-01; o enunciado cobra as defesas no README (docs/CASE.md)        |
-| ARCH-04   | Registrar escolha do ORM Prisma 7                       | concluída    | Codex       | ADR-001, ADR-002 e ADR-003; documentação apenas                     |
-| ENV-02    | Instalar ferramentas do sistema                         | aguardando   | Usuário     | docs/SETUP.md                                                       |
-| ENV-03    | Validar Compose, conexão e reinício do banco            | aguardando   | —           | ENV-02; ambiente, sem código de negócio                             |
-| REPO-01   | Inicializar Git, commit base e fluxo de branches        | concluída    | Claude      | Commit base autorizado pelo usuário; docs/GIT_WORKFLOW.md           |
-| REVIEW-01 | Revisar base e plano técnico                            | em andamento | Codex       | Revisão solicitada pelo usuário; sem editar código                  |
-| REVIEW-02 | Revisar arquitetura contra o enunciado                  | concluída    | Claude      | Achados para P1-01, P1-02 e ENV-03; sem editar código               |
-| P1-01     | Definir contrato normalizado e decisões de negócio      | aguardando   | —           | Próxima etapa de implementação; alinhar interfaces antes de dividir |
-| P1-02     | Implementar schema, migrações e repositórios            | aguardando   | —           | P1-01; sugestão: Codex                                              |
-| P1-03     | Implementar domínio e adaptadores Alfa/Beta             | aguardando   | —           | P1-01; sugestão: Claude                                             |
-| P1-04     | Integrar API, conferência e relatório paginado          | aguardando   | —           | P1-02 e P1-03; combinar responsabilidade por arquivo                |
-| P1-05     | Validar desafio e registrar marco parte-1               | aguardando   | —           | P1-04; persistência, concorrência, precisão e paginação             |
-| P2-01     | Integrar Gama/Delta e documentar mudanças               | aguardando   | —           | P1-05                                                               |
+| ID        | Tarefa                                                  | Estado       | Responsável | Dependência / escopo                                                 |
+| --------- | ------------------------------------------------------- | ------------ | ----------- | -------------------------------------------------------------------- |
+| ENV-01    | Criar base TypeScript/Fastify e Compose                 | concluída    | Codex       | Arquivos existentes; execução real do Compose pendente em ENV-02     |
+| COL-01    | Organizar colaboração e instalação                      | concluída    | Codex       | AGENTS.md, CLAUDE.md, docs e link no README                          |
+| COL-02    | Estruturar contexto compartilhado e leitura sob demanda | concluída    | Codex       | Documentação; registro e arquivos abaixo                             |
+| DOC-01    | Versionar o enunciado e as amostras dos clientes        | concluída    | Claude      | Nenhuma; enunciado e fixtures, sem código de negócio                 |
+| DOC-02    | Reestruturar README como artefato avaliado              | aguardando   | —           | P1-01; o enunciado cobra as defesas no README (docs/CASE.md)         |
+| ARCH-04   | Registrar escolha do ORM Prisma 7                       | concluída    | Codex       | ADR-001, ADR-002 e ADR-003; documentação apenas                      |
+| ENV-02    | Instalar ferramentas do sistema                         | aguardando   | Usuário     | docs/SETUP.md                                                        |
+| ENV-03    | Validar Compose, conexão e reinício do banco            | aguardando   | —           | ENV-02; ambiente, sem código de negócio                              |
+| ENV-04    | Verificar portas e isolar o Compose antes de subir      | em andamento | Claude      | Pedido do usuário; compose.yaml, scripts, .env.example, package.json |
+| REPO-01   | Inicializar Git, commit base e fluxo de branches        | concluída    | Claude      | Commit base autorizado pelo usuário; docs/GIT_WORKFLOW.md            |
+| REVIEW-01 | Revisar base e plano técnico                            | em andamento | Codex       | Revisão solicitada pelo usuário; sem editar código                   |
+| REVIEW-02 | Revisar arquitetura contra o enunciado                  | concluída    | Claude      | Achados para P1-01, P1-02 e ENV-03; sem editar código                |
+| P1-01     | Definir contrato normalizado e decisões de negócio      | aguardando   | —           | Próxima etapa de implementação; alinhar interfaces antes de dividir  |
+| P1-02     | Implementar schema, migrações e repositórios            | aguardando   | —           | P1-01; sugestão: Codex                                               |
+| P1-03     | Implementar domínio e adaptadores Alfa/Beta             | aguardando   | —           | P1-01; sugestão: Claude                                              |
+| P1-04     | Integrar API, conferência e relatório paginado          | aguardando   | —           | P1-02 e P1-03; combinar responsabilidade por arquivo                 |
+| P1-05     | Validar desafio e registrar marco parte-1               | aguardando   | —           | P1-04; persistência, concorrência, precisão e paginação              |
+| P2-01     | Integrar Gama/Delta e documentar mudanças               | aguardando   | —           | P1-05                                                                |
 
 Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e dependências. Uma tarefa só pode ter um responsável de implementação por vez.
 
@@ -102,3 +103,11 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: revisão de arquitetura contra o enunciado e as ADR aceitas; treze achados, nenhuma correção aplicada. Não substitui REVIEW-01, que segue com o Codex.
 - Dependências: nenhuma. Não edita código, `docs/STATUS.md` nem arquivos reservados por REVIEW-01.
 - Evidência: [handoff REVIEW-02](handoffs/REVIEW-02-claude.md).
+
+## ENV-04 — verificação de portas e isolamento do Compose
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `compose.yaml`, `scripts/preflight-docker.mjs`, `package.json`, `.env.example`, `eslint.config.js`, `README.md`, `docs/handoffs/ENV-04-claude.md`.
+- Escopo: verificação antes de subir o Compose, para não colidir com serviço já em execução no host, e isolamento do projeto Docker. Sem código de negócio e sem mexer em `/ready` (mantido por decisão do usuário).
+- Dependências: ambiente é frente proposta do Codex em `COLLABORATION.md`; esta tarefa foi pedida explicitamente pelo usuário, que tem prioridade conforme `AGENTS.md`. ENV-03 segue sem responsável; se o Codex assumir, alinhar antes de editar `compose.yaml`.
