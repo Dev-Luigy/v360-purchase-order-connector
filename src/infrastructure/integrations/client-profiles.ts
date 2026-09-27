@@ -201,6 +201,30 @@ const profileSchema = z
       profile.deliveryFormat !== 'nested-json' ||
       profile.fields.itemsArray !== null,
     'itens aninhados exigem itemsArray',
+  )
+  // Onde está o array de pedidos depende da forma, e o start é o lugar de
+  // descobrir que não está em lugar nenhum. Antes isso só aparecia na primeira
+  // carga real do cliente (REVIEW-01, achado 6).
+  .refine(
+    (profile) =>
+      profile.deliveryFormat === 'flat-json' ||
+      profile.deliveryFormat === 'paired-csv' ||
+      profile.fields.ordersArray !== null,
+    'esta forma exige ordersArray: é onde o array de pedidos está no payload',
+  )
+  .refine(
+    (profile) =>
+      profile.deliveryFormat !== 'flat-json' ||
+      profile.fields.ordersArray === null,
+    'flat-json não tem ordersArray: a raiz do payload já é o array',
+  )
+  // Sem campo de moeda e sem moeda assumida, todo registro do cliente seria
+  // rejeitado por falta de moeda — perfil inútil que passava no start.
+  .refine(
+    (profile) =>
+      profile.fields.order.currency !== null ||
+      profile.assumedCurrency !== null,
+    'cliente que não envia moeda precisa declarar assumedCurrency',
   );
 
 /**
@@ -214,6 +238,20 @@ export function assertValidProfile(profile: ClientProfile): void {
   }
 }
 
+/**
+ * Congela o perfil por inteiro. `readonly` é só de compilação: sem isto, quem
+ * receber o perfil pela porta pode alterá-lo em tempo de execução e contornar
+ * a validação do start (REVIEW-01, achado 6).
+ */
+function deepFreeze<T>(value: T): T {
+  if (value === null || typeof value !== 'object' || Object.isFrozen(value)) {
+    return value;
+  }
+  Object.freeze(value);
+  for (const nested of Object.values(value)) deepFreeze(nested);
+  return value;
+}
+
 /** Implementação da porta sobre os perfis em código. */
 export class InMemoryClientProfiles implements ClientProfiles {
   private readonly byId: ReadonlyMap<ClientId, ClientProfile>;
@@ -225,7 +263,7 @@ export class InMemoryClientProfiles implements ClientProfiles {
       if (byId.has(profile.clientId)) {
         throw new ProfileError(profile.clientId, 'identificador repetido');
       }
-      byId.set(profile.clientId, profile);
+      byId.set(profile.clientId, deepFreeze(structuredClone(profile)));
     }
     this.byId = byId;
   }

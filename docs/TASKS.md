@@ -2,29 +2,29 @@
 
 Estados: disponível, aguardando, em andamento, em revisão, concluída. Responsável `—` significa que ninguém assumiu.
 
-| ID        | Tarefa                                                    | Estado                         | Responsável | Dependência / escopo                                                 |
-| --------- | --------------------------------------------------------- | ------------------------------ | ----------- | -------------------------------------------------------------------- |
-| ENV-01    | Criar base TypeScript/Fastify e Compose                   | concluída                      | Codex       | Arquivos existentes; execução real do Compose pendente em ENV-02     |
-| COL-01    | Organizar colaboração e instalação                        | concluída                      | Codex       | AGENTS.md, CLAUDE.md, docs e link no README                          |
-| COL-02    | Estruturar contexto compartilhado e leitura sob demanda   | concluída                      | Codex       | Documentação; registro e arquivos abaixo                             |
-| DOC-01    | Versionar o enunciado e as amostras dos clientes          | concluída                      | Claude      | Nenhuma; enunciado e fixtures, sem código de negócio                 |
-| DOC-02    | Reestruturar README como artefato avaliado                | aguardando                     | —           | P1-01; o enunciado cobra as defesas no README (docs/CASE.md)         |
-| DOC-03    | Diagramar objetos e relacoes do contrato normalizado      | em andamento                   | Claude      | P1-01; diagramas em docs/diagrams, sem codigo de negocio             |
-| ARCH-04   | Registrar escolha do ORM Prisma 7                         | concluída                      | Codex       | ADR-001, ADR-002 e ADR-003; documentação apenas                      |
-| ARCH-05   | Registrar desenho de observabilidade (Grafana/Prometheus) | aceita, implementação diferida | Claude      | Pedido do usuário; decisão apenas, sem dependência instalada         |
-| ENV-02    | Instalar ferramentas do sistema                           | aguardando                     | Usuário     | docs/SETUP.md                                                        |
-| ENV-03    | Validar Compose, conexão e reinício do banco              | aguardando                     | —           | ENV-02; ambiente, sem código de negócio                              |
-| ENV-04    | Verificar portas e isolar o Compose antes de subir        | concluída                      | Claude      | Pedido do usuário; preflight, nome fixo do projeto e portas por env  |
-| REPO-01   | Inicializar Git, commit base e fluxo de branches          | concluída                      | Claude      | Commit base autorizado pelo usuário; docs/GIT_WORKFLOW.md            |
-| REVIEW-01 | Revisar base e plano técnico                              | concluída                      | Codex       | Limites de P1-03 e HTTP testados; achados no handoff                 |
-| REVIEW-02 | Revisar arquitetura contra o enunciado                    | concluída                      | Claude      | Achados para P1-01, P1-02 e ENV-03; sem editar código                |
-| P1-01     | Definir contrato normalizado e decisões de negócio        | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03 |
-| P1-02     | Implementar schema, migrações e repositórios              | disponível                     | —           | P1-01; sugestão: Codex                                               |
-| P1-03     | Implementar domínio e adaptadores Alfa/Beta               | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                         |
-| FIX-01    | Estabilizar validação e limites de REVIEW-01              | em andamento                   | Claude      | REVIEW-01; sete achados; bloqueia P1-04                              |
-| P1-04     | Integrar API, conferência e relatório paginado            | aguardando                     | —           | P1-02, P1-03 e FIX-01; combinar responsabilidade por arquivo         |
-| P1-05     | Validar desafio e registrar marco parte-1                 | aguardando                     | —           | P1-04; persistência, concorrência, precisão e paginação              |
-| P2-01     | Integrar Gama/Delta e documentar mudanças                 | aguardando                     | —           | P1-05                                                                |
+| ID        | Tarefa                                                    | Estado                         | Responsável | Dependência / escopo                                                    |
+| --------- | --------------------------------------------------------- | ------------------------------ | ----------- | ----------------------------------------------------------------------- |
+| ENV-01    | Criar base TypeScript/Fastify e Compose                   | concluída                      | Codex       | Arquivos existentes; execução real do Compose pendente em ENV-02        |
+| COL-01    | Organizar colaboração e instalação                        | concluída                      | Codex       | AGENTS.md, CLAUDE.md, docs e link no README                             |
+| COL-02    | Estruturar contexto compartilhado e leitura sob demanda   | concluída                      | Codex       | Documentação; registro e arquivos abaixo                                |
+| DOC-01    | Versionar o enunciado e as amostras dos clientes          | concluída                      | Claude      | Nenhuma; enunciado e fixtures, sem código de negócio                    |
+| DOC-02    | Reestruturar README como artefato avaliado                | aguardando                     | —           | P1-01; o enunciado cobra as defesas no README (docs/CASE.md)            |
+| DOC-03    | Diagramar objetos e relacoes do contrato normalizado      | em andamento                   | Claude      | P1-01; diagramas em docs/diagrams, sem codigo de negocio                |
+| ARCH-04   | Registrar escolha do ORM Prisma 7                         | concluída                      | Codex       | ADR-001, ADR-002 e ADR-003; documentação apenas                         |
+| ARCH-05   | Registrar desenho de observabilidade (Grafana/Prometheus) | aceita, implementação diferida | Claude      | Pedido do usuário; decisão apenas, sem dependência instalada            |
+| ENV-02    | Instalar ferramentas do sistema                           | aguardando                     | Usuário     | docs/SETUP.md                                                           |
+| ENV-03    | Validar Compose, conexão e reinício do banco              | aguardando                     | —           | ENV-02; ambiente, sem código de negócio                                 |
+| ENV-04    | Verificar portas e isolar o Compose antes de subir        | concluída                      | Claude      | Pedido do usuário; preflight, nome fixo do projeto e portas por env     |
+| REPO-01   | Inicializar Git, commit base e fluxo de branches          | concluída                      | Claude      | Commit base autorizado pelo usuário; docs/GIT_WORKFLOW.md               |
+| REVIEW-01 | Revisar base e plano técnico                              | concluída                      | Codex       | Limites de P1-03 e HTTP testados; achados no handoff                    |
+| REVIEW-02 | Revisar arquitetura contra o enunciado                    | concluída                      | Claude      | Achados para P1-01, P1-02 e ENV-03; sem editar código                   |
+| P1-01     | Definir contrato normalizado e decisões de negócio        | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03    |
+| P1-02     | Implementar schema, migrações e repositórios              | disponível                     | —           | P1-01; sugestão: Codex                                                  |
+| P1-03     | Implementar domínio e adaptadores Alfa/Beta               | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                            |
+| FIX-01    | Estabilizar validação e limites de REVIEW-01              | em andamento                   | Claude      | REVIEW-01; sete achados; bloqueia P1-04                                 |
+| P1-04     | Integrar API, conferência e relatório paginado            | aguardando                     | —           | P1-02; P1-03 e FIX-01 concluídas; combinar responsabilidade por arquivo |
+| P1-05     | Validar desafio e registrar marco parte-1                 | aguardando                     | —           | P1-04; persistência, concorrência, precisão e paginação                 |
+| P2-01     | Integrar Gama/Delta e documentar mudanças                 | aguardando                     | —           | P1-05                                                                   |
 
 Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e dependências. Uma tarefa só pode ter um responsável de implementação por vez.
 
@@ -158,8 +158,9 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## FIX-01 — estabilizar validação e limites
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/domain/{decimal,schemas,conference-rules}.ts`, `src/infrastructure/integrations/{field-parsers,csv-stream,client-profiles,nested-json-adapter,paired-csv-adapter}.ts`, `tests/*.test.ts`, `docs/TASKS.md`, `docs/handoffs/FIX-01-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `src/domain/{decimal,schemas}.ts`, `src/infrastructure/integrations/{field-parsers,csv-stream,client-profiles,nested-json-adapter,paired-csv-adapter}.ts`, `tests/*.test.ts`, `docs/TASKS.md`, `docs/handoffs/FIX-01-claude.md`.
 - Escopo: os sete achados de [REVIEW-01](handoffs/REVIEW-01-codex.md), cada um com teste de regressão. Corrige o que P1-03 entregou; não acrescenta funcionalidade nem toca contrato de porta.
 - Dependências: REVIEW-01 concluída. **Não toca** `prisma/`, `src/infrastructure/database/`, `src/presentation/`, `src/main/` nem `package.json`. P1-02 segue livre para o Codex em paralelo.
 - Prioridade adotada, diferente da ordem do handoff: a normalização brasileira permissiva (achado 4) vem primeiro, porque é a única que **altera um valor monetário** em silêncio; as demais aceitam entrada ruim sem mudar número.
+- Evidência: [handoff FIX-01](handoffs/FIX-01-claude.md); `npm run check` verde com 81 testes; os sete achados foram reproduzidos antes da correção e um oitavo apareceu durante ela.

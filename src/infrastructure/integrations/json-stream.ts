@@ -49,7 +49,13 @@ export async function* streamArrayAtKey(
     streamArray({ numberAsString: true }),
   ]);
 
-  Readable.from(toBuffers(chunks)).pipe(pipeline);
+  // `.pipe()` não propaga erro da fonte para o destino: sem encaminhar, uma
+  // falha na origem da carga vira erro não tratado.
+  const source = Readable.from(toBuffers(chunks));
+  source.on('error', (error: Error) => {
+    pipeline.emit('error', error);
+  });
+  source.pipe(pipeline);
 
   for await (const entry of pipeline) {
     yield (entry as { key: number; value: JsonValue }).value;

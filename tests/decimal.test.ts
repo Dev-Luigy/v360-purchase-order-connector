@@ -36,14 +36,16 @@ test('recusa o que decimal.js aceitaria calado e viraria outro número', () => {
 });
 
 test('soma, subtração e multiplicação lançam em vez de arredondar em silêncio', () => {
-  const trinta = '123456789012345678901234567890';
+  // Setenta dígitos: o limite agora é 120 significativos, então o estouro
+  // precisa de números maiores do que qualquer dado de ERP.
+  const setenta = '1234567890'.repeat(7);
   // decimal.js devolveria o produto com a cauda zerada, sem avisar.
   assert.throws(
-    () => Decimal.parse(trinta).multiply(Decimal.parse(trinta + '1')),
+    () => Decimal.parse(setenta).multiply(Decimal.parse(setenta + '1')),
     /arredondado em silêncio/,
   );
   assert.throws(
-    () => Decimal.parse('1e40').add(Decimal.parse('0.000000000000000000001')),
+    () => Decimal.parse('1e110').add(Decimal.parse('0.000000000000000000001')),
     /arredondado em silêncio/,
   );
   // E o que cabe, passa exato.

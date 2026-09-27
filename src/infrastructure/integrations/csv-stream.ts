@@ -55,7 +55,9 @@ export async function* streamCsvRecords(
     },
   });
 
-  Readable.from(decode(chunks, options.encoding)).pipe(parser);
+  // `.pipe()` não propaga erro da fonte para o destino: sem encaminhar, uma
+  // falha de decodificação vira erro não tratado e o consumidor fica esperando.
+  pipeSource(Readable.from(decode(chunks, options.encoding)), parser);
 
   for await (const row of parser) {
     const { info, record } = row as {
@@ -70,15 +72,36 @@ export async function* streamCsvRecords(
   }
 }
 
+/** Liga fonte e destino encaminhando o erro, que `.pipe()` sozinho não faz. */
+function pipeSource(
+  source: Readable,
+  destination: NodeJS.WritableStream,
+): void {
+  source.on('error', (error: Error) => {
+    destination.emit('error', error);
+  });
+  source.pipe(destination);
+}
+
 async function* decode(
   chunks: AsyncIterable<Uint8Array>,
   encoding: CsvEncoding,
 ): AsyncIterable<string> {
-  const decoder = new TextDecoder(encoding);
-  for await (const chunk of chunks) {
-    yield decoder.decode(chunk, { stream: true });
+  // `fatal: true`: byte inválido para o encoding declarado lança, em vez de
+  // virar U+FFFD. Um código de material com caractere de substituição é dado
+  // corrompido que atravessa toda a validação (REVIEW-01, achado 7).
+  const decoder = new TextDecoder(encoding, { fatal: true });
+  try {
+    for await (const chunk of chunks) {
+      yield decoder.decode(chunk, { stream: true });
+    }
+    yield decoder.decode();
+  } catch (cause) {
+    throw new SyntaxError(
+      `conteúdo não é ${encoding} válido; confira o encoding declarado no perfil`,
+      { cause },
+    );
   }
-  yield decoder.decode();
 }
 
 function assertHeader(
