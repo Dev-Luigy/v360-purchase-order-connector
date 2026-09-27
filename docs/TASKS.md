@@ -21,7 +21,8 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | P1-01     | Definir contrato normalizado e decisões de negócio        | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03 |
 | P1-02     | Implementar schema, migrações e repositórios              | disponível                     | —           | P1-01; sugestão: Codex                                               |
 | P1-03     | Implementar domínio e adaptadores Alfa/Beta               | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                         |
-| P1-04     | Integrar API, conferência e relatório paginado            | aguardando                     | —           | P1-02 e P1-03; combinar responsabilidade por arquivo                 |
+| FIX-01    | Estabilizar validação e limites de REVIEW-01              | em andamento                   | Claude      | REVIEW-01; sete achados; bloqueia P1-04                              |
+| P1-04     | Integrar API, conferência e relatório paginado            | aguardando                     | —           | P1-02, P1-03 e FIX-01; combinar responsabilidade por arquivo         |
 | P1-05     | Validar desafio e registrar marco parte-1                 | aguardando                     | —           | P1-04; persistência, concorrência, precisão e paginação              |
 | P2-01     | Integrar Gama/Delta e documentar mudanças                 | aguardando                     | —           | P1-05                                                                |
 
@@ -153,3 +154,12 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Evidencia: [handoff P1-03](handoffs/P1-03-claude.md); `npm run check` verde com 66 testes; adaptadores exercitados contra as fixtures reais de Alfa e Beta. Nada tocou banco, HTTP ou Docker.
 - Escopo: aritmética decimal sem ponto flutuante, as sete regras de conferência de ADR-009, leitores de fluxo JSON e CSV, os adaptadores `nested-json` (Alfa) e `paired-csv` (Beta) e os perfis em código. Implementa o contrato de P1-01 sem alterá-lo.
 - Dependências: P1-01. **Não toca** `prisma/`, `src/infrastructure/database/`, `src/presentation/`, `src/main/` nem `package.json`, que são P1-02 e P1-04. Se o Codex assumir P1-02, os dois andam em paralelo; combinar antes de mexer em `package.json`.
+
+## FIX-01 — estabilizar validação e limites
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `src/domain/{decimal,schemas,conference-rules}.ts`, `src/infrastructure/integrations/{field-parsers,csv-stream,client-profiles,nested-json-adapter,paired-csv-adapter}.ts`, `tests/*.test.ts`, `docs/TASKS.md`, `docs/handoffs/FIX-01-claude.md`.
+- Escopo: os sete achados de [REVIEW-01](handoffs/REVIEW-01-codex.md), cada um com teste de regressão. Corrige o que P1-03 entregou; não acrescenta funcionalidade nem toca contrato de porta.
+- Dependências: REVIEW-01 concluída. **Não toca** `prisma/`, `src/infrastructure/database/`, `src/presentation/`, `src/main/` nem `package.json`. P1-02 segue livre para o Codex em paralelo.
+- Prioridade adotada, diferente da ordem do handoff: a normalização brasileira permissiva (achado 4) vem primeiro, porque é a única que **altera um valor monetário** em silêncio; as demais aceitam entrada ruim sem mudar número.
