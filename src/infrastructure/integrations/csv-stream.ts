@@ -1,26 +1,23 @@
+import { Readable } from 'node:stream';
+
+import { parse } from 'csv-parse';
+
 /**
- * Leitor de CSV em fluxo, por linha, com as tolerâncias que uma exportação de
- * ERP brasileiro exige: delimitador configurável, UTF-8 ou Windows-1252, LF ou
- * CRLF e BOM no início. O enunciado não especifica encoding nem fim de linha
- * (ver "O que o enunciado não fecha" em `docs/CASE.md`), então toleramos os
- * dois em vez de apostar em um.
+ * Leitura de CSV em fluxo, sobre csv-parse (ADR-011).
  *
- * Aspas seguem a convenção usual: campo entre `"` pode conter o delimitador e
- * quebra de linha, e `""` é uma aspa literal. As amostras do Beta não usam
- * aspas, mas descrição de material com ponto e vírgula é questão de tempo.
+ * A biblioteca resolve aspas, quebra de linha dentro de campo, CRLF, BOM,
+ * linha em branco e numeração de linha por opção. O que ela **não** resolve é
+ * encoding fora da lista do Node: `encoding` aceita `BufferEncoding`, e
+ * Windows-1252 não está lá. Como exportação de ERP brasileiro costuma vir
+ * nesse encoding e o enunciado não especifica nenhum, decodificamos antes com
+ * `TextDecoder` e entregamos texto à biblioteca.
  */
 
 export type CsvEncoding = 'utf-8' | 'windows-1252';
 
-export interface CsvRow {
-  /** Número da linha no arquivo, começando em 1 no cabeçalho. Vai na rejeição. */
-  readonly line: number;
-  readonly values: readonly string[];
-}
-
 export interface CsvRecord {
+  /** Número da linha no arquivo. Vai na rejeição, para localizar o registro. */
   readonly line: number;
-  /** Valor por nome de coluna, como escrito no cabeçalho. */
   get(column: string): string;
   has(column: string): boolean;
 }
@@ -32,123 +29,56 @@ export interface CsvOptions {
   readonly requiredColumns: readonly string[];
 }
 
-/** Rende as linhas de dados já casadas com o cabeçalho. */
 export async function* streamCsvRecords(
   chunks: AsyncIterable<Uint8Array>,
   options: CsvOptions,
 ): AsyncIterable<CsvRecord> {
-  let header: readonly string[] | null = null;
-
-  for await (const row of streamCsvRows(chunks, options)) {
-    if (header === null) {
-      header = row.values;
-      assertHeader(header, options.requiredColumns);
-      continue;
-    }
-    // Linha em branco no fim do arquivo é comum e não é registro.
-    if (row.values.length === 1 && row.values[0] === '') continue;
-    yield toRecord(header, row);
-  }
-
-  if (header === null) {
-    throw new SyntaxError('CSV vazio: nem o cabeçalho foi encontrado');
-  }
-}
-
-export async function* streamCsvRows(
-  chunks: AsyncIterable<Uint8Array>,
-  options: Pick<CsvOptions, 'delimiter' | 'encoding'>,
-): AsyncIterable<CsvRow> {
   if (options.delimiter.length !== 1) {
     throw new RangeError(
       `delimitador precisa ter um caractere: ${JSON.stringify(options.delimiter)}`,
     );
   }
-  const decoder = new TextDecoder(options.encoding);
-  const parser = new RowParser(options.delimiter);
 
-  for await (const chunk of chunks) {
-    yield* parser.push(decoder.decode(chunk, { stream: true }));
+  let sawHeader = false;
+  const parser = parse({
+    delimiter: options.delimiter,
+    bom: true,
+    info: true,
+    skip_empty_lines: true,
+    trim: true,
+    // A forma de callback entrega o cabeçalho para conferirmos contra o perfil
+    // antes de qualquer registro, que é onde perfil errado tem que parar.
+    columns: (header: string[]) => {
+      sawHeader = true;
+      assertHeader(header, options.requiredColumns);
+      return header.map((column) => column.trim());
+    },
+  });
+
+  Readable.from(decode(chunks, options.encoding)).pipe(parser);
+
+  for await (const row of parser) {
+    const { info, record } = row as {
+      info: { lines: number };
+      record: Record<string, string>;
+    };
+    yield toRecord(record, info.lines);
   }
-  yield* parser.push(decoder.decode());
-  yield* parser.end();
+
+  if (!sawHeader) {
+    throw new SyntaxError('CSV vazio: nem o cabeçalho foi encontrado');
+  }
 }
 
-class RowParser {
-  private values: string[] = [];
-  private field = '';
-  private inQuotes = false;
-  /** Aspa dentro de campo entre aspas: pode fechar o campo ou ser literal. */
-  private quotePending = false;
-  private started = false;
-  private line = 1;
-
-  constructor(private readonly delimiter: string) {}
-
-  *push(text: string): Generator<CsvRow> {
-    for (const character of text) {
-      const row = this.consume(character);
-      if (row !== null) yield row;
-    }
+async function* decode(
+  chunks: AsyncIterable<Uint8Array>,
+  encoding: CsvEncoding,
+): AsyncIterable<string> {
+  const decoder = new TextDecoder(encoding);
+  for await (const chunk of chunks) {
+    yield decoder.decode(chunk, { stream: true });
   }
-
-  *end(): Generator<CsvRow> {
-    if (this.quotePending) this.quotePending = false;
-    if (this.started || this.field !== '' || this.values.length > 0) {
-      yield this.takeRow();
-    }
-  }
-
-  private consume(character: string): CsvRow | null {
-    // O BOM só existe antes de qualquer conteúdo.
-    if (!this.started && character === '﻿') return null;
-    this.started = true;
-
-    if (this.quotePending) {
-      this.quotePending = false;
-      if (character === '"') {
-        this.field += '"';
-        return null;
-      }
-      this.inQuotes = false;
-    }
-
-    if (this.inQuotes) {
-      if (character === '"') {
-        this.quotePending = true;
-        return null;
-      }
-      this.field += character;
-      return null;
-    }
-
-    if (character === '"' && this.field === '') {
-      this.inQuotes = true;
-      return null;
-    }
-    if (character === this.delimiter) {
-      this.values.push(this.field);
-      this.field = '';
-      return null;
-    }
-    // CRLF: o \r some e o \n fecha a linha. \r sozinho não fecha nada, porque
-    // não aparece em exportação real e engoli-lo é mais seguro que inventar
-    // uma linha.
-    if (character === '\r') return null;
-    if (character === '\n') return this.takeRow();
-
-    this.field += character;
-    return null;
-  }
-
-  private takeRow(): CsvRow {
-    this.values.push(this.field);
-    const row: CsvRow = { line: this.line, values: this.values };
-    this.values = [];
-    this.field = '';
-    this.line += 1;
-    return row;
-  }
+  yield decoder.decode();
 }
 
 function assertHeader(
@@ -164,18 +94,14 @@ function assertHeader(
   }
 }
 
-function toRecord(header: readonly string[], row: CsvRow): CsvRecord {
-  const values = new Map<string, string>();
-  header.forEach((column, index) => {
-    values.set(column.trim(), (row.values[index] ?? '').trim());
-  });
+function toRecord(record: Record<string, string>, line: number): CsvRecord {
   return {
-    line: row.line,
-    has: (column) => values.has(column),
+    line,
+    has: (column) => record[column] !== undefined,
     get(column) {
-      const value = values.get(column);
+      const value = record[column];
       if (value === undefined) {
-        throw new RangeError(`coluna ausente na linha ${row.line}: ${column}`);
+        throw new RangeError(`coluna ausente na linha ${line}: ${column}`);
       }
       return value;
     },

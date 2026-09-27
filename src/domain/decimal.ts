@@ -1,164 +1,166 @@
+import { Decimal as DecimalJs } from 'decimal.js';
+
 import type { CurrencyCode, DecimalText } from './primitives.js';
 
 /**
- * Decimal exato, com inteiro escalado. `units` é o valor sem vírgula e `scale`
- * diz onde ela fica: `units = 1290n, scale = 2` é `12.90`.
+ * Decimal exato do domínio, sobre decimal.js.
  *
- * `bigint` e não `number` porque o `AGENTS.md` proíbe ponto flutuante em
- * cálculo monetário e o domínio não pode depender de biblioteca de
- * infraestrutura (ADR-007): `Prisma.Decimal` fica confinado ao repositório.
- * O que precisamos aqui é somar, subtrair, comparar e fazer uma multiplicação
- * com uma divisão arredondada no fim — não vale trazer uma dependência.
+ * A biblioteca é a mesma que o Prisma usa internamente, então a ponte com o
+ * repositório de P1-02 é `toString()` dos dois lados (ADR-011). Mas ela é
+ * permissiva de um jeito que dinheiro não tolera, e esta classe existe para
+ * fechar as quatro frestas, todas verificadas contra a versão 10.6:
+ *
+ * 1. `new Decimal('0x10')` devolve 16, `'1_000'` devolve 1000, `'NaN'` e
+ *    `'Infinity'` passam. Um campo corrompido do cliente viraria número
+ *    plausível em vez de rejeição, então validamos o texto antes de construir.
+ * 2. `toString()` usa notação exponencial (`1e-8`, `1e+21`), que não é o
+ *    `DecimalText` do contrato. Só emitimos por `toFixed`.
+ * 3. Zeros à direita não sobrevivem: `'1200.000'` volta `'1200'`. Quem precisa
+ *    de escala estável pede a escala em `toText`.
+ * 4. **`plus`, `minus` e `times` arredondam para `precision` em silêncio.** É a
+ *    fresta perigosa: o produto de dois números de 30 dígitos volta com a cauda
+ *    zerada sem avisar. Aqui essas três operações conferem se o resultado exato
+ *    cabe e **lançam** em vez de arredondar. A única operação que arredonda é
+ *    `divide`, e só na escala que quem chama pediu.
  */
+
+/**
+ * Sessenta dígitos significativos. Dado de ERP não chega perto disso — o maior
+ * caso real aqui tem nove —, e a folga é o que permite tratar arredondamento em
+ * soma ou produto como defeito, e não como rotina.
+ */
+const precision = 60;
+
+const Exact = DecimalJs.clone({
+  precision,
+  rounding: DecimalJs.ROUND_HALF_UP,
+  // Mesmo não usando `toString`, um template literal usaria: garantimos que
+  // nem por acidente sai notação exponencial.
+  toExpNeg: -9e15,
+  toExpPos: 9e15,
+});
+
+/** O contrato aceita sinal, fração e expoente. Não aceita hexadecimal, sublinhado, NaN nem infinito. */
+const decimalText = /^[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
+
 export class Decimal {
-  private constructor(
-    readonly units: bigint,
-    readonly scale: number,
-  ) {}
+  private constructor(private readonly value: InstanceType<typeof Exact>) {}
 
-  static readonly zero = new Decimal(0n, 0);
+  static readonly zero = new Decimal(new Exact(0));
 
-  /**
-   * Lê o texto decimal do contrato. Aceita sinal, parte fracionária e notação
-   * exponencial — `JSON.parse` devolve `1e-7` para números pequenos, e recusar
-   * isso seria rejeitar um número legítimo do cliente. Não aceita espaço,
-   * separador de milhar nem vírgula: a tradução da notação do cliente é do
-   * adaptador, e aceitar as duas coisas aqui esconderia perfil errado.
-   */
   static parse(text: DecimalText): Decimal {
-    const match = /^([+-]?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(text);
-    if (match === null) {
+    if (typeof text !== 'string' || !decimalText.test(text)) {
       throw new RangeError(`decimal inválido: ${JSON.stringify(text)}`);
     }
-    const [, sign = '', whole = '', fraction = '', exponent] = match;
-    const digits = `${whole}${fraction}`;
-    const scale = fraction.length - Number(exponent ?? '0');
-    const units = BigInt(digits) * (sign === '-' ? -1n : 1n);
-    return scale < 0
-      ? new Decimal(units * 10n ** BigInt(-scale), 0)
-      : new Decimal(units, scale);
+    return new Decimal(new Exact(text));
   }
 
-  static fromUnits(units: bigint, scale: number): Decimal {
-    if (scale < 0 || !Number.isInteger(scale)) {
-      throw new RangeError(`escala inválida: ${scale}`);
-    }
-    return new Decimal(units, scale);
+  /** Casas decimais do texto de origem, para preservar a escala declarada. */
+  get decimalPlaces(): number {
+    return this.value.decimalPlaces();
   }
 
-  /** Texto do contrato. Sem escala, devolve a própria; com escala, arredonda. */
+  /** Texto do contrato, nunca exponencial. Sem escala, a mínima que representa o valor. */
   toText(scale?: number): DecimalText {
-    const value = scale === undefined ? this : this.rescale(scale);
-    const negative = value.units < 0n;
-    const digits = (negative ? -value.units : value.units)
-      .toString()
-      .padStart(value.scale + 1, '0');
-    const cut = digits.length - value.scale;
-    const whole = digits.slice(0, cut);
-    const fraction = digits.slice(cut);
-    const sign =
-      negative && (BigInt(whole) !== 0n || BigInt(fraction || '0') !== 0n)
-        ? '-'
-        : '';
-    return value.scale === 0
-      ? `${sign}${whole}`
-      : `${sign}${whole}.${fraction}`;
-  }
-
-  /**
-   * Muda a escala. Aumentar é exato; diminuir arredonda **meio para cima**,
-   * isto é, meio afastando-se do zero — a prática de nota fiscal brasileira.
-   * Arredondamento bancário divergiria do cálculo do fornecedor (ADR-007).
-   */
-  rescale(scale: number): Decimal {
+    if (scale === undefined) return this.value.toFixed();
     if (scale < 0 || !Number.isInteger(scale)) {
       throw new RangeError(`escala inválida: ${scale}`);
     }
-    if (scale === this.scale) return this;
-    if (scale > this.scale) {
-      return new Decimal(this.units * 10n ** BigInt(scale - this.scale), scale);
-    }
-    const divisor = 10n ** BigInt(this.scale - scale);
-    const negative = this.units < 0n;
-    const magnitude = negative ? -this.units : this.units;
-    const quotient = magnitude / divisor;
-    const rounded =
-      (magnitude % divisor) * 2n >= divisor ? quotient + 1n : quotient;
-    return new Decimal(negative ? -rounded : rounded, scale);
+    return this.value.toFixed(scale, DecimalJs.ROUND_HALF_UP);
   }
 
   add(other: Decimal): Decimal {
-    const scale = Math.max(this.scale, other.scale);
-    return new Decimal(
-      this.rescale(scale).units + other.rescale(scale).units,
-      scale,
-    );
+    return this.exact(this.value.plus(other.value), this.sumDigits(other), '+');
   }
 
   subtract(other: Decimal): Decimal {
-    const scale = Math.max(this.scale, other.scale);
-    return new Decimal(
-      this.rescale(scale).units - other.rescale(scale).units,
-      scale,
+    return this.exact(
+      this.value.minus(other.value),
+      this.sumDigits(other),
+      '-',
     );
   }
 
-  /** Exata: a escala do resultado é a soma das escalas. */
   multiply(other: Decimal): Decimal {
-    return new Decimal(this.units * other.units, this.scale + other.scale);
+    return this.exact(
+      this.value.times(other.value),
+      // `precision(true)`: sem o argumento, decimal.js não conta os zeros à
+      // direita da parte inteira, e a guarda passaria batido justamente nos
+      // números redondos e grandes.
+      this.value.precision(true) + other.value.precision(true),
+      '×',
+    );
   }
 
   /**
-   * Divisão com arredondamento meio para cima na escala pedida. É a única
-   * operação que perde informação, e por isso o cálculo da conferência
-   * multiplica primeiro e divide uma vez só, no fim (ADR-007).
+   * A única operação que perde informação, e por isso a escala é obrigatória:
+   * quem divide declara onde quer parar. Meio para cima, afastando-se do zero,
+   * que é a prática de nota fiscal brasileira (ADR-007).
    */
   divide(other: Decimal, scale: number): Decimal {
-    if (other.units === 0n) {
-      throw new RangeError('divisão por zero');
+    if (other.value.isZero()) throw new RangeError('divisão por zero');
+    if (scale < 0 || !Number.isInteger(scale)) {
+      throw new RangeError(`escala inválida: ${scale}`);
     }
-    const numerator = this.units * 10n ** BigInt(other.scale + scale);
-    const denominator = other.units * 10n ** BigInt(this.scale);
-    const negative = numerator < 0n !== denominator < 0n;
-    const absNumerator = numerator < 0n ? -numerator : numerator;
-    const absDenominator = denominator < 0n ? -denominator : denominator;
-    const quotient = absNumerator / absDenominator;
-    const rounded =
-      (absNumerator % absDenominator) * 2n >= absDenominator
-        ? quotient + 1n
-        : quotient;
-    return new Decimal(negative ? -rounded : rounded, scale);
+    return new Decimal(
+      this.value
+        .div(other.value)
+        .toDecimalPlaces(scale, DecimalJs.ROUND_HALF_UP),
+    );
   }
 
   compare(other: Decimal): -1 | 0 | 1 {
-    const scale = Math.max(this.scale, other.scale);
-    const left = this.rescale(scale).units;
-    const right = other.rescale(scale).units;
-    if (left < right) return -1;
-    return left > right ? 1 : 0;
+    return this.value.comparedTo(other.value) as -1 | 0 | 1;
   }
 
   equals(other: Decimal): boolean {
-    return this.compare(other) === 0;
+    return this.value.equals(other.value);
   }
 
   get isZero(): boolean {
-    return this.units === 0n;
+    return this.value.isZero();
   }
 
   get isPositive(): boolean {
-    return this.units > 0n;
+    return this.value.greaterThan(0);
   }
 
   get isNegative(): boolean {
-    return this.units < 0n;
+    return this.value.lessThan(0);
+  }
+
+  /**
+   * Dígitos que o resultado exato de uma soma ocupa: da ordem de grandeza do
+   * maior operando até a casa decimal mais funda, mais um para o "vai um".
+   */
+  private sumDigits(other: Decimal): number {
+    const magnitude = Math.max(this.value.e, other.value.e) + 1;
+    const depth = Math.max(
+      this.value.decimalPlaces(),
+      other.value.decimalPlaces(),
+    );
+    return magnitude + depth + 1;
+  }
+
+  private exact(
+    result: InstanceType<typeof Exact>,
+    exactDigits: number,
+    operation: string,
+  ): Decimal {
+    if (exactDigits > precision) {
+      throw new RangeError(
+        `${operation} exigiria ${exactDigits} dígitos significativos e o limite é ${precision}: ` +
+          'o resultado seria arredondado em silêncio',
+      );
+    }
+    return new Decimal(result);
   }
 }
 
 /**
- * Casas decimais da moeda, usadas para arredondar o valor esperado de uma
- * linha de nota. Duas para as moedas que este serviço vê hoje; o mapa existe
- * para que uma moeda sem centavo não seja tratada como se tivesse.
+ * Casas decimais da moeda, para arredondar o valor esperado de uma linha de
+ * nota. O mapa existe para que uma moeda sem centavo não seja tratada como se
+ * tivesse.
  */
 const currencyScales: Readonly<Record<string, number>> = {
   BRL: 2,
@@ -171,3 +173,6 @@ export const defaultCurrencyScale = 2;
 export function currencyScale(currency: CurrencyCode): number {
   return currencyScales[currency] ?? defaultCurrencyScale;
 }
+
+/** Escala do contrato para quantidade, fator e preço unitário (ADR-007). */
+export const quantityScale = 6;

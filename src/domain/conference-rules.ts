@@ -185,7 +185,9 @@ function checkTotalValue(
       field: 'items[].unitPrice',
       invoiceLineIndex: index,
       purchaseOrderLine: item.externalLine,
-      expected: expected.toText(),
+      // Dinheiro sai na escala da moeda dos dois lados: é o que o usuário
+      // compara na tela, e '1836' ao lado de '1836.01' esconde a diferença.
+      expected: expected.toText(scale),
       received: received.toText(scale),
     },
   ];

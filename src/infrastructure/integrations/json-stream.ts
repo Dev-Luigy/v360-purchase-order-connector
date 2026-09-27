@@ -1,206 +1,71 @@
-/**
- * Leitor de JSON em fluxo que preserva o **texto original** dos números.
- *
- * Duas exigências se encontram aqui. O enunciado fala em dezenas de milhares
- * de pedidos, então não podemos materializar a carga inteira; e `JSON.parse`
- * converte `45.9` em `double` antes de qualquer decisão nossa, o que o
- * `AGENTS.md` proíbe para dinheiro (ADR-007).
- *
- * A solução é recortar o array elemento a elemento — contando chaves e
- * colchetes, respeitando strings e escapes — e só então entregar cada elemento
- * a `JSON.parse`, usando o terceiro argumento do reviver, que desde o Node 24
- * expõe o texto exato do número. Um pedido por vez cabe na memória; a carga
- * inteira, não.
- */
+import { Readable } from 'node:stream';
 
-/** Número como o cliente escreveu. Nunca `number`: `45.9` não sobrevive. */
-export class JsonNumber {
-  constructor(readonly raw: string) {}
-}
+import { chain } from 'stream-chain';
+import { parser } from 'stream-json';
+import type { Token } from 'stream-json/parser.js';
+import { pick } from 'stream-json/core/filters/pick.js';
+import { streamArray } from 'stream-json/core/streamers/stream-array.js';
+
+/**
+ * Leitura de JSON em fluxo com o decimal preservado como texto.
+ *
+ * `streamArray({ numberAsString: true })` faz o `Assembler` do stream-json
+ * guardar o número como a string que veio no payload, em vez de `parseFloat`.
+ * É o requisito da ADR-007 resolvido pela biblioteca: `45.9` chega `'45.9'`,
+ * e não o `double` mais próximo (ADR-011).
+ *
+ * O fluxo importa pelo volume: o enunciado fala em dezenas de milhares de
+ * pedidos, e aqui só um pedido por vez fica montado em memória.
+ */
 
 export type JsonValue =
   | string
   | boolean
   | null
-  | JsonNumber
   | readonly JsonValue[]
   | { readonly [key: string]: JsonValue };
 
-/** O reviver de três argumentos ainda não está nos tipos da biblioteca padrão. */
-type SourceReviver = (
-  this: unknown,
-  key: string,
-  value: unknown,
-  context?: { source?: string },
-) => unknown;
-
-/** Lê um valor JSON completo mantendo os números como texto. */
-export function parseJsonValue(text: string): JsonValue {
-  const reviver: SourceReviver = (_key, value, context) =>
-    typeof value === 'number' && context?.source !== undefined
-      ? new JsonNumber(context.source)
-      : value;
-  return JSON.parse(text, reviver as never) as JsonValue;
-}
-
-type ScanState = 'seek-key' | 'expect-array' | 'in-array' | 'done';
-
 /**
- * Rende cada elemento do array que está na chave `key` da raiz do documento.
+ * Rende cada elemento do array na chave `key`.
  *
- * Lança quando a chave não existe ou não é um array: perfil declarado que não
+ * Lança quando a chave não existe ou não é array: perfil declarado que não
  * corresponde ao payload precisa falhar alto, não render zero pedidos em
- * silêncio (ADR-008).
+ * silêncio (ADR-008). Array de verdade vazio rende nada, sem erro.
  */
 export async function* streamArrayAtKey(
   chunks: AsyncIterable<Uint8Array>,
   key: string,
 ): AsyncIterable<JsonValue> {
-  const decoder = new TextDecoder('utf-8');
-  const scanner = new ArrayScanner(key);
+  let found = false;
+  const pipeline = chain([
+    parser(),
+    pick({ filter: key }),
+    // Sonda entre o filtro e o montador: distingue "array vazio" de "chave que
+    // não existe", que sem isto seriam a mesma saída silenciosa.
+    (token: Token) => {
+      if (token.name === 'startArray') found = true;
+      return token;
+    },
+    streamArray({ numberAsString: true }),
+  ]);
 
-  for await (const chunk of chunks) {
-    yield* scanner.push(decoder.decode(chunk, { stream: true }));
+  Readable.from(toBuffers(chunks)).pipe(pipeline);
+
+  for await (const entry of pipeline) {
+    yield (entry as { key: number; value: JsonValue }).value;
   }
-  yield* scanner.push(decoder.decode());
-  scanner.end();
+
+  if (!found) {
+    throw new SyntaxError(
+      `campo ${JSON.stringify(key)} não encontrado como array no JSON`,
+    );
+  }
 }
 
-/**
- * Máquina de estados de um caractere por vez. Sem lookahead: é o que permite
- * parar no fim de um chunk e continuar no próximo sem guardar o documento.
- */
-class ArrayScanner {
-  private state: ScanState = 'seek-key';
-  private depth = 0;
-  private inString = false;
-  private escaped = false;
-  /** Última string lida na raiz, candidata a nome de campo. */
-  private lastString = '';
-  private stringValue = '';
-  private elementDepth = 0;
-  private element = '';
-
-  constructor(private readonly key: string) {}
-
-  *push(text: string): Generator<JsonValue> {
-    for (const character of text) {
-      if (this.state === 'done') return;
-      const element = this.consume(character);
-      if (element !== null) yield parseJsonValue(element);
-    }
-  }
-
-  end(): void {
-    if (this.state !== 'done') {
-      throw new SyntaxError(
-        `campo ${JSON.stringify(this.key)} não encontrado como array na raiz do JSON`,
-      );
-    }
-  }
-
-  private consume(character: string): string | null {
-    switch (this.state) {
-      case 'seek-key':
-        this.seekKey(character);
-        return null;
-      case 'expect-array':
-        if (/\s/.test(character)) return null;
-        if (character !== '[') {
-          throw new SyntaxError(
-            `campo ${JSON.stringify(this.key)} não é um array`,
-          );
-        }
-        this.state = 'in-array';
-        return null;
-      case 'in-array':
-        return this.readArray(character);
-      default:
-        return null;
-    }
-  }
-
-  private seekKey(character: string): void {
-    if (this.inString) {
-      if (this.escaped) {
-        this.escaped = false;
-        this.stringValue += character;
-        return;
-      }
-      if (character === '\\') {
-        this.escaped = true;
-        this.stringValue += character;
-        return;
-      }
-      if (character === '"') {
-        this.inString = false;
-        // Só interessa o que está na raiz do documento.
-        if (this.depth === 1) this.lastString = this.stringValue;
-        return;
-      }
-      this.stringValue += character;
-      return;
-    }
-    if (character === '"') {
-      this.inString = true;
-      this.stringValue = '';
-      return;
-    }
-    if (character === '{' || character === '[') {
-      this.depth += 1;
-      return;
-    }
-    if (character === '}' || character === ']') {
-      this.depth -= 1;
-      return;
-    }
-    if (character === ':' && this.depth === 1 && this.lastString === this.key) {
-      this.state = 'expect-array';
-    }
-  }
-
-  private readArray(character: string): string | null {
-    if (this.inString) {
-      this.element += character;
-      if (this.escaped) {
-        this.escaped = false;
-      } else if (character === '\\') {
-        this.escaped = true;
-      } else if (character === '"') {
-        this.inString = false;
-      }
-      return null;
-    }
-    if (character === '"') {
-      this.inString = true;
-      this.element += character;
-      return null;
-    }
-    if (character === '{' || character === '[') {
-      this.elementDepth += 1;
-      this.element += character;
-      return null;
-    }
-    if (character === '}' || character === ']') {
-      if (this.elementDepth === 0 && character === ']') {
-        this.state = 'done';
-        return this.takeElement();
-      }
-      this.elementDepth -= 1;
-      this.element += character;
-      return null;
-    }
-    if (character === ',' && this.elementDepth === 0) {
-      return this.takeElement();
-    }
-    this.element += character;
-    return null;
-  }
-
-  /** Devolve o elemento acumulado, ou `null` quando só havia espaço. */
-  private takeElement(): string | null {
-    const element = this.element.trim();
-    this.element = '';
-    return element === '' ? null : element;
+async function* toBuffers(
+  chunks: AsyncIterable<Uint8Array>,
+): AsyncIterable<Buffer> {
+  for await (const chunk of chunks) {
+    yield Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
   }
 }

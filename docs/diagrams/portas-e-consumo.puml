@@ -106,9 +106,9 @@ package "Objetos do contrato — detalhe em contrato-normalizado.puml" as pkgCon
 }
 
 package "Implementacao — quem cumpre a porta" as pkgImpl {
-  class "perfis em codigo\n(P1-03)" as implPerfis <<adaptador>>
-  class "adaptadores por forma\nde entrega (P1-03)" as implAdapters <<adaptador>>
-  class "repositorios Prisma\n(P1-02)" as implRepos <<adaptador>>
+  class "InMemoryClientProfiles\n(existe, P1-03)" as implPerfis <<adaptador>>
+  class "NestedJsonAdapter (Alfa)\nPairedCsvAdapter (Beta)\n(existem, P1-03)" as implAdapters <<adaptador>>
+  class "repositorios Prisma\n(ainda nao, P1-02)" as implRepos <<adaptador>>
   class "PostgresHealth\n(existe, ENV-01)" as implHealth <<adaptador>>
 }
 

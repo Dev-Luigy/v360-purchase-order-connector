@@ -12,7 +12,9 @@ import type {
 const supplierTaxId = '23456789000101';
 
 /** Linha do pedido do Alfa: 100 pedidas, 60 recebidas, 40 de saldo a 45,90. */
-function orderItem(overrides: Partial<PurchaseOrderItem> = {}): PurchaseOrderItem {
+function orderItem(
+  overrides: Partial<PurchaseOrderItem> = {},
+): PurchaseOrderItem {
   return {
     id: 'item-1',
     externalLine: 10,
@@ -57,7 +59,9 @@ function invoice(lines: readonly InvoiceLine[], taxId = supplierTaxId) {
   };
 }
 
-function codes(divergences: readonly { code: DivergenceCode }[]): DivergenceCode[] {
+function codes(
+  divergences: readonly { code: DivergenceCode }[],
+): DivergenceCode[] {
   return divergences.map((divergence) => divergence.code);
 }
 
@@ -97,7 +101,9 @@ test('pedido encerrado ou bloqueado não recebe', () => {
   for (const status of ['encerrado', 'bloqueado'] as const) {
     const result = checkInvoice(
       order([orderItem()], status),
-      invoice([{ material: 'MAT-1001', quantity: '40', totalValue: '1836.00' }]),
+      invoice([
+        { material: 'MAT-1001', quantity: '40', totalValue: '1836.00' },
+      ]),
     );
     assert.deepEqual(codes(result.divergences), ['PEDIDO_NAO_ABERTO'], status);
     assert.equal(result.divergences[0]?.received, status);
@@ -131,7 +137,11 @@ test('quantidade zero ou negativa para na regra 5, sem inventar valor esperado',
       order(),
       invoice([{ material: 'MAT-1001', quantity, totalValue: '0.00' }]),
     );
-    assert.deepEqual(codes(result.divergences), ['QUANTIDADE_NAO_POSITIVA'], quantity);
+    assert.deepEqual(
+      codes(result.divergences),
+      ['QUANTIDADE_NAO_POSITIVA'],
+      quantity,
+    );
   }
 });
 
@@ -146,8 +156,12 @@ test('duas linhas do mesmo material somam antes de comparar com o saldo', () => 
   assert.deepEqual(codes(result.divergences), ['QUANTIDADE_ACIMA_DO_SALDO']);
   const divergence = result.divergences[0];
   assert.equal(divergence?.received, '60');
-  assert.equal(divergence?.expected, '40.000');
-  assert.equal(divergence?.invoiceLineIndex, 0, 'ancorada na primeira linha do material');
+  assert.equal(divergence?.expected, '40');
+  assert.equal(
+    divergence?.invoiceLineIndex,
+    0,
+    'ancorada na primeira linha do material',
+  );
 });
 
 test('uma linha inválida não isenta as outras linhas do mesmo material', () => {
@@ -198,7 +212,11 @@ test('caixa: a nota fala em unidades e o pedido em caixas', () => {
     invoice([{ material: 'TRP-01', quantity: '121', totalValue: '12100.00' }]),
   );
   assert.deepEqual(codes(acima.divergences), ['QUANTIDADE_ACIMA_DO_SALDO']);
-  assert.equal(acima.divergences[0]?.expected, '120.000', 'saldo convertido para unidades');
+  assert.equal(
+    acima.divergences[0]?.expected,
+    '120',
+    'saldo convertido para unidades',
+  );
 });
 
 test('preço periódico: arredonda uma vez, no fim, e não a cada unidade', () => {
@@ -221,7 +239,11 @@ test('preço periódico: arredonda uma vez, no fim, e não a cada unidade', () =
     order([periodico]),
     invoice([{ material: 'TRP-09', quantity: '1', totalValue: '33.33' }]),
   );
-  assert.equal(umaUnidade.outcome, 'aprovada', '33,333... arredonda para 33,33');
+  assert.equal(
+    umaUnidade.outcome,
+    'aprovada',
+    '33,333... arredonda para 33,33',
+  );
 });
 
 test('devolve todas as divergências, não a primeira', () => {
@@ -245,7 +267,9 @@ test('devolve todas as divergências, não a primeira', () => {
 
 test('conferir não consome saldo: conferir duas vezes dá o mesmo resultado', () => {
   const pedido = order();
-  const nota = invoice([{ material: 'MAT-1001', quantity: '40', totalValue: '1836.00' }]);
+  const nota = invoice([
+    { material: 'MAT-1001', quantity: '40', totalValue: '1836.00' },
+  ]);
   assert.equal(checkInvoice(pedido, nota).outcome, 'aprovada');
   assert.equal(checkInvoice(pedido, nota).outcome, 'aprovada');
   assert.equal(pedido.items[0]?.quantityPending, '40.000');

@@ -22,6 +22,8 @@ Consultar este índice apenas quando a tarefa envolver contratos, schema, depend
 
 - [ADR-010 — Paginação por cursor](ADR-010-paginacao.md): aceita; rebaixa a proposta de instantâneo do TECHNICAL_PLAN, item 4.
 
+- [ADR-011 — Bibliotecas de precisão, leitura em fluxo e validação](ADR-011-bibliotecas-p1-03.md): aceita por escolha do usuário; decimal.js, stream-json, csv-parse e o alcance do Zod. Fecha a pendência que ADR-007 deixou para P1-03. Afeta P1-03, P1-02 e P1-04.
+
 ## Como registrar
 
 Antes do trabalho dependente, reservar no quadro o arquivo `ADR-NNN-titulo.md` e este índice. Adicionar aqui um link com título, estado e tarefas afetadas. Usar o próximo número livre.
