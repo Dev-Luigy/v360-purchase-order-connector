@@ -26,7 +26,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-02    | Verificação pós-FIX-01: vazamento de origem e notações sem teste | concluída                      | Claude      | Dois defeitos corrigidos; notação por campo fica para decisão               |
 | FIX-03    | Fechar riscos residuais de REVIEW-02 e REVIEW-03                 | concluída                      | Claude      | Cinco defeitos fechados; quatro decisões listadas em aberto                 |
 | FIX-04    | Fechar os pontos que dependiam de decisão                        | concluída                      | Claude      | ADR-012: notação por campo, teto do Beta, pool por propósito, lint com tipo |
-| FIX-05    | Congelar presets e perfis exportados                             | em andamento                   | Claude      | Defeito encontrado ao verificar FIX-04                                      |
+| FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado         |
 | P1-04     | Integrar API, conferência e relatório paginado                   | aguardando                     | —           | P1-02; P1-03 e FIX-01 concluídas; combinar responsabilidade por arquivo     |
 | P1-05     | Validar desafio e registrar marco parte-1                        | aguardando                     | —           | P1-04; persistência, concorrência, precisão e paginação                     |
 | P2-01     | Integrar Gama/Delta e documentar mudanças                        | aguardando                     | —           | P1-05                                                                       |
@@ -209,7 +209,8 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## FIX-05 — congelar presets e perfis exportados
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/infrastructure/database/pool.ts`, `src/infrastructure/integrations/client-profiles.ts`, `tests/fix-04-decisoes.test.ts`, `docs/TASKS.md`, `docs/handoffs/FIX-05-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `src/infrastructure/database/pool.ts`, `src/infrastructure/integrations/client-profiles.ts`, `tests/fix-04-decisoes.test.ts`, `docs/TASKS.md`, `docs/handoffs/FIX-05-claude.md`.
 - Escopo: `poolOptionsFor` devolvia o preset compartilhado por referência; mutar o retorno corrompia o preset para todo mundo. Mesma classe do perfil mutável de REVIEW-03. Sem mudança de contrato.
 - Dependências: FIX-04.
+- Evidência: [handoff FIX-05](handoffs/FIX-05-claude.md); `npm run check` verde com 97 testes.
