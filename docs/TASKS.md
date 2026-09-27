@@ -9,7 +9,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | COL-02    | Estruturar contexto compartilhado e leitura sob demanda          | concluída                      | Codex       | Documentação; registro e arquivos abaixo                                |
 | DOC-01    | Versionar o enunciado e as amostras dos clientes                 | concluída                      | Claude      | Nenhuma; enunciado e fixtures, sem código de negócio                    |
 | DOC-02    | Reestruturar README como artefato avaliado                       | aguardando                     | —           | P1-01; o enunciado cobra as defesas no README (docs/CASE.md)            |
-| DOC-03    | Diagramar objetos e relacoes do contrato normalizado             | em andamento                   | Claude      | P1-01; diagramas em docs/diagrams, sem codigo de negocio                |
+| DOC-03    | Diagramar objetos e relações do contrato normalizado             | concluída                      | Claude      | P1-01; diagramas em docs/diagrams, sem código de negócio                |
 | ARCH-04   | Registrar escolha do ORM Prisma 7                                | concluída                      | Codex       | ADR-001, ADR-002 e ADR-003; documentação apenas                         |
 | ARCH-05   | Registrar desenho de observabilidade (Grafana/Prometheus)        | aceita, implementação diferida | Claude      | Pedido do usuário; decisão apenas, sem dependência instalada            |
 | ENV-02    | Instalar ferramentas do sistema                                  | aguardando                     | Usuário     | docs/SETUP.md                                                           |
@@ -22,7 +22,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | P1-02     | Implementar schema, migrações e repositórios                     | disponível                     | —           | P1-01; sugestão: Codex                                                  |
 | P1-03     | Implementar domínio e adaptadores Alfa/Beta                      | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                            |
 | FIX-01    | Estabilizar validação e limites de REVIEW-01                     | concluída                      | Claude      | REVIEW-01; sete achados corrigidos com regressão; libera P1-04          |
-| FIX-02    | Verificação pós-FIX-01: vazamento de origem e notações sem teste | em andamento                   | Claude      | Verificação pedida pelo usuário; dois defeitos nos leitores             |
+| FIX-02    | Verificação pós-FIX-01: vazamento de origem e notações sem teste | concluída                      | Claude      | Dois defeitos corrigidos; notação por campo fica para decisão           |
 | P1-04     | Integrar API, conferência e relatório paginado                   | aguardando                     | —           | P1-02; P1-03 e FIX-01 concluídas; combinar responsabilidade por arquivo |
 | P1-05     | Validar desafio e registrar marco parte-1                        | aguardando                     | —           | P1-04; persistência, concorrência, precisão e paginação                 |
 | P2-01     | Integrar Gama/Delta e documentar mudanças                        | aguardando                     | —           | P1-05                                                                   |
@@ -169,7 +169,8 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## FIX-02 — verificação pós-FIX-01
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/infrastructure/integrations/{json-stream,csv-stream}.ts`, `tests/verificacao-pos-fix-01.test.ts`, `docs/TASKS.md`, `docs/handoffs/FIX-02-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `src/infrastructure/integrations/{json-stream,csv-stream}.ts`, `tests/verificacao-pos-fix-01.test.ts`, `docs/TASKS.md`, `docs/handoffs/FIX-02-claude.md`.
 - Escopo: passada adversarial sobre o que FIX-01 entregou, com cobertura medida. Dois defeitos encontrados nos leitores e as notações que Alfa e Beta não exercitam. Sem mudança de contrato.
 - Dependências: FIX-01. Não toca `src/domain/`, `package.json` nem arquivos de P1-02.
+- Evidência: [handoff FIX-02](handoffs/FIX-02-claude.md); `npm run check` verde com 86 testes; cobertura 98,07% de linhas e 87,11% de branches. Um problema de contrato ficou registrado sem correção: `numberFormat` é único por cliente e o Gama não cabe nisso.
