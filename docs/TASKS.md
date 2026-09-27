@@ -136,7 +136,8 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## DOC-03 — diagramas de objetos e relacoes
 
 - Responsavel: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `docs/diagrams/**`, `scripts/render-diagrams.mjs`, `eslint.config.js` (duas globais no bloco de `scripts/**`), `docs/COLLABORATION.md` (uma linha do mapa), `README.md` (um link), `docs/TASKS.md`, `docs/handoffs/DOC-03-claude.md`.
+- Estado: concluida.
+- Arquivos alterados (reservas liberadas): `docs/diagrams/**`, `scripts/render-diagrams.mjs`, `eslint.config.js` (globais `Buffer` e `fetch` no bloco de `scripts/**`), `docs/COLLABORATION.md` (uma linha do mapa), `README.md` (uma secao curta), `docs/TASKS.md`, `docs/handoffs/DOC-03-claude.md`.
 - Escopo: representar em PlantUML os objetos de P1-01 e suas relacoes, com fonte versionada e SVG renderizado. Diagrama derivado do contrato: nao altera tipo, porta nem decisao. O modelo entidade-relacionamento das tabelas pertence a P1-02.
 - Dependencias: P1-01 concluida. Nao toca `src/**`, `package.json`, `docs/STATUS.md` nem os arquivos reservados por REVIEW-01.
+- Evidencia: [handoff DOC-03](handoffs/DOC-03-claude.md); `npm run check` verde; diagramas renderizados pelo servidor publico do PlantUML e inspecionados visualmente. Sem PlantUML local: nao ha render offline.

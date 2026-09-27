@@ -47,6 +47,7 @@ Os arquivos são a memória comum. Não há sincronização de conversas, entreg
 | `docs/CASE.md`               | Enunciado do desafio e pontos que ele não fecha; nas tarefas de negócio.         |
 | `docs/SETUP.md`              | Instalação e ambiente; somente em tarefas de ambiente.                           |
 | `docs/decisions/README.md`   | Índice de decisões; consultar nas mudanças de contratos, schema e arquitetura.   |
+| `docs/diagrams/README.md`    | Objetos e portas desenhados; ao mudar o contrato e ao entrar em P1-02 ou P1-03.  |
 | `docs/handoffs/ID-agente.md` | Resultado, evidências e pendências; ler o da tarefa e os de suas dependências.   |
 | Código e testes              | Implementação real; localizar por caminho/símbolo e ler conforme a tarefa.       |
 

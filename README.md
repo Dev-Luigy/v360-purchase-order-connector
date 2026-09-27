@@ -83,6 +83,10 @@ tests/                         testes automatizados
 
 SOLID é aplicado às responsabilidades e dependências, não apenas aos diretórios: `CheckReadiness` depende da interface pequena `DatabaseHealth`; `PostgresHealth` implementa esse contrato; `main/server.ts` faz a injeção pelo construtor. O teste substitui o adaptador mantendo o contrato. Novos adaptadores de clientes deverão estender a ingestão sem adicionar condicionais específicos de cliente às regras de conferência. Não há container de injeção ou hierarquia de classes desnecessária.
 
+## Contrato e diagramas
+
+O contrato normalizado está em [docs/API.md](docs/API.md) e em `src/domain/` e `src/application/ports/`. Os objetos e as portas estão desenhados em [docs/diagrams/](docs/diagrams/README.md): o diagrama é derivado do código e se atualiza junto com ele.
+
 ## Plano técnico
 
 Consulte [o plano de Alfa/Beta e Gama/Delta](docs/TECHNICAL_PLAN.md) somente ao trabalhar nessas etapas.
