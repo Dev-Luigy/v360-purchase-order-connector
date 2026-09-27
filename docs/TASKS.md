@@ -20,7 +20,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-02 | Revisar arquitetura contra o enunciado                    | concluída                      | Claude      | Achados para P1-01, P1-02 e ENV-03; sem editar código                |
 | P1-01     | Definir contrato normalizado e decisões de negócio        | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03 |
 | P1-02     | Implementar schema, migrações e repositórios              | disponível                     | —           | P1-01; sugestão: Codex                                               |
-| P1-03     | Implementar domínio e adaptadores Alfa/Beta               | disponível                     | —           | P1-01; sugestão: Claude                                              |
+| P1-03     | Implementar domínio e adaptadores Alfa/Beta               | em andamento                   | Claude      | P1-01; sugestão: Claude                                              |
 | P1-04     | Integrar API, conferência e relatório paginado            | aguardando                     | —           | P1-02 e P1-03; combinar responsabilidade por arquivo                 |
 | P1-05     | Validar desafio e registrar marco parte-1                 | aguardando                     | —           | P1-04; persistência, concorrência, precisão e paginação              |
 | P2-01     | Integrar Gama/Delta e documentar mudanças                 | aguardando                     | —           | P1-05                                                                |
@@ -141,3 +141,11 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: representar em PlantUML os objetos de P1-01 e suas relacoes, com fonte versionada e SVG renderizado. Diagrama derivado do contrato: nao altera tipo, porta nem decisao. O modelo entidade-relacionamento das tabelas pertence a P1-02.
 - Dependencias: P1-01 concluida. Nao toca `src/**`, `package.json`, `docs/STATUS.md` nem os arquivos reservados por REVIEW-01.
 - Evidencia: [handoff DOC-03](handoffs/DOC-03-claude.md); `npm run check` verde; diagramas renderizados pelo servidor publico do PlantUML e inspecionados visualmente. Sem PlantUML local: nao ha render offline.
+
+## P1-03 — domínio e adaptadores Alfa/Beta
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `src/domain/decimal.ts`, `src/domain/conference-rules.ts`, `src/infrastructure/integrations/**`, `tests/*.test.ts` (novos), `docs/TASKS.md`, `docs/handoffs/P1-03-claude.md`.
+- Escopo: aritmética decimal sem ponto flutuante, as sete regras de conferência de ADR-009, leitores de fluxo JSON e CSV, os adaptadores `nested-json` (Alfa) e `paired-csv` (Beta) e os perfis em código. Implementa o contrato de P1-01 sem alterá-lo.
+- Dependências: P1-01. **Não toca** `prisma/`, `src/infrastructure/database/`, `src/presentation/`, `src/main/` nem `package.json`, que são P1-02 e P1-04. Se o Codex assumir P1-02, os dois andam em paralelo; combinar antes de mexer em `package.json`.
