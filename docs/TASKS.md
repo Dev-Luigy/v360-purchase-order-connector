@@ -118,6 +118,7 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 
 - Responsável: Claude.
 - Estado: concluída como registro; implementação diferida para depois do marco `parte-1`.
-- Arquivos reservados: `docs/decisions/ADR-005-observabilidade.md`, `docs/decisions/README.md`, `docs/TASKS.md`, `docs/handoffs/ARCH-05-claude.md`.
+- Arquivos alterados (reservas liberadas): `docs/decisions/ADR-005-observabilidade.md`, `docs/decisions/README.md`, `docs/TASKS.md`, `docs/handoffs/ARCH-05-claude.md`.
+- Evidência: [handoff ARCH-05](handoffs/ARCH-05-claude.md); `npm run check` verde; nada validado contra Grafana ou Prometheus reais, que não existem nesta máquina.
 - Escopo: registrar como a aplicação se conecta a Grafana e Prometheus, o consentimento de quem executa e a convenção de nomes e labels. Nenhuma dependência instalada, nenhum endpoint criado.
 - Dependências: nenhuma para o registro. A implementação depende de P1-01 e P1-03, porque os labels saem do contrato e dos adaptadores.

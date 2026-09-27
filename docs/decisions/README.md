@@ -10,6 +10,8 @@ Consultar este índice apenas quando a tarefa envolver contratos, schema, depend
 
 - [ADR-004 — Prisma ORM 7](ADR-004-prisma-7.md): aceita pelo usuário; orienta o acesso ao PostgreSQL em P1-02.
 
+- [ADR-005 — Observabilidade com Grafana e Prometheus](ADR-005-observabilidade.md): direção aceita pelo usuário; implementação diferida para depois do marco `parte-1`, porque os labels dependem de P1-01 e P1-03.
+
 ## Como registrar
 
 Antes do trabalho dependente, reservar no quadro o arquivo `ADR-NNN-titulo.md` e este índice. Adicionar aqui um link com título, estado e tarefas afetadas. Usar o próximo número livre.
