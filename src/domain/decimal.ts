@@ -48,6 +48,16 @@ const Exact = DecimalJs.clone({
 /** O contrato aceita sinal, fração e expoente. Não aceita hexadecimal, sublinhado, NaN nem infinito. */
 const decimalText = /^[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
 
+/**
+ * Faixa de grandeza que o contrato representa. São também os limites do
+ * `decimalTextSchema`, e existem aqui porque a checagem precisa acontecer
+ * **antes** de virar texto: `1e1000000` cabe em pouquíssimos bytes na notação
+ * exponencial e vira um milhão de caracteres em `toFixed`. Rejeitar só depois,
+ * no schema, deixaria um payload curto alocar memória grande (REVIEW-03, 1).
+ */
+export const maxIntegerDigits = 24;
+export const maxDecimalPlaces = 12;
+
 export class Decimal {
   private constructor(private readonly value: InstanceType<typeof Exact>) {}
 
@@ -57,7 +67,24 @@ export class Decimal {
     if (typeof text !== 'string' || !decimalText.test(text)) {
       throw new RangeError(`decimal inválido: ${JSON.stringify(text)}`);
     }
-    return new Decimal(new Exact(text));
+    const value = new Exact(text);
+    // A ordem importa: decimal.js guarda dígitos e expoente separados, então
+    // `1e1000000` custa nada até alguém pedir o texto. A conferência aqui é
+    // barata e impede a amplificação.
+    if (!value.isZero()) {
+      const integerDigits = value.e + 1;
+      if (integerDigits > maxIntegerDigits) {
+        throw new RangeError(
+          `decimal com ${integerDigits} dígitos inteiros excede o limite de ${maxIntegerDigits}: ${JSON.stringify(text)}`,
+        );
+      }
+      if (value.decimalPlaces() > maxDecimalPlaces) {
+        throw new RangeError(
+          `decimal com ${value.decimalPlaces()} casas decimais excede o limite de ${maxDecimalPlaces}: ${JSON.stringify(text)}`,
+        );
+      }
+    }
+    return new Decimal(value);
   }
 
   /** Casas decimais do texto de origem, para preservar a escala declarada. */

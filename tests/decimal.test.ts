@@ -36,18 +36,21 @@ test('recusa o que decimal.js aceitaria calado e viraria outro número', () => {
 });
 
 test('soma, subtração e multiplicação lançam em vez de arredondar em silêncio', () => {
-  // Setenta dígitos: o limite agora é 120 significativos, então o estouro
-  // precisa de números maiores do que qualquer dado de ERP.
-  const setenta = '1234567890'.repeat(7);
+  // A entrada agora para na porta com 24 dígitos inteiros, então o estouro da
+  // guarda aritmética só se alcança encadeando operações sobre resultados.
+  const maximo = Decimal.parse('9'.repeat(24));
   // decimal.js devolveria o produto com a cauda zerada, sem avisar.
-  assert.throws(
-    () => Decimal.parse(setenta).multiply(Decimal.parse(setenta + '1')),
-    /arredondado em silêncio/,
+  assert.throws(() => {
+    let acumulado = maximo;
+    for (let vez = 0; vez < 5; vez += 1) acumulado = acumulado.multiply(maximo);
+  }, /arredondado em silêncio/);
+  // Soma estoura quando a grandeza de um lado e a profundidade do outro não
+  // cabem juntas: 96 dígitos inteiros mais 24 casas decimais passam de 120.
+  const grande = maximo.multiply(maximo).multiply(maximo).multiply(maximo);
+  const fundo = Decimal.parse('0.000000000001').multiply(
+    Decimal.parse('0.000000000001'),
   );
-  assert.throws(
-    () => Decimal.parse('1e110').add(Decimal.parse('0.000000000000000000001')),
-    /arredondado em silêncio/,
-  );
+  assert.throws(() => grande.add(fundo), /arredondado em silêncio/);
   // E o que cabe, passa exato.
   assert.equal(
     Decimal.parse('123456789012345')
