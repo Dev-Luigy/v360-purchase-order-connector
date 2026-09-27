@@ -17,7 +17,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REPO-01   | Inicializar Git, commit base e fluxo de branches          | concluída                      | Claude      | Commit base autorizado pelo usuário; docs/GIT_WORKFLOW.md           |
 | REVIEW-01 | Revisar base e plano técnico                              | em andamento                   | Codex       | Revisão solicitada pelo usuário; sem editar código                  |
 | REVIEW-02 | Revisar arquitetura contra o enunciado                    | concluída                      | Claude      | Achados para P1-01, P1-02 e ENV-03; sem editar código               |
-| P1-01     | Definir contrato normalizado e decisões de negócio        | aguardando                     | —           | Próxima etapa de implementação; alinhar interfaces antes de dividir |
+| P1-01     | Definir contrato normalizado e decisões de negócio        | em andamento                   | Claude      | Próxima etapa de implementação; alinhar interfaces antes de dividir |
 | P1-02     | Implementar schema, migrações e repositórios              | aguardando                     | —           | P1-01; sugestão: Codex                                              |
 | P1-03     | Implementar domínio e adaptadores Alfa/Beta               | aguardando                     | —           | P1-01; sugestão: Claude                                             |
 | P1-04     | Integrar API, conferência e relatório paginado            | aguardando                     | —           | P1-02 e P1-03; combinar responsabilidade por arquivo                |
@@ -122,3 +122,11 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Evidência: [handoff ARCH-05](handoffs/ARCH-05-claude.md); `npm run check` verde; nada validado contra Grafana ou Prometheus reais, que não existem nesta máquina.
 - Escopo: registrar como a aplicação se conecta a Grafana e Prometheus, o consentimento de quem executa e a convenção de nomes e labels. Nenhuma dependência instalada, nenhum endpoint criado.
 - Dependências: nenhuma para o registro. A implementação depende de P1-01 e P1-03, porque os labels saem do contrato e dos adaptadores.
+
+## P1-01 — contrato normalizado e decisões de negócio
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `docs/decisions/ADR-006-*.md` a `ADR-010-*.md`, `docs/decisions/README.md`, `docs/API.md`, `src/domain/**`, `src/application/ports/**`, `docs/TASKS.md`, `docs/handoffs/P1-01-claude.md`.
+- Escopo: modelo normalizado, identidade, situação canônica, política decimal e de unidade, contrato de ingestão, taxonomia de divergências, paginação e contrato HTTP. Contrato em tipos e portas, sem implementação: adaptadores são P1-03 e schema é P1-02.
+- Dependências: nenhuma. Libera P1-02 e P1-03 para trabalho paralelo. Entrada: pontos abertos de `docs/CASE.md` e achados de `docs/handoffs/REVIEW-02-claude.md`.
