@@ -205,6 +205,7 @@ function readPath(value: JsonValue, path: string): JsonValue | undefined {
 function textOf(value: JsonValue | undefined): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value === 'string') return value === '' ? null : value;
-  if (typeof value === 'boolean') return String(value);
+  // Booleano, objeto e lista não viram texto. `true` chegava a virar nome de
+  // fornecedor e código de material (REVIEW-01, achado 7).
   return null;
 }

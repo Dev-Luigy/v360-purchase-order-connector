@@ -5,9 +5,20 @@ import type {
   PurchaseOrderStatus,
 } from '../../domain/client.js';
 import { Decimal } from '../../domain/decimal.js';
+import type { DecimalText, IsoDate, TaxId } from '../../domain/primitives.js';
+import { isCalendarDate } from '../../domain/schemas.js';
 
 const hundred = Decimal.parse('100');
-import type { DecimalText, IsoDate, TaxId } from '../../domain/primitives.js';
+
+/**
+ * Número no padrão brasileiro: milhar em grupos de três separados por ponto,
+ * decimal por vírgula. `1.200,000`, `6,49` e `1200` passam; `12.34` e
+ * `1.23.4,50` não.
+ */
+const brazilianNumber = /^[+-]?(?:\d{1,3}(?:\.\d{3})*|\d+)(?:,\d+)?$/;
+
+/** CNPJ limpo, ou com a pontuação da máscara brasileira, e nada além. */
+const maskedTaxId = /^\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}$/;
 
 /**
  * Tradutores de notação, um por rótulo declarado no perfil. Todos recusam o
@@ -60,17 +71,10 @@ export function parseDate(
 }
 
 function assertCalendarDate(value: string, field: string): IsoDate {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (match === null) {
-    throw new FieldError(field, `data fora de aaaa-mm-dd: ${value}`);
-  }
-  const date = new Date(`${value}T00:00:00.000Z`);
-  // `new Date` acomoda 31/02 virando 03/03; comparar de volta rejeita isso.
-  if (
-    Number.isNaN(date.getTime()) ||
-    date.toISOString().slice(0, 10) !== value
-  ) {
-    throw new FieldError(field, `data inexistente no calendário: ${value}`);
+  // A regra mora no schema do contrato, para o adaptador e a borda HTTP não
+  // divergirem sobre o que é uma data (REVIEW-01, achado 5).
+  if (!isCalendarDate(value)) {
+    throw new FieldError(field, `data inválida ou inexistente: ${value}`);
   }
   return value;
 }
@@ -92,12 +96,18 @@ export function parseDecimal(
     switch (format) {
       case 'plain':
         return Decimal.parse(text).toText(scale);
-      case 'br':
-        // No padrão brasileiro o ponto é sempre milhar e a vírgula é sempre
-        // decimal. Não há ambiguidade a resolver porque o perfil já declarou.
+      case 'br': {
+        // O ponto é separador de milhar, e separador de milhar aparece a cada
+        // três dígitos. Apagar todo ponto sem conferir onde ele estava faz
+        // `12.34` virar 1234: erro de cem vezes em dinheiro, que passa por
+        // toda a validação seguinte parecendo certo (REVIEW-01, achado 4).
+        if (!brazilianNumber.test(text)) {
+          throw new RangeError(`agrupamento de milhar inválido: ${text}`);
+        }
         return Decimal.parse(text.replace(/\./g, '').replace(',', '.')).toText(
           scale,
         );
+      }
       case 'cents': {
         if (!/^[+-]?\d+$/.test(text)) {
           throw new RangeError(`centavos não inteiros: ${text}`);
@@ -108,9 +118,13 @@ export function parseDecimal(
       }
     }
   } catch (cause) {
+    // A razão específica precisa chegar a quem lê o relatório de carga:
+    // "agrupamento de milhar inválido" diz o que corrigir, "decimal inválido"
+    // não.
+    const reason = cause instanceof Error ? `: ${cause.message}` : '';
     throw new FieldError(
       field,
-      `decimal inválido para a notação ${format}: ${raw}`,
+      `decimal inválido para a notação ${format}${reason}`,
       { cause },
     );
   }
@@ -128,13 +142,22 @@ export function parseInteger(raw: string, field: string): number {
   return value;
 }
 
-/** CNPJ sem máscara e com 14 dígitos. Não validamos dígito verificador: o dado é do ERP do cliente e recusar por checksum criaria rejeição que ninguém consegue corrigir do nosso lado. */
+/**
+ * CNPJ sem máscara e com 14 dígitos.
+ *
+ * Só a pontuação da máscara é tolerada. Apagar todo caractere não numérico
+ * aceitaria `abc12.345.678/0001-90xyz` como CNPJ válido, e identidade de
+ * fornecedor não é campo para leniência (REVIEW-01, achado 1).
+ *
+ * Dígito verificador continua sem conferência: o dado é do ERP do cliente e
+ * recusar por checksum criaria rejeição que ninguém corrige do nosso lado.
+ */
 export function parseTaxId(raw: string, field: string): TaxId {
-  const digits = raw.replace(/\D/g, '');
-  if (digits.length !== 14) {
-    throw new FieldError(field, `CNPJ não tem 14 dígitos: ${raw}`);
+  const text = raw.trim();
+  if (!maskedTaxId.test(text)) {
+    throw new FieldError(field, `CNPJ fora do formato esperado: ${raw}`);
   }
-  return digits;
+  return text.replace(/\D/g, '');
 }
 
 /**

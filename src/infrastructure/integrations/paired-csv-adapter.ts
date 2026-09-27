@@ -175,6 +175,13 @@ export class PairedCsvAdapter implements SourceAdapter {
           reason: reasonOf(cause),
         });
       }
+      // Este caminho também respeita o lote. Sem isso, uma carga só de
+      // cabeçalhos saía num único lote do tamanho do arquivo, contradizendo a
+      // promessa de lotes limitados (REVIEW-01, achado 3).
+      if (orders.length + rejected.length >= this.batchSize) {
+        yield { orders, rejected: rejected.splice(0), staged: [] };
+        orders = [];
+      }
     }
 
     if (orders.length > 0 || rejected.length > 0) {

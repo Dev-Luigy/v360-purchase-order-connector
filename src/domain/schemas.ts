@@ -12,14 +12,53 @@ import type { NormalizedPurchaseOrder } from './purchase-order.js';
  * de linha torta persistida (ADR-011).
  */
 
-/** Decimal como texto, a mesma gramática que `Decimal.parse` aceita (ADR-007). */
+/**
+ * Decimal como texto **do contrato** — mais estrito que a entrada que
+ * `Decimal.parse` aceita, e de propósito. A entrada do cliente pode vir em
+ * notação exponencial; o contrato normalizado, não, porque tudo sai por
+ * `toFixed`. E o tamanho tem teto: sem ele, um expoente grande gera uma string
+ * de milhares de dígitos que atravessa o serviço inteiro (REVIEW-01, achado 5).
+ */
 export const decimalTextSchema = z
   .string()
-  .regex(/^[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/, 'decimal fora do contrato');
+  .regex(
+    /^-?\d{1,24}(?:\.\d{1,12})?$/,
+    'decimal fora do contrato: até 24 dígitos inteiros, 12 decimais, sem expoente',
+  );
+
+/** Decimal do contrato que não pode ser negativo: quantidade, preço, saldo. */
+export const nonNegativeDecimalSchema = decimalTextSchema.refine(
+  (value) => !value.startsWith('-'),
+  'não pode ser negativo',
+);
+
+/**
+ * Decimal do contrato estritamente positivo. O fator de conversão é o caso:
+ * zero fazia a conferência dividir por zero e lançar, o que viraria erro 500
+ * na borda em vez de rejeição na carga (REVIEW-01, achado 2).
+ */
+export const positiveDecimalSchema = decimalTextSchema.refine(
+  (value) => !value.startsWith('-') && /[1-9]/.test(value),
+  'precisa ser maior que zero',
+);
+
+/**
+ * Data que existe no calendário, e não só uma que tem a forma de data.
+ * `new Date` acomoda 31/02 virando 03/03; comparar de volta rejeita isso.
+ * Fonte única: o adaptador e a borda HTTP usam esta mesma regra.
+ */
+export function isCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return (
+    !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+  );
+}
 
 export const isoDateSchema = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'data fora de aaaa-mm-dd');
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'data fora de aaaa-mm-dd')
+  .refine(isCalendarDate, 'data inexistente no calendário');
 
 export const isoInstantSchema = z
   .string()
@@ -49,14 +88,16 @@ export const supplierSchema = z.object({
 });
 
 export const normalizedItemSchema = z.object({
-  externalLine: z.int(),
+  externalLine: z.int().nonnegative(),
   material: z.string().min(1, 'material vazio'),
   description: z.string(),
   purchaseUnit: z.string().min(1, 'unidade vazia'),
-  conversionFactor: decimalTextSchema,
-  quantityOrdered: decimalTextSchema,
-  quantityReceived: decimalTextSchema,
-  unitPrice: decimalTextSchema,
+  // Invariantes, não aparências: quantidade negativa e fator zero passavam e
+  // só explodiam na conferência (REVIEW-01, achado 2).
+  conversionFactor: positiveDecimalSchema,
+  quantityOrdered: nonNegativeDecimalSchema,
+  quantityReceived: nonNegativeDecimalSchema,
+  unitPrice: nonNegativeDecimalSchema,
   lineCreatedOn: isoDateSchema.nullable(),
 });
 
@@ -79,7 +120,16 @@ export const normalizedOrderSchema = z.object({
 export const invoiceCheckRequestSchema = z.object({
   clientId: z.string().min(1),
   purchaseOrderNumber: z.string().min(1),
-  supplierTaxId: z.string().min(1),
+  // O CNPJ chega limpo nesta borda. Máscara é assunto do arquivo do cliente,
+  // resolvido pelo adaptador; a API não precisa adivinhar pontuação, e aceitar
+  // qualquer string com 14 dígitos dentro era leniência em campo de identidade
+  // (REVIEW-01, achado 1).
+  supplierTaxId: taxIdSchema,
+  // A nota é laxa de propósito onde o pedido é estrito: ela é uma afirmação
+  // sobre o mundo que nós julgamos, não um registro que guardamos. Quantidade
+  // zero ou negativa é `QUANTIDADE_NAO_POSITIVA` na resposta, com o motivo
+  // estruturado (ADR-009, regra 5) — barrar aqui devolveria 400 e tornaria o
+  // código de divergência inalcançável.
   lines: z
     .array(
       z.object({

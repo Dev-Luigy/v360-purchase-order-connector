@@ -25,11 +25,16 @@ import type { CurrencyCode, DecimalText } from './primitives.js';
  */
 
 /**
- * Sessenta dígitos significativos. Dado de ERP não chega perto disso — o maior
- * caso real aqui tem nove —, e a folga é o que permite tratar arredondamento em
- * soma ou produto como defeito, e não como rotina.
+ * Cento e vinte dígitos significativos. Dado de ERP não chega perto disso — o
+ * maior caso real aqui tem nove —, e a folga é o que permite tratar
+ * arredondamento em soma ou produto como defeito, e não como rotina.
+ *
+ * A guarda abaixo é conservadora: estima o pior caso em vez de medir o
+ * resultado, então recusa um pouco antes do limite real. Com sessenta dígitos
+ * ela recusava `1e59 + 1`, que caberia (REVIEW-01, achado 7); com o dobro, a
+ * margem sobra e nenhuma operação plausível encosta nela.
  */
-const precision = 60;
+const precision = 120;
 
 const Exact = DecimalJs.clone({
   precision,
@@ -166,6 +171,22 @@ const currencyScales: Readonly<Record<string, number>> = {
   BRL: 2,
   USD: 2,
   EUR: 2,
+  GBP: 2,
+  // Sem centavo. Tratá-las como se tivessem duas casas arredondaria o valor
+  // esperado para uma fração que não existe na moeda (REVIEW-01, achado 7).
+  CLP: 0,
+  ISK: 0,
+  JPY: 0,
+  KRW: 0,
+  PYG: 0,
+  VND: 0,
+  // Três casas.
+  BHD: 3,
+  IQD: 3,
+  JOD: 3,
+  KWD: 3,
+  OMR: 3,
+  TND: 3,
 };
 
 export const defaultCurrencyScale = 2;

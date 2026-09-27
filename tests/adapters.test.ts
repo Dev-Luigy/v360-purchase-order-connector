@@ -161,7 +161,7 @@ test('Alfa: registro inválido é rejeitado e não derruba a carga', async () =>
     ['PO-SITUACAO', 'PO-CNPJ'],
   );
   assert.match(batch.rejected[0]?.reason ?? '', /situação fora do vocabulário/);
-  assert.match(batch.rejected[1]?.reason ?? '', /14 dígitos/);
+  assert.match(batch.rejected[1]?.reason ?? '', /CNPJ fora do formato/);
 });
 
 test('Alfa: carga com versão ou cliente diferente do perfil falha alto', async () => {
