@@ -13,22 +13,23 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | ARCH-04   | Registrar escolha do ORM Prisma 7                                | concluída                      | Codex       | ADR-001, ADR-002 e ADR-003; documentação apenas                             |
 | ARCH-05   | Registrar desenho de observabilidade (Grafana/Prometheus)        | aceita, implementação diferida | Claude      | Pedido do usuário; decisão apenas, sem dependência instalada                |
 | ENV-02    | Instalar ferramentas do sistema                                  | aguardando                     | Usuário     | docs/SETUP.md                                                               |
-| ENV-03    | Validar Compose, conexão e reinício do banco                     | aguardando                     | —           | ENV-02; ambiente, sem código de negócio                                     |
+| ENV-03    | Validar Compose, conexão e reinício do banco                     | aguardando                     | —           | ENV-02; destrava a validação de P1-02 e a suíte de integração               |
 | ENV-04    | Verificar portas e isolar o Compose antes de subir               | concluída                      | Claude      | Pedido do usuário; preflight, nome fixo do projeto e portas por env         |
 | REPO-01   | Inicializar Git, commit base e fluxo de branches                 | concluída                      | Claude      | Commit base autorizado pelo usuário; docs/GIT_WORKFLOW.md                   |
 | REVIEW-01 | Revisar base e plano técnico                                     | concluída                      | Codex       | Limites de P1-03 e HTTP testados; achados no handoff                        |
 | REVIEW-02 | Revisar arquitetura contra o enunciado                           | concluída                      | Claude      | Achados para P1-01, P1-02 e ENV-03; sem editar código                       |
 | REVIEW-03 | Consolidar verificação pós-FIX-02 para a outra IA                | concluída                      | Codex       | Handoff documental; riscos residuais e retomada                             |
 | REVIEW-04 | Preparar plano de fix: arquitetura, segurança, CI/CD e Docker    | concluída                      | Codex       | Revisão documental; não altera código nem arquivos reservados por FIX-04/05 |
+| REVIEW-05 | Revisar a entrega parcial de P1-02                               | concluída                      | Codex       | Handoff para Claude; somente documentação                                   |
 | P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03        |
-| P1-02     | Implementar schema, migrações e repositórios                     | em andamento                   | Claude      | P1-01, ADR-004 e ADR-012; validação real depende de ENV-03                  |
+| P1-02     | Implementar schema, migrações e repositórios                     | concluída                      | Claude      | Código pronto; validação contra PostgreSQL real é ENV-03                    |
 | P1-03     | Implementar domínio e adaptadores Alfa/Beta                      | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                                |
 | FIX-01    | Estabilizar validação e limites de REVIEW-01                     | concluída                      | Claude      | REVIEW-01; sete achados corrigidos com regressão; libera P1-04              |
 | FIX-02    | Verificação pós-FIX-01: vazamento de origem e notações sem teste | concluída                      | Claude      | Dois defeitos corrigidos; notação por campo fica para decisão               |
 | FIX-03    | Fechar riscos residuais de REVIEW-02 e REVIEW-03                 | concluída                      | Claude      | Cinco defeitos fechados; quatro decisões listadas em aberto                 |
 | FIX-04    | Fechar os pontos que dependiam de decisão                        | concluída                      | Claude      | ADR-012: notação por campo, teto do Beta, pool por propósito, lint com tipo |
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado         |
-| P1-04     | Integrar API, conferência e relatório paginado                   | aguardando                     | —           | P1-02; P1-03 e FIX-01 concluídas; combinar responsabilidade por arquivo     |
+| P1-04     | Integrar API, conferência e relatório paginado                   | aguardando                     | —           | P1-02 e P1-03 concluídas; combinar responsabilidade por arquivo             |
 | P1-05     | Validar desafio e registrar marco parte-1                        | aguardando                     | —           | P1-04; persistência, concorrência, precisão e paginação                     |
 | P2-01     | Integrar Gama/Delta e documentar mudanças                        | aguardando                     | —           | P1-05                                                                       |
 
@@ -60,6 +61,15 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: consolidar achados de arquitetura e ampliar a revisão para segurança, CI/CD e Docker, com prioridade e critérios de aceite; nenhuma correção de código ou configuração nesta tarefa.
 - Dependências: considera FIX-04 e FIX-05 já concluídas para não pedir novamente correções que o Claude acabou de entregar.
 - Evidência: [handoff REVIEW-04](handoffs/REVIEW-04-arquitetura-seguranca-cicd-docker-codex.md); `npm run check`, `docker compose config --quiet` e `docker build --check .` verdes; `npm audit --audit-level=low` sem vulnerabilidades conhecidas na data da revisão.
+
+## REVIEW-05 — revisão da entrega parcial de P1-02
+
+- Responsável: Codex.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `docs/TASKS.md`, `docs/handoffs/REVIEW-05-p1-02-codex.md`.
+- Escopo: revisar schema, migração, dependências, Docker e os repositórios deixados pelo Claude; produzir handoff sem modificar os arquivos de P1-02.
+- Dependências: P1-02 permanece formalmente em andamento e seus arquivos continuam pertencendo ao Claude.
+- Evidência: [handoff REVIEW-05](handoffs/REVIEW-05-p1-02-codex.md); Prisma validou, mas `npm run check`, `prisma format --check` e o build real do estágio Docker falharam pelos achados documentados; audit registrou quatro vulnerabilidades altas na árvore do Prisma.
 
 ## COL-02 — contexto compartilhado e leitura sob demanda
 
@@ -228,8 +238,9 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## P1-02 — schema, migrações e repositórios
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `prisma/**`, `database/migrations/README.md`, `src/infrastructure/database/**`, `src/application/ports/pagination.ts` (só se o cursor exigir), `package.json` e `package-lock.json` (Prisma 7), `.gitignore`, `Dockerfile`, `compose.yaml`, `tests/*.test.ts`, `docs/TASKS.md`, `docs/handoffs/P1-02-claude.md`.
+- Estado: concluída como código; validação real pendente em ENV-03.
+- Arquivos alterados (reservas liberadas): `prisma/**`, `database/migrations/README.md`, `src/infrastructure/database/**`, `src/application/ports/pagination.ts` (só se o cursor exigir), `package.json` e `package-lock.json` (Prisma 7), `.gitignore`, `Dockerfile`, `compose.yaml`, `tests/*.test.ts`, `docs/TASKS.md`, `docs/handoffs/P1-02-claude.md`.
 - Escopo: schema Prisma, migração inicial com os índices que o requisito 1 exige, e as implementações de `PurchaseOrderRepository` e `ConferenceRepository`. Resolve também os achados 1, 2, 3 e 8 de [REVIEW-02](handoffs/REVIEW-02-claude.md).
 - Dependências: P1-01 (contrato), ADR-004 (Prisma 7), ADR-012 (pool por propósito). **A validação contra PostgreSQL real é ENV-03** e depende de o usuário autorizar subir o Compose; até lá, migração e consultas não são exercitadas contra banco.
-- Nota de posse: `package.json` volta a ficar reservado enquanto durar.
+- Nota de posse: `package.json` liberado.
+- Evidência: [handoff P1-02](handoffs/P1-02-claude.md); `npm run check` verde com 109 testes; `docker compose config` e `docker build --check` passam. **Nada rodou contra PostgreSQL**: os repositórios não têm teste até ENV-03.
