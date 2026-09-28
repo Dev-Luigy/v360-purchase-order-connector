@@ -2,6 +2,10 @@ import type { FastifyInstance } from 'fastify';
 
 import { CheckReadiness } from '../../src/application/use-cases/check-readiness.js';
 import { CheckInvoice } from '../../src/application/use-cases/check-invoice.js';
+import {
+  ListConferences,
+  SummarizeConferences,
+} from '../../src/application/use-cases/query-conferences.js';
 import { IngestPurchaseOrders } from '../../src/application/use-cases/ingest-purchase-orders.js';
 import {
   GetPurchaseOrder,
@@ -45,6 +49,8 @@ export async function buildTestApp(
     listOrders: new ListPurchaseOrders(orders),
     getOrder: new GetPurchaseOrder(orders),
     checkInvoice: new CheckInvoice(orders, conferences),
+    listConferences: new ListConferences(conferences),
+    summarizeConferences: new SummarizeConferences(conferences),
     profileFormatOf: async (clientId) =>
       (await profiles.find(clientId))?.deliveryFormat ?? null,
   });

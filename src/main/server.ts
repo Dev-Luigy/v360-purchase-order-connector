@@ -1,5 +1,9 @@
 import { CheckReadiness } from '../application/use-cases/check-readiness.js';
 import { CheckInvoice } from '../application/use-cases/check-invoice.js';
+import {
+  ListConferences,
+  SummarizeConferences,
+} from '../application/use-cases/query-conferences.js';
 import { IngestPurchaseOrders } from '../application/use-cases/ingest-purchase-orders.js';
 import {
   GetPurchaseOrder,
@@ -37,6 +41,8 @@ const app = await buildApp({
   listOrders: new ListPurchaseOrders(orderRepository),
   getOrder: new GetPurchaseOrder(orderRepository),
   checkInvoice: new CheckInvoice(orderRepository, conferenceRepository),
+  listConferences: new ListConferences(conferenceRepository),
+  summarizeConferences: new SummarizeConferences(conferenceRepository),
   profileFormatOf: async (clientId) =>
     (await profiles.find(clientId))?.deliveryFormat ?? null,
   logLevel: env.LOG_LEVEL,

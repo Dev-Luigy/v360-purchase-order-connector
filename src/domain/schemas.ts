@@ -286,7 +286,12 @@ export const conferenceSummarySchema = z.object({
    * Ocorrências por código. A soma **não** fecha com `rejected`: uma nota
    * reprovada pode ter várias divergências (ADR-009).
    */
-  divergencesByCode: z.record(divergenceCodeSchema, z.int().nonnegative()),
+  // Parcial: código sem ocorrência simplesmente não aparece, em vez de vir
+  // zerado. A chave é validada contra a taxonomia fechada.
+  divergencesByCode: z.partialRecord(
+    divergenceCodeSchema,
+    z.int().nonnegative(),
+  ),
 });
 
 /** Mensagem curta e com caminho, para virar `RejectedRecord.reason`. */
