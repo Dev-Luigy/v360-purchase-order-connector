@@ -224,12 +224,18 @@ test('R07-06: o perfil cumpre o que declara sobre a máscara do CNPJ', () => {
   // Antes, `taxIdMasked` nunca era lido: o perfil prometia uma regra falsa.
   assert.equal(alfaProfile.taxIdMasked, false);
   assert.equal(betaProfile.taxIdMasked, true);
-  assert.equal(parseTaxId('12345678000190', 'c', false), '12345678000190');
+  assert.equal(
+    parseTaxId('12345678000190', 'c', false, false),
+    '12345678000190',
+  );
   assert.throws(
-    () => parseTaxId('12.345.678/0001-90', 'c', false),
+    () => parseTaxId('12.345.678/0001-90', 'c', false, false),
     /declara formato limpo/,
   );
-  assert.equal(parseTaxId('12.345.678/0001-90', 'c', true), '12345678000190');
+  assert.equal(
+    parseTaxId('12.345.678/0001-90', 'c', true, false),
+    '12345678000190',
+  );
 });
 
 test('R07-06: identificador de cliente do perfil respeita o limite da coluna', () => {

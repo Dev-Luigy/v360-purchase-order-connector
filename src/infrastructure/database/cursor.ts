@@ -1,20 +1,8 @@
 import { createHash } from 'node:crypto';
 
-/**
- * Cursor opaco de ADR-010.
- *
- * Carrega duas coisas: onde a varredura parou e a impressão digital dos
- * filtros que a originaram. Trocar de filtro no meio da varredura passa a ser
- * recusa, em vez de página incoerente — o cliente receberia registros de dois
- * conjuntos diferentes sem perceber.
- *
- * Opaco para quem consome, **tipado antes de chegar ao banco**: tamanho,
- * alfabeto, forma e identidade são conferidos aqui, e o construtor da consulta
- * só recebe um identificador já validado (REVIEW-04, R04-06).
- */
+import { maxCursorLength } from '../../domain/limits.js';
 
-/** Teto de tamanho: cursor legítimo tem ~80 caracteres. */
-const maxCursorLength = 256;
+// Cursor legítimo tem cerca de 80 caracteres; o teto limita custo de parsing.
 
 const base64url = /^[A-Za-z0-9_-]+$/;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -26,27 +14,16 @@ export class CursorError extends Error {
   }
 }
 
-/**
- * Formato do cursor. A ADR-010 especifica `{ v, after, f }`, e o `v` não é
- * enfeite: sem versão, mudar o formato no futuro não tem caminho explícito —
- * cursor antigo viraria erro de estrutura, ou pior, seria lido errado.
- */
+/** A versão permite rejeitar explicitamente formatos antigos. */
 export const cursorVersion = 1;
 
 interface CursorPayload {
-  /** Versão do formato. */
   readonly v: number;
-  /** Último identificador entregue na página anterior. */
   readonly after: string;
-  /** Impressão digital dos filtros. */
   readonly f: string;
 }
 
-/**
- * Valor de filtro que a impressão digital sabe representar. Só primitivos, de
- * propósito: um objeto viraria `[object Object]` e dois filtros diferentes
- * teriam a mesma impressão, que é justamente o que ela existe para impedir.
- */
+/** Objetos não são aceitos porque sua conversão textual não é canônica. */
 export type FilterValue = string | number | boolean | null;
 
 /**
@@ -56,11 +33,7 @@ export type FilterValue = string | number | boolean | null;
 export function fingerprintOf(
   filters: Readonly<Record<string, FilterValue>>,
 ): string {
-  // Tipo **e** valor, em tuplas. Concatenar `String(value)` confundia coisas
-  // distintas: `null` com o caractere NUL, o número 1 com a string "1", o
-  // booleano true com a string "true" — três colisões reproduzidas em
-  // REVIEW-06, R06-03. Uma impressão que colide não distingue os filtros que
-  // ela existe para distinguir.
+  // Tipo e valor evitam colisões entre, por exemplo, `1` e `"1"`.
   const canonical = JSON.stringify(
     Object.keys(filters)
       .sort()
@@ -82,11 +55,7 @@ export function encodeCursor(after: string, fingerprint: string): string {
   return Buffer.from(JSON.stringify(payload), 'utf-8').toString('base64url');
 }
 
-/**
- * Devolve o identificador em que a próxima página começa, ou lança. Nunca
- * devolve dado do cursor sem conferir a impressão digital: é o que impede
- * combinar cursor de uma consulta com filtro de outra.
- */
+/** Decodifica e impede reutilizar um cursor com outros filtros. */
 export function decodeCursor(cursor: string, fingerprint: string): string {
   if (cursor.length > maxCursorLength) {
     throw new CursorError('comprimento acima do limite');

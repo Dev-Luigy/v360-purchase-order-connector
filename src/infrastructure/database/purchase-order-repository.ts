@@ -32,14 +32,8 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
   /**
-   * Substitui o retrato do pedido em uma transação (ADR-008).
-   *
-   * Cargas concorrentes do mesmo pedido são serializadas por advisory lock
-   * sobre `(clientId, externalNumber)`. Lock de transação, e não de sessão: o
-   * Postgres o solta no commit ou no rollback, então carga que morre no meio
-   * não deixa o pedido travado. `SELECT ... FOR UPDATE` não serviria porque o
-   * pedido pode ainda não existir, e duas cargas simultâneas do mesmo pedido
-   * novo criariam duas linhas antes de qualquer uma travar a outra.
+   * Serializa cargas do mesmo pedido com lock transacional. `FOR UPDATE` não
+   * cobre um pedido que ainda não existe.
    */
   replaceSnapshot(snapshot: NormalizedPurchaseOrder): Promise<PurchaseOrder> {
     return this.prisma.$transaction(async (tx) => {
@@ -80,8 +74,6 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
           : (
               await tx.purchaseOrder.update({
                 where: { id: existing.id },
-                // Identidade interna preservada e versão incrementada: toda
-                // conferência guarda a versão que conferiu (ADR-009).
                 data: { ...header, ingestionVersion: { increment: 1 } },
                 select: { id: true },
               })
@@ -115,8 +107,7 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
         }
       }
 
-      // Recalculado a partir do que ficou no banco, e não do payload: com
-      // `items: null` o saldo vem dos itens preservados.
+      // Com `items: null`, o saldo depende dos itens preservados no banco.
       const saldos = await tx.purchaseOrderItem.findMany({
         where: { purchaseOrderId: id },
         select: { quantityPending: true },
@@ -158,11 +149,6 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
     return found === null ? null : findFull(this.prisma, found.id);
   }
 
-  /**
-   * Listagem sem itens, paginada por cursor sobre a identidade interna
-   * (ADR-010). O `id` é UUID v7, ordenável no tempo, então a varredura avança
-   * pelos mesmos índices que sustentam os filtros.
-   */
   async list(
     filters: PurchaseOrderFilters,
     page: PageRequest,
@@ -185,13 +171,10 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
           ? {}
           : { supplierTaxId: filters.supplierTaxId }),
         ...(filters.status === null ? {} : { status: filters.status }),
-        // Coluna mantida na ingestão e coberta por índice parcial: comparar
-        // quantidade pedida com recebida não usaria índice (ADR-006).
         ...(filters.onlyPending ? { hasPendingBalance: true } : {}),
         ...(after === null ? {} : { id: { gt: after } }),
       },
       orderBy: { id: 'asc' },
-      // Um a mais do que a página, para saber se há próxima sem um COUNT.
       take: page.limit + 1,
       include: { items: { select: { quantityPending: true } } },
     });
@@ -215,10 +198,7 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
   }
 }
 
-/**
- * Chave do advisory lock. O comprimento do cliente vai na frente para que
- * `("a", "bc")` e `("ab", "c")` não colidam na concatenação.
- */
+/** Inclui o comprimento para evitar colisões na concatenação das partes. */
 export function lockKeyFor(snapshot: {
   clientId: string;
   externalNumber: string;
@@ -230,7 +210,6 @@ export function assertPageLimit(limit: number): void {
   if (!Number.isInteger(limit) || limit < 1) {
     throw new RangeError(`tamanho de página inválido: ${String(limit)}`);
   }
-  // Acima do teto é erro de requisição, não recorte silencioso (ADR-010).
   if (limit > maxPageLimit) {
     throw new RangeError(
       `tamanho de página ${String(limit)} acima do teto de ${String(maxPageLimit)}`,
@@ -288,16 +267,10 @@ function toPurchaseOrder(row: FullOrder): PurchaseOrder {
   };
 }
 
-/**
- * Contagem feita sobre as linhas da própria página. Uma subconsulta por pedido
- * transferiria menos bytes, mas exigiria SQL cru e perderia a tipagem; com teto
- * de cem por página (ADR-010), o custo é limitado e fica visível aqui.
- */
+// O teto de página limita o custo de carregar os saldos para esta contagem.
 function toSummary(row: SummaryRow): PurchaseOrderSummary {
   const pendentes = row.items.filter(
     (item) =>
-      // `Decimal`, não `parseFloat`: quantidade é decimal exato e ponto
-      // flutuante é proibido neste projeto (ADR-007).
       Decimal.parse(decimalToText(item.quantityPending, 'quantityPending'))
         .isPositive,
   );

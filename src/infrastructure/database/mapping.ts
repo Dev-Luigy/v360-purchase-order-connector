@@ -6,16 +6,7 @@ import type {
   IsoInstant,
 } from '../../domain/primitives.js';
 
-/**
- * Tradução entre as linhas do banco e o contrato normalizado.
- *
- * O ponto delicado é o decimal. O Prisma devolve `runtime.Decimal`, que é
- * decimal.js — a mesma biblioteca do domínio (ADR-011) —, então a ponte é
- * `toFixed()` e não passa por `number` em nenhum momento. Ler com `Number()`
- * aqui desfaria tudo o que ADR-007 protege.
- */
-
-/** Mínimo que precisamos do decimal do Prisma, sem importar o tipo gerado. */
+/** Interface mínima que mantém a conversão decimal fora de `number`. */
 interface PrismaDecimal {
   toFixed(decimalPlaces?: number): string;
 }
@@ -64,7 +55,6 @@ export function instantToIso(
   return value.toISOString();
 }
 
-/** Data de calendário sem hora: meia-noite UTC, para o `DATE` do Postgres. */
 export function isoDateToDate(value: IsoDate): Date {
   return new Date(`${value}T00:00:00.000Z`);
 }
@@ -73,12 +63,7 @@ export function isoDateToDateOrNull(value: IsoDate | null): Date | null {
   return value === null ? null : isoDateToDate(value);
 }
 
-/**
- * Saldo do item, na unidade de compra. **Não** é limitado a zero: recebimento
- * acima do pedido acontece em ERP, e um saldo negativo é informação real sobre
- * o que veio a mais. Quem decide se há algo a receber é a comparação com zero,
- * logo abaixo.
- */
+/** Saldo pode ser negativo para preservar recebimento acima do pedido. */
 export function pendingOf(
   quantityOrdered: DecimalText,
   quantityReceived: DecimalText,
@@ -94,7 +79,6 @@ export function hasPendingBalance(
   return items.some((item) => Decimal.parse(item.quantityPending).isPositive);
 }
 
-/** As situações do domínio e do banco têm os mesmos nomes, de propósito. */
 export function statusToDb(status: PurchaseOrderStatus): PurchaseOrderStatus {
   return status;
 }

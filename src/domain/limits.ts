@@ -88,6 +88,15 @@ export const maxCsvRecordSize = 64 * 1024;
 export const maxInvoiceLines = 1_000;
 
 /**
+ * Quantos registros rejeitados ou em staging a resposta de uma carga devolve.
+ *
+ * O total vai separado, então nada é escondido — só não cabe tudo numa
+ * resposta HTTP. Quem precisar da lista inteira consulta o registro da carga,
+ * que é trabalho de outra tarefa (REVIEW-04, R04-02).
+ */
+export const maxReportedRecords = 100;
+
+/**
  * Moedas suportadas e as casas decimais de cada uma.
  *
  * Allowlist versionada, e não "três letras maiúsculas": `ZZZ` passava por ISO
@@ -115,3 +124,10 @@ export const supportedCurrencies: Readonly<Record<string, number>> = {
   OMR: 3,
   TND: 3,
 };
+
+/**
+ * Comprimento máximo de um cursor de paginação. Um cursor legítimo tem cerca
+ * de oitenta caracteres; o teto existe para a borda HTTP recusar antes de
+ * decodificar (ADR-010).
+ */
+export const maxCursorLength = 256;

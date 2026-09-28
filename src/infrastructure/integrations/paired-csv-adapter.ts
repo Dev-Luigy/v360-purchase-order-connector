@@ -28,38 +28,19 @@ import {
   type OrderHeader,
 } from './record-mapping.js';
 
-/** As duas partes da carga do Beta. */
 export const csvHeadersPart = 'headers';
 export const csvItemsPart = 'items';
 
 /**
- * Forma `paired-csv`: dois arquivos delimitados ligados pelo número do pedido,
- * que é como o Beta entrega.
- *
- * **Memória.** Os cabeçalhos são indexados primeiro, um registro por pedido —
- * é o que a porta `SourceAdapter` já previa ("o Beta precisa ler o arquivo de
- * itens depois de indexar os cabeçalhos"). Os itens seguem em fluxo, agrupados
- * enquanto o número do pedido não muda. Guardar todos os itens para agrupar
- * depois custaria a carga inteira em memória, que é justamente o que o volume
- * do enunciado proíbe.
- *
- * **O preço dessa escolha** é que o arquivo de itens precisa vir agrupado por
- * pedido. Isso não é assumido em silêncio: se um pedido reaparece depois de o
- * grupo dele ter fechado, as linhas são **rejeitadas** com o motivo explícito,
- * porque emiti-las substituiria o retrato e apagaria os itens já lidos.
+ * Indexa cabeçalhos e percorre itens em fluxo. Os itens precisam estar
+ * agrupados por pedido; reabrir um grupo substituiria um retrato já emitido.
  */
 export class PairedCsvAdapter implements SourceAdapter {
   readonly deliveryFormat = 'paired-csv' as const;
 
   constructor(
     private readonly batchSize = 200,
-    /**
-     * Teto de cabeçalhos indexados. O índice é o preço de agrupar itens sem
-     * carregar o arquivo inteiro, e ele cresce com o número de pedidos da
-     * carga. Sem teto, uma carga grande demais derruba o processo por memória;
-     * com teto, ela é recusada com motivo, e quem opera divide a carga ou
-     * decide subir o limite (REVIEW-03, 2).
-     */
+    /** Teto do índice de cabeçalhos mantido em memória. */
     private readonly maxIndexedHeaders = 100_000,
   ) {}
 
@@ -87,15 +68,12 @@ export class PairedCsvAdapter implements SourceAdapter {
 
     let orders: NormalizedPurchaseOrder[] = [];
     let current: Group | null = null;
-    /** Pedidos cujo grupo já fechou, para detectar arquivo fora de ordem. */
     const closed = new Set<string>();
 
     const flush = (): void => {
       if (current === null) return;
       closed.add(current.orderNumber);
-      // O conjunto cresce com todo número de pedido visto nos itens, inclusive
-      // grupos órfãos que nunca entraram no mapa de cabeçalhos: sem teto, ele
-      // escapava do limite que protegia o índice (REVIEW-07, R07-02).
+      // Este conjunto também cresce para grupos sem cabeçalho.
       if (closed.size > this.maxIndexedHeaders) {
         throw new FieldError(
           csvItemsPart,
@@ -104,9 +82,6 @@ export class PairedCsvAdapter implements SourceAdapter {
       }
       const header = headers.get(current.orderNumber);
       if (header === undefined) {
-        // As duas partes vieram na mesma carga: falta de cabeçalho aqui é
-        // payload incoerente, não a espera do Delta, cujas duas consultas são
-        // independentes e vão para staging (ADR-008).
         rejected.push({
           reference: `${csvItemsPart}: pedido ${current.orderNumber}`,
           reason: 'item sem cabeçalho correspondente na mesma carga',
@@ -116,10 +91,7 @@ export class PairedCsvAdapter implements SourceAdapter {
       }
       headers.delete(current.orderNumber);
 
-      // Pedido acima do teto não vira retrato truncado. Emitir as primeiras
-      // `maxItemsPerOrder` linhas seria pior que recusar: `replaceSnapshot`
-      // substitui, então o excedente sumiria e o retrato se diria completo
-      // (REVIEW-08, R08-01). Uma rejeição por pedido, não por linha.
+      // Nunca persista um retrato truncado quando o pedido excede o teto.
       if (current.overflow) {
         rejected.push({
           reference: `pedido ${current.orderNumber}`,
@@ -136,10 +108,7 @@ export class PairedCsvAdapter implements SourceAdapter {
           validateNormalizedOrder({
             clientId: payload.clientId,
             ...header,
-            // Qualquer linha rejeitada torna a lista incompleta, e lista
-            // incompleta não é retrato. `null` aplica o cabeçalho e preserva
-            // os itens já conhecidos; a lista parcial os apagaria (ADR-008).
-            // A aceitação parcial é por pedido, não por item dentro do pedido.
+            // `null` preserva itens anteriores quando alguma linha foi rejeitada.
             items: current.rejected > 0 ? null : current.items,
           }),
         );
@@ -182,10 +151,7 @@ export class PairedCsvAdapter implements SourceAdapter {
         current = { orderNumber, items: [], rejected: 0, overflow: false };
       }
 
-      // O teto entra **antes** do push. O `.max()` do Zod só roda quando a
-      // lista já existe, então um pedido malicioso acumularia milhões de itens
-      // antes de alguém reclamar (REVIEW-07, R07-02). Marcar o grupo e parar
-      // de acumular é o que evita tanto a memória quanto o retrato parcial.
+      // Aplique o teto antes do push para limitar memória antes do Zod.
       if (current.items.length >= maxItemsPerOrder) {
         current.overflow = true;
         current.items.length = 0;
@@ -209,8 +175,7 @@ export class PairedCsvAdapter implements SourceAdapter {
     }
     flush();
 
-    // Cabeçalho sem nenhum item no arquivo: o cliente exporta a carga inteira,
-    // então ausência de linha é afirmação de que o pedido não tem itens.
+    // Neste formato completo, cabeçalho sem linha significa lista vazia.
     for (const [orderNumber, header] of headers) {
       try {
         orders.push(
@@ -226,9 +191,6 @@ export class PairedCsvAdapter implements SourceAdapter {
           reason: reasonOf(cause),
         });
       }
-      // Este caminho também respeita o lote. Sem isso, uma carga só de
-      // cabeçalhos saía num único lote do tamanho do arquivo, contradizendo a
-      // promessa de lotes limitados (REVIEW-01, achado 3).
       if (orders.length + rejected.length >= this.batchSize) {
         yield { orders, rejected: rejected.splice(0), staged: [] };
         orders = [];
@@ -245,7 +207,6 @@ interface Group {
   readonly orderNumber: string;
   readonly items: NormalizedPurchaseOrderItem[];
   rejected: number;
-  /** Passou do teto de itens: o pedido inteiro é recusado, não truncado. */
   overflow: boolean;
 }
 
@@ -277,9 +238,7 @@ async function indexHeaders(
         reason: reasonOf(cause),
       });
     }
-    // Fora do `try` de propósito: estourar o teto é falha da carga inteira, e
-    // não mais um registro rejeitado. Dentro, viraria uma linha de relatório e
-    // a carga seguiria consumindo memória.
+    // Estourar o teto encerra a carga inteira, não apenas uma linha.
     if (headers.size > maxIndexedHeaders) {
       throw new FieldError(
         csvHeadersPart,
@@ -291,7 +250,6 @@ async function indexHeaders(
   return headers;
 }
 
-/** As colunas exigidas saem do perfil, não de uma lista fixa no código. */
 function orderColumns(profile: ClientProfile): string[] {
   const map = profile.fields.order;
   return [

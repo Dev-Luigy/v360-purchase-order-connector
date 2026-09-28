@@ -1,6 +1,19 @@
 # Contrato HTTP
 
-**Este documento é contrato, não descrição do que existe.** Hoje apenas `GET /health` e `GET /ready` estão implementados; o resto é o que P1-04 vai expor, decidido em P1-01. O enunciado deixa explícito que transformar os requisitos em endpoints é decisão nossa e faz parte da avaliação.
+**Este documento é contrato e agora também descrição.** As rotas abaixo estão implementadas em P1-04 e cobertas por teste que atravessa a borda HTTP. O enunciado deixa explícito que transformar os requisitos em endpoints é decisão nossa e faz parte da avaliação.
+
+```
+POST /clients/:clientId/ingestions
+GET  /purchase-orders
+GET  /purchase-orders/:id
+POST /conferences
+GET  /conferences
+GET  /conferences/summary
+GET  /health
+GET  /ready
+```
+
+O que **não** foi validado: nada rodou contra PostgreSQL real. Os testes de rota usam repositório em memória; transação, advisory lock, `CHECK` e plano de consulta dependem de ENV-03.
 
 ## Convenções
 
@@ -224,4 +237,4 @@ A soma por código não fecha com `rejected`: uma nota reprovada pode ter vária
 
 ## Operacionais
 
-`GET /health` responde 200 com o processo vivo. `GET /ready` responde 200 com o banco acessível e 503 quando não — hoje verifica só conectividade, não a existência das tabelas, limitação registrada em [REVIEW-02](handoffs/REVIEW-02-claude.md) e mantida por decisão do usuário. `GET /metrics` está desenhado em [ADR-005](decisions/ADR-005-observabilidade.md) e não implementado.
+`GET /health` responde 200 com o processo vivo. `GET /ready` responde 200 quando a migração esperada está aplicada e 503 quando não — desde P1-02 ele confere o estado das migrações, não só a conectividade. `GET /metrics` está desenhado em [ADR-005](decisions/ADR-005-observabilidade.md) e não implementado.

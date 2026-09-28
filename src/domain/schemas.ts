@@ -12,6 +12,7 @@ import {
   maxIntegerDigits,
   maxInvoiceLines,
   maxPersistedDecimalPlaces,
+  maxReportedRecords,
   maxItemsPerOrder,
   maxMaterialLength,
   maxPurchaseUnitLength,
@@ -218,6 +219,36 @@ export const invoiceCheckRequestSchema = z.object({
     .max(maxInvoiceLines, 'nota com linhas demais'),
 });
 
+/** Registro que a carga não aceitou, como sai na resposta. */
+export const rejectedRecordSchema = z.object({
+  reference: persistedText(maxFieldLength).min(1),
+  reason: persistedText(maxDivergenceTextLength).min(1),
+});
+
+export const stagedRecordSchema = z.object({
+  reference: persistedText(maxFieldLength).min(1),
+  reason: z.enum(['cabecalho-ausente', 'itens-ausentes']),
+  raw: z.string(),
+});
+
+/**
+ * Resultado de uma carga. As listas são amostra e os totais vêm separados: uma
+ * carga com dez mil rejeições não pode virar resposta sem teto (REVIEW-04).
+ */
+export const ingestionReportSchema = z.object({
+  ingestionId: z.uuid(),
+  clientId: persistedText(maxClientIdLength).min(1),
+  formatVersion: z.string().min(1),
+  startedAt: isoInstantSchema,
+  finishedAt: isoInstantSchema,
+  ordersAccepted: z.int().nonnegative(),
+  itemsAccepted: z.int().nonnegative(),
+  rejected: z.array(rejectedRecordSchema).max(maxReportedRecords),
+  rejectedTotal: z.int().nonnegative(),
+  staged: z.array(stagedRecordSchema).max(maxReportedRecords),
+  stagedTotal: z.int().nonnegative(),
+});
+
 export const divergenceCodeSchema = z.enum(divergenceCodes);
 
 /**
@@ -233,6 +264,34 @@ export const divergenceSchema = z.object({
   purchaseOrderLine: z.int().nonnegative().nullable(),
   expected: persistedText(maxDivergenceTextLength).nullable(),
   received: persistedText(maxDivergenceTextLength).nullable(),
+});
+
+/** Conferência como sai na resposta e como volta do histórico. */
+export const conferenceRecordSchema = z.object({
+  id: z.string().min(1),
+  purchaseOrderId: z.string().min(1),
+  purchaseOrderIngestionVersion: z.int().positive(),
+  clientId: persistedText(maxClientIdLength).min(1),
+  checkedAt: isoInstantSchema,
+  outcome: z.enum(['aprovada', 'reprovada']),
+  invoice: invoiceCheckRequestSchema,
+  divergences: z.array(divergenceSchema),
+});
+
+export const conferenceSummarySchema = z.object({
+  checked: z.int().nonnegative(),
+  approved: z.int().nonnegative(),
+  rejected: z.int().nonnegative(),
+  /**
+   * Ocorrências por código. A soma **não** fecha com `rejected`: uma nota
+   * reprovada pode ter várias divergências (ADR-009).
+   */
+  // Parcial: código sem ocorrência simplesmente não aparece, em vez de vir
+  // zerado. A chave é validada contra a taxonomia fechada.
+  divergencesByCode: z.partialRecord(
+    divergenceCodeSchema,
+    z.int().nonnegative(),
+  ),
 });
 
 /** Mensagem curta e com caminho, para virar `RejectedRecord.reason`. */

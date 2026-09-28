@@ -24,6 +24,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-06 | Verificar FIX-06 e funcionalidades concluídas de P1-02           | concluída                      | Codex       | Handoff para Claude; somente documentação                                   |
 | REVIEW-07 | Revisão geral de código, segurança e engenharia                  | concluída                      | Codex       | Código completo, Zod e avaliação de bibliotecas; somente documentação       |
 | REVIEW-08 | Verificar as correções de FIX-08                                 | concluída                      | Codex       | Conferência item a item de REVIEW-07; somente documentação                  |
+| CLEAN-01  | Enxugar comentários do código estável                            | concluída                      | Codex       | 526 linhas removidas; arquivos ativos de P1-04 preservados                  |
 | P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03        |
 | P1-02     | Implementar schema, migrações e repositórios                     | concluída                      | Claude      | Código pronto; validação contra PostgreSQL real é ENV-03                    |
 | FIX-06    | Fechar os achados de REVIEW-05 sobre P1-02                       | concluída                      | Claude      | Oito achados fechados; dois estavam desatualizados                          |
@@ -36,8 +37,8 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-03    | Fechar riscos residuais de REVIEW-02 e REVIEW-03                 | concluída                      | Claude      | Cinco defeitos fechados; quatro decisões listadas em aberto                 |
 | FIX-04    | Fechar os pontos que dependiam de decisão                        | concluída                      | Claude      | ADR-012: notação por campo, teto do Beta, pool por propósito, lint com tipo |
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado         |
-| P1-04     | Integrar API, conferência e relatório paginado                   | em andamento                   | Claude      | P1-02 e P1-03; ADR-013; uma rota por vez, na ordem das dependências         |
-| P1-05     | Validar desafio e registrar marco parte-1                        | aguardando                     | —           | P1-04; persistência, concorrência, precisão e paginação                     |
+| P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                       |
+| P1-05     | Validar desafio e registrar marco parte-1                        | aguardando                     | —           | P1-04 concluída; falta ENV-03 para provar persistência e concorrência       |
 | P2-01     | Integrar Gama/Delta e documentar mudanças                        | aguardando                     | —           | P1-05                                                                       |
 
 Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e dependências. Uma tarefa só pode ter um responsável de implementação por vez.
@@ -104,6 +105,15 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: conferir cada fechamento declarado em FIX-08 contra REVIEW-07, executar checks e sondas de regressão, sem alterar código de produção.
 - Dependências: FIX-08 concluída; PostgreSQL real continua dependente de ENV-03.
 - Evidência: [handoff REVIEW-08](handoffs/REVIEW-08-pos-fix-08-codex.md); seis correções confirmadas, teto de itens ainda produz snapshot truncado, regra de máscara segue parcial e pendências deliberadas continuam abertas.
+
+## CLEAN-01 — limpeza de comentários
+
+- Responsável: Codex.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `src/domain/{conference-rules,conference,decimal,primitives,purchase-order}.ts`, `src/application/ports/{client-profiles,pagination,purchase-order-repository,source-adapter}.ts`, `src/infrastructure/deep-freeze.ts`, `src/infrastructure/database/**`, `src/infrastructure/integrations/{csv-stream,json-stream,nested-json-adapter,paired-csv-adapter,record-mapping}.ts`, `prisma/schema.prisma`, `Dockerfile`, `compose.yaml`, `scripts/{preflight-docker,render-diagrams}.mjs`, `docs/TASKS.md` e `docs/handoffs/CLEAN-01-comentarios-codex.md`.
+- Escopo: remover comentários redundantes, históricos de review e explicações que apenas repetem o código; preservar invariantes, decisões de segurança, semânticas de negócio e limitações operacionais não óbvias. Nenhuma alteração de comportamento.
+- Dependências: trabalho independente de P1-04; não toca os arquivos reservados ou não commitados do Claude, nem `tests/**`.
+- Evidência: [handoff CLEAN-01](handoffs/CLEAN-01-comentarios-codex.md); `npm run check` verde com 139 testes.
 
 ## COL-02 — contexto compartilhado e leitura sob demanda
 
@@ -322,8 +332,9 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## P1-04 — casos de uso e rotas de negócio
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/application/use-cases/**`, `src/presentation/http/**`, `src/main/server.ts`, `src/infrastructure/integrations/{field-parsers,client-profiles}.ts` e `src/domain/client.ts` (política de checksum), `package.json`, `docs/decisions/ADR-013-*.md` e o índice, `docs/API.md`, `tests/**`, `docs/TASKS.md`, `docs/handoffs/P1-04-claude.md`.
+- Estado: concluída como código; validação real pendente em ENV-03.
+- Arquivos alterados (reservas liberadas): `src/application/use-cases/**`, `src/presentation/http/**`, `src/main/server.ts`, `src/infrastructure/integrations/{field-parsers,client-profiles}.ts` e `src/domain/client.ts` (política de checksum), `package.json`, `docs/decisions/ADR-013-*.md` e o índice, `docs/API.md`, `tests/**`, `docs/TASKS.md`, `docs/handoffs/P1-04-claude.md`.
 - Escopo: as quatro entregas do enunciado, **uma rota por vez** — caso de uso, rota e teste antes da próxima —, por escolha do usuário. Ordem pela dependência real: ingestão, consulta, conferência, relatório. Conferir exige pedido carregado, que exige ingestão.
 - Decisões do usuário nesta tarefa: manter o invólucro do `Decimal`; adotar `cpf-cnpj-validator` com o checksum como política por perfil; instalar provider Zod, multipart, rate-limit e fast-check.
 - Dependências: P1-02 e P1-03. A validação contra PostgreSQL real continua sendo ENV-03.
+- Evidência: [handoff P1-04](handoffs/P1-04-claude.md); `npm run check` verde com 169 testes; cobertura 94,69% de linhas e 89,50% de branches. As seis rotas existem e são exercitadas por `inject`, com repositório em memória — **nada rodou contra PostgreSQL**.

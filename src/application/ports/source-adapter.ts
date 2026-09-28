@@ -6,11 +6,7 @@ import type {
 import type { RejectedRecord, StagedRecord } from '../../domain/ingestion.js';
 import type { NormalizedPurchaseOrder } from '../../domain/purchase-order.js';
 
-/**
- * Uma carga, em partes nomeadas: Beta e Delta entregam duas, Alfa e Gama uma.
- * A parte é uma fábrica de fluxo, e não um fluxo, porque o Beta precisa ler o
- * arquivo de itens depois de indexar os cabeçalhos.
- */
+/** As fábricas permitem reabrir uma parte sem manter o conteúdo em memória. */
 export interface SourcePayload {
   readonly clientId: ClientId;
   readonly formatVersion: string;
@@ -23,12 +19,7 @@ export interface AdapterBatch {
   readonly staged: readonly StagedRecord[];
 }
 
-/**
- * Tradutor de uma forma de entrega para o contrato normalizado. Um adaptador
- * por forma, não por cliente: o que é rótulo vem do perfil (ADR-008). O
- * adaptador não conhece HTTP nem banco, e rende em lotes limitados para não
- * exigir a carga inteira em memória.
- */
+/** Traduz uma forma de entrega em lotes do contrato normalizado. */
 export interface SourceAdapter {
   readonly deliveryFormat: DeliveryFormat;
   read(

@@ -9,59 +9,20 @@ import {
 
 import type { CurrencyCode, DecimalText } from './primitives.js';
 
-/**
- * Decimal exato do domínio, sobre decimal.js.
- *
- * A biblioteca é a mesma que o Prisma usa internamente, então a ponte com o
- * repositório de P1-02 é `toString()` dos dois lados (ADR-011). Mas ela é
- * permissiva de um jeito que dinheiro não tolera, e esta classe existe para
- * fechar as quatro frestas, todas verificadas contra a versão 10.6:
- *
- * 1. `new Decimal('0x10')` devolve 16, `'1_000'` devolve 1000, `'NaN'` e
- *    `'Infinity'` passam. Um campo corrompido do cliente viraria número
- *    plausível em vez de rejeição, então validamos o texto antes de construir.
- * 2. `toString()` usa notação exponencial (`1e-8`, `1e+21`), que não é o
- *    `DecimalText` do contrato. Só emitimos por `toFixed`.
- * 3. Zeros à direita não sobrevivem: `'1200.000'` volta `'1200'`. Quem precisa
- *    de escala estável pede a escala em `toText`.
- * 4. **`plus`, `minus` e `times` arredondam para `precision` em silêncio.** É a
- *    fresta perigosa: o produto de dois números de 30 dígitos volta com a cauda
- *    zerada sem avisar. Aqui essas três operações conferem se o resultado exato
- *    cabe e **lançam** em vez de arredondar. A única operação que arredonda é
- *    `divide`, e só na escala que quem chama pediu.
- */
-
-/**
- * Cento e vinte dígitos significativos. Dado de ERP não chega perto disso — o
- * maior caso real aqui tem nove —, e a folga é o que permite tratar
- * arredondamento em soma ou produto como defeito, e não como rotina.
- *
- * A guarda abaixo é conservadora: estima o pior caso em vez de medir o
- * resultado, então recusa um pouco antes do limite real. Com sessenta dígitos
- * ela recusava `1e59 + 1`, que caberia (REVIEW-01, achado 7); com o dobro, a
- * margem sobra e nenhuma operação plausível encosta nela.
- */
+// A folga permite detectar arredondamento implícito de decimal.js nas
+// operações exatas. A guarda é conservadora e pode recusar antes do limite.
 const precision = 120;
 
 const Exact = DecimalJs.clone({
   precision,
   rounding: DecimalJs.ROUND_HALF_UP,
-  // Mesmo não usando `toString`, um template literal usaria: garantimos que
-  // nem por acidente sai notação exponencial.
+  // Evita notação exponencial até em conversões acidentais para string.
   toExpNeg: -9e15,
   toExpPos: 9e15,
 });
 
-/** O contrato aceita sinal, fração e expoente. Não aceita hexadecimal, sublinhado, NaN nem infinito. */
+// decimal.js também aceita formatos que não pertencem ao contrato.
 const decimalText = /^[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
-
-/**
- * Faixa de grandeza que o contrato representa. São também os limites do
- * `decimalTextSchema`, e existem aqui porque a checagem precisa acontecer
- * **antes** de virar texto: `1e1000000` cabe em pouquíssimos bytes na notação
- * exponencial e vira um milhão de caracteres em `toFixed`. Rejeitar só depois,
- * no schema, deixaria um payload curto alocar memória grande (REVIEW-03, 1).
- */
 
 export class Decimal {
   private constructor(private readonly value: InstanceType<typeof Exact>) {}
@@ -73,9 +34,7 @@ export class Decimal {
       throw new RangeError(`decimal inválido: ${JSON.stringify(text)}`);
     }
     const value = new Exact(text);
-    // A ordem importa: decimal.js guarda dígitos e expoente separados, então
-    // `1e1000000` custa nada até alguém pedir o texto. A conferência aqui é
-    // barata e impede a amplificação.
+    // Valida a grandeza antes de `toFixed`, que expandiria expoentes enormes.
     if (!value.isZero()) {
       const integerDigits = value.e + 1;
       if (integerDigits > maxIntegerDigits) {
@@ -92,12 +51,11 @@ export class Decimal {
     return new Decimal(value);
   }
 
-  /** Casas decimais do texto de origem, para preservar a escala declarada. */
   get decimalPlaces(): number {
     return this.value.decimalPlaces();
   }
 
-  /** Texto do contrato, nunca exponencial. Sem escala, a mínima que representa o valor. */
+  /** Texto não exponencial; sem escala, usa a representação mínima. */
   toText(scale?: number): DecimalText {
     if (scale === undefined) return this.value.toFixed();
     if (scale < 0 || !Number.isInteger(scale)) {
@@ -121,19 +79,13 @@ export class Decimal {
   multiply(other: Decimal): Decimal {
     return this.exact(
       this.value.times(other.value),
-      // `precision(true)`: sem o argumento, decimal.js não conta os zeros à
-      // direita da parte inteira, e a guarda passaria batido justamente nos
-      // números redondos e grandes.
+      // `true` inclui zeros à direita da parte inteira na guarda.
       this.value.precision(true) + other.value.precision(true),
       '×',
     );
   }
 
-  /**
-   * A única operação que perde informação, e por isso a escala é obrigatória:
-   * quem divide declara onde quer parar. Meio para cima, afastando-se do zero,
-   * que é a prática de nota fiscal brasileira (ADR-007).
-   */
+  /** Divide com escala explícita e arredondamento fiscal meio para cima. */
   divide(other: Decimal, scale: number): Decimal {
     if (other.value.isZero()) throw new RangeError('divisão por zero');
     if (scale < 0 || !Number.isInteger(scale)) {
@@ -166,10 +118,6 @@ export class Decimal {
     return this.value.lessThan(0);
   }
 
-  /**
-   * Dígitos que o resultado exato de uma soma ocupa: da ordem de grandeza do
-   * maior operando até a casa decimal mais funda, mais um para o "vai um".
-   */
   private sumDigits(other: Decimal): number {
     const magnitude = Math.max(this.value.e, other.value.e) + 1;
     const depth = Math.max(
@@ -195,17 +143,8 @@ export class Decimal {
 }
 
 /**
- * Casas decimais da moeda, para arredondar o valor esperado de uma linha de
- * nota. O mapa existe para que uma moeda sem centavo não seja tratada como se
- * tivesse.
- */
-/**
- * Escala da moeda, usada para arredondar o valor esperado de uma linha de nota.
- *
- * Moeda desconhecida **lança**, em vez de assumir duas casas: tratar uma moeda
- * sem centavo como se tivesse arredondaria para uma fração que não existe, e
- * assumir escala é decidir o resultado da conferência por omissão (REVIEW-01
- * achado 7, REVIEW-07 R07-08). A allowlist é o contrato.
+ * Escala monetária usada na conferência. Moeda desconhecida lança porque não é
+ * seguro presumir duas casas decimais.
  */
 export function currencyScale(currency: CurrencyCode): number {
   const scale = supportedCurrencies[currency];
@@ -217,5 +156,4 @@ export function currencyScale(currency: CurrencyCode): number {
   return scale;
 }
 
-/** Escala do contrato para quantidade, fator e preço unitário (ADR-007). */
 export const quantityScale = maxPersistedDecimalPlaces;

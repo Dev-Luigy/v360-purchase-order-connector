@@ -56,19 +56,22 @@ const item = {
 
 test('achado 1: CNPJ com lixo em volta não é mais aceito como válido', () => {
   assert.throws(
-    () => parseTaxId('abc12.345.678/0001-90xyz', 'cnpj', true),
+    () => parseTaxId('abc12.345.678/0001-90xyz', 'cnpj', true, false),
     /fora do formato/,
   );
   assert.throws(
-    () => parseTaxId('12 345 678 0001 90', 'cnpj', true),
+    () => parseTaxId('12 345 678 0001 90', 'cnpj', true, false),
     /fora do formato/,
   );
   // O que é máscara legítima continua passando.
   assert.equal(
-    parseTaxId('12.345.678/0001-90', 'cnpj', true),
+    parseTaxId('12.345.678/0001-90', 'cnpj', true, false),
     '12345678000190',
   );
-  assert.equal(parseTaxId('12345678000190', 'cnpj', false), '12345678000190');
+  assert.equal(
+    parseTaxId('12345678000190', 'cnpj', false, false),
+    '12345678000190',
+  );
 });
 
 test('achado 1: a nota exige CNPJ limpo na borda', () => {

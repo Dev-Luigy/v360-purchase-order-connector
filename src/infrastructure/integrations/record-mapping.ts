@@ -17,19 +17,12 @@ import {
   parseTaxId,
 } from './field-parsers.js';
 
-/**
- * Um registro do cliente, visto como "me dê o campo que está neste rótulo".
- * JSON resolve por caminho com ponto, CSV por nome de coluna — a diferença
- * para aqui, e a tradução para o contrato é uma só para os dois.
- */
+/** Abstrai caminho JSON e coluna CSV sob o mesmo mapeamento. */
 export interface FieldSource {
-  /** Valor obrigatório. Lança `FieldError` quando ausente ou vazio. */
   text(path: string): string;
-  /** Valor opcional: `null` quando ausente, nulo ou vazio. */
   optionalText(path: string): string | null;
 }
 
-/** Fator de um cliente que não trabalha com caixa, na escala do contrato. */
 const neutralFactor = Decimal.parse('1').toText(quantityScale);
 
 export interface OrderHeader {
@@ -56,6 +49,7 @@ export function readOrderHeader(
         source.text(map.supplierTaxId),
         map.supplierTaxId,
         profile.taxIdMasked,
+        profile.validatesTaxIdChecksum,
       ),
       name: source.text(map.supplierName).trim(),
     },
@@ -78,8 +72,7 @@ export function readItem(
   profile: ClientProfile,
 ): NormalizedPurchaseOrderItem {
   const map = profile.fields.item;
-  // Medida e dinheiro têm notações próprias: o Gama manda quantidade em
-  // inteiro simples e preço em centavos na mesma linha (ADR-012).
+  // Um mesmo perfil pode usar notações diferentes para medida e dinheiro.
   const measure = (path: string): string =>
     parseDecimal(
       source.text(path),
@@ -100,8 +93,6 @@ export function readItem(
     material: source.text(map.material).trim(),
     description: source.text(map.description).trim(),
     purchaseUnit: source.text(map.purchaseUnit).trim(),
-    // Cliente sem caixa não manda fator: uma unidade de compra é uma unidade
-    // de consumo, e o fator neutro mantém a conferência com uma fórmula só.
     conversionFactor:
       map.conversionFactor === null
         ? neutralFactor
@@ -120,7 +111,6 @@ export function readItem(
   };
 }
 
-/** Número do pedido a que um item de parte separada pertence. */
 export function readItemOrderNumber(
   source: FieldSource,
   profile: ClientProfile,

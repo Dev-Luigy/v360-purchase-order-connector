@@ -122,8 +122,17 @@ export interface ClientProfile {
   readonly formatVersion: string;
   readonly dateFormat: DateFormat;
   readonly numberFormat: NumberFormats;
-  /** `true` quando o CNPJ vem mascarado, como no Beta. */
+  /** `true` quando o CNPJ vem mascarado, como no Beta. Exclusivo nos dois sentidos. */
   readonly taxIdMasked: boolean;
+  /**
+   * `true` quando o CNPJ deste cliente deve passar no dígito verificador.
+   *
+   * Falso para os quatro clientes do desafio, e não por descuido: **nenhum dos
+   * sete CNPJs do enunciado passa no checksum**, porque são números fictícios.
+   * Ligar a validação para eles rejeitaria toda a amostra. A capacidade fica
+   * pronta para um cliente com dado real, a um booleano de distância (ADR-013).
+   */
+  readonly validatesTaxIdChecksum: boolean;
   /**
    * Moeda assumida quando o cliente não envia nenhuma, como o Gama. `null`
    * quando o cliente sempre envia; aí a ausência é rejeição, não suposição.
