@@ -1,12 +1,17 @@
 import assert from 'node:assert/strict';
+import { readdirSync } from 'node:fs';
 import test from 'node:test';
+
+import type { Pool } from 'pg';
 
 import {
   CursorError,
+  cursorVersion,
   decodeCursor,
   encodeCursor,
   fingerprintOf,
 } from '../src/infrastructure/database/cursor.js';
+import { requiredMigration } from '../src/infrastructure/database/migrations.js';
 import {
   dateToIsoDate,
   decimalToText,
@@ -20,7 +25,10 @@ import {
   assertPageLimit,
   lockKeyFor,
 } from '../src/infrastructure/database/purchase-order-repository.js';
-import { describeReadinessFailure } from '../src/infrastructure/database/schema-readiness.js';
+import {
+  SchemaReadiness,
+  describeReadinessFailure,
+} from '../src/infrastructure/database/schema-readiness.js';
 
 /**
  * O que dá para provar sem banco. Transação, lock e plano de consulta só se
@@ -167,4 +175,70 @@ test('banco sem tabela de migração é explicado, não vaza erro de SQL', () =>
     describeReadinessFailure(new Error('conexão recusada')),
     'conexão recusada',
   );
+});
+
+test('o cursor carrega versão, como ADR-010 especifica', () => {
+  // A ADR diz `{ v, after, f }`. Sem versão, mudar o formato depois não teria
+  // caminho explícito: cursor antigo seria lido errado ou daria erro obscuro.
+  const impressao = fingerprintOf(filtros);
+  const conteudo = JSON.parse(
+    Buffer.from(encodeCursor(id, impressao), 'base64url').toString('utf-8'),
+  ) as Record<string, unknown>;
+  assert.deepEqual(Object.keys(conteudo).sort(), ['after', 'f', 'v']);
+  assert.equal(conteudo.v, cursorVersion);
+
+  const deOutraVersao = Buffer.from(
+    JSON.stringify({ v: 99, after: id, f: impressao }),
+  ).toString('base64url');
+  assert.throws(() => decodeCursor(deOutraVersao, impressao), /versão 99/);
+});
+
+test('a migração exigida acompanha a pasta de migrações', () => {
+  // Constante escrita à mão envelhece em silêncio: quando alguém acrescentar
+  // uma migração sem atualizar isto, a prontidão continuaria aprovando um
+  // banco desatualizado. Este teste é a trava.
+  const pasta = new URL('../database/migrations/', import.meta.url);
+  const migracoes = readdirSync(pasta, { withFileTypes: true })
+    .filter((entrada) => entrada.isDirectory())
+    .map((entrada) => entrada.name)
+    .sort();
+  assert.ok(migracoes.length > 0, 'nenhuma migração encontrada');
+  assert.equal(requiredMigration, migracoes.at(-1));
+});
+
+function poolComLinhas(rows: unknown[]): Pool {
+  return { query: () => Promise.resolve({ rows }) } as unknown as Pool;
+}
+
+test('prontidão reprova banco parado numa migração anterior', async () => {
+  // Migração que ainda não rodou não deixa linha na tabela de controle, então
+  // contar aplicadas deixaria passar (REVIEW-05, achado 2).
+  const readiness = new SchemaReadiness(poolComLinhas([]), '0002_futura');
+  await assert.rejects(() => readiness.ping(), /0002_futura não foi aplicada/);
+});
+
+test('prontidão reprova migração revertida ou inacabada', async () => {
+  await assert.rejects(
+    () =>
+      new SchemaReadiness(
+        poolComLinhas([
+          { finished_at: new Date(), rolled_back_at: new Date() },
+        ]),
+      ).ping(),
+    /revertida/,
+  );
+  await assert.rejects(
+    () =>
+      new SchemaReadiness(
+        poolComLinhas([{ finished_at: null, rolled_back_at: null }]),
+      ).ping(),
+    /não terminou/,
+  );
+});
+
+test('prontidão aprova quando a migração exigida terminou', async () => {
+  const readiness = new SchemaReadiness(
+    poolComLinhas([{ finished_at: new Date(), rolled_back_at: null }]),
+  );
+  await assert.doesNotReject(() => readiness.ping());
 });
