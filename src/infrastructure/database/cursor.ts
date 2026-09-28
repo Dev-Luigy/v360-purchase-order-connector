@@ -56,14 +56,20 @@ export type FilterValue = string | number | boolean | null;
 export function fingerprintOf(
   filters: Readonly<Record<string, FilterValue>>,
 ): string {
-  const canonical = Object.keys(filters)
-    .sort()
-    .map((key) => {
-      const value = filters[key];
-      // `null` e ausente precisam ser distinguíveis de uma string vazia.
-      return `${key}=${value === null || value === undefined ? '\u0000' : String(value)}`;
-    })
-    .join('&');
+  // Tipo **e** valor, em tuplas. Concatenar `String(value)` confundia coisas
+  // distintas: `null` com o caractere NUL, o número 1 com a string "1", o
+  // booleano true com a string "true" — três colisões reproduzidas em
+  // REVIEW-06, R06-03. Uma impressão que colide não distingue os filtros que
+  // ela existe para distinguir.
+  const canonical = JSON.stringify(
+    Object.keys(filters)
+      .sort()
+      .map((key): [string, string, string?] => {
+        const value = filters[key];
+        if (value === null || value === undefined) return [key, 'null'];
+        return [key, typeof value, String(value)];
+      }),
+  );
   return createHash('sha256').update(canonical).digest('hex').slice(0, 16);
 }
 
