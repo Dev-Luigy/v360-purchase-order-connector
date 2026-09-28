@@ -79,8 +79,15 @@ test('o caminho de carga não herda o tempo limite do caminho de requisição', 
   // `query_timeout: 3000` é certo para /ready e mataria uma transação de carga
   // no meio. Separado no preset, não no ponto de uso, para não ser herdado por
   // descuido.
-  assert.equal(poolOptionsFor('request').query_timeout, 3000);
-  assert.equal(poolOptionsFor('ingestion').query_timeout, undefined);
+  const request = poolOptionsFor('request');
+  const ingestion = poolOptionsFor('ingestion');
+  assert.equal(request.query_timeout, 3000);
+  // Largo, mas finito: sem limite, uma carga travada em lock espera para
+  // sempre e segura a conexão até o processo morrer (REVIEW-04, R04-05).
+  assert.ok((ingestion.query_timeout ?? 0) > (request.query_timeout ?? 0));
+  assert.ok(Number.isFinite(ingestion.query_timeout));
+  assert.ok(Number.isFinite(ingestion.lock_timeout));
+  assert.ok(Number.isFinite(ingestion.idle_in_transaction_session_timeout));
   assert.ok(
     (poolOptionsFor('ingestion').connectionTimeoutMillis ?? 0) >
       (poolOptionsFor('request').connectionTimeoutMillis ?? 0),

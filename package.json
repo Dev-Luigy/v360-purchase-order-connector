@@ -21,9 +21,15 @@
     "up": "docker compose up --build",
     "predb:up": "npm run preflight",
     "db:up": "docker compose up -d db",
-    "db:down": "docker compose down"
+    "db:down": "docker compose down",
+    "generate": "prisma generate",
+    "pretypecheck": "npm run generate",
+    "prebuild": "npm run generate",
+    "pretest": "npm run generate"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
     "csv-parse": "^7.0.3",
     "decimal.js": "^10.6.0",
     "fastify": "^5.12.5",
@@ -37,6 +43,7 @@
     "@types/pg": "^8.23.1",
     "eslint": "^10.11.0",
     "prettier": "^3.9.9",
+    "prisma": "7.10.0",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.70.1"

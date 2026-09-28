@@ -6,3 +6,4 @@ coverage/
 !.env.example
 .tools/
 *.log
+src/infrastructure/database/generated

@@ -31,11 +31,20 @@ const presets: Readonly<Record<PoolPurpose, pg.PoolConfig>> = deepFreeze({
     max: 10,
   },
   ingestion: {
-    // Conectar pode esperar; a consulta, não pode ser interrompida.
+    // Conectar pode esperar.
     connectionTimeoutMillis: 10_000,
     // Poucas conexões de propósito: a carga é sequencial por pedido e não
     // deve competir com o caminho de requisição pelo banco.
     max: 4,
+    // Limites largos, mas **finitos**. Sem tempo limite, uma carga travada em
+    // lock espera para sempre e segura uma das quatro conexões até o processo
+    // morrer (REVIEW-04, R04-05). Os números são folgados de propósito e
+    // precisam ser medidos contra uma carga de referência antes de virarem
+    // compromisso — hoje são teto de segurança, não afinação.
+    query_timeout: 300_000,
+    statement_timeout: 300_000,
+    lock_timeout: 30_000,
+    idle_in_transaction_session_timeout: 60_000,
   },
 });
 

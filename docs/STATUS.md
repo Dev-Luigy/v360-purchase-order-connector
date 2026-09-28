@@ -1,6 +1,6 @@
 # Estado do projeto
 
-Atualizado por Claude em 2026-09-27, após FIX-03.
+Atualizado por Claude em 2026-09-28, após P1-02.
 
 ## Implementado
 
@@ -11,12 +11,13 @@ Atualizado por Claude em 2026-09-27, após FIX-03.
 - Scripts de desenvolvimento, build, testes, lint e formatação; lockfile presente.
 - Contrato normalizado, aritmética decimal e regras puras de conferência.
 - Leitura em fluxo e adaptadores Alfa (`nested-json`) e Beta (`paired-csv`), com perfis em código.
+- Schema Prisma, migração inicial com índices parciais, repositórios de pedido e conferência, prontidão pelo estado das migrações e migração como etapa própria do Compose.
 - Node 24.21.0, dependências npm instaladas e `.env` local criado.
 - Guia de colaboração com entrada para ambos os agentes.
 
 ## Evidências e limitações
 
-- `npm run check` passou após FIX-03: tipagem, lint, formatação, 92 casos de teste e build.
+- `npm run check` passou após P1-02: tipagem, lint com tipo em `src`, formatação, 109 casos de teste e build.
 - Duas mil combinações aritméticas inteiras comparadas com `BigInt` passaram; `/health` e `/ready` foram exercitados via `inject` nos limites atuais.
 - Três revisões registradas — [REVIEW-01](handoffs/REVIEW-01-codex.md), [REVIEW-02](handoffs/REVIEW-02-claude.md) e [REVIEW-03](handoffs/REVIEW-03-codex.md) — e os defeitos inequívocos das três estão fechados em [FIX-01](handoffs/FIX-01-claude.md), [FIX-02](handoffs/FIX-02-claude.md) e [FIX-03](handoffs/FIX-03-claude.md), cada um com regressão. Nenhum achado era falso positivo; dois defeitos adicionais apareceram durante as correções.
 - Quatro pontos seguem abertos **por exigirem decisão**, não por falta de trabalho: notação por campo no perfil (bloqueia a Parte 2), teto de memória do Beta, `query_timeout` na ingestão e lint type-aware. Detalhe em [FIX-03](handoffs/FIX-03-claude.md).
@@ -27,11 +28,11 @@ Atualizado por Claude em 2026-09-27, após FIX-03.
 
 ## Ainda não implementado
 
-Tabelas, migrações e repositórios; casos de uso e rotas de ingestão, consulta, paginação, conferência e relatórios. Gama/Delta somente após o marco da Parte 1.
+Casos de uso e rotas de ingestão, consulta, paginação, conferência e relatórios. Gama/Delta somente após o marco da Parte 1.
 
 ## Próxima retomada
 
-P1-02 é o caminho crítico: é a única coisa entre o estado atual e P1-04, que agora só depende dela. `package.json` está livre de novo. ENV-03 continua pendente e destrava a validação real de banco e Compose. Limites de corpo, página e multipart ficam para P1-04, como REVIEW-01 apontou. Consultar o quadro antes de reservar arquivos.
+**ENV-03 é o caminho crítico.** O código de P1-02 existe e nada dele rodou contra PostgreSQL: migração não aplicada, transação e advisory lock não exercitados, índices parciais não confirmados em plano. Subir o Compose é mudança de serviço e depende de autorização do usuário. Depois disso, P1-04 (casos de uso e rotas) está liberada. ENV-03 continua pendente e destrava a validação real de banco e Compose. Limites de corpo, página e multipart ficam para P1-04, como REVIEW-01 apontou. Consultar o quadro antes de reservar arquivos.
 
 ## Colaboração
 

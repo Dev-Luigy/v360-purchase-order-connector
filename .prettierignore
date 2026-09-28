@@ -3,3 +3,4 @@ dist
 .tools
 package-lock.json
 tests/fixtures/**/*.json
+src/infrastructure/database/generated

@@ -1,21 +1,23 @@
-import { createPool } from '../infrastructure/database/pool.js';
 import { CheckReadiness } from '../application/use-cases/check-readiness.js';
 import { parseEnvironment } from '../infrastructure/config/env.js';
-import { PostgresHealth } from '../infrastructure/database/postgres-health.js';
+import { connectDatabase } from '../infrastructure/database/prisma-client.js';
+import { SchemaReadiness } from '../infrastructure/database/schema-readiness.js';
 import { buildApp } from '../presentation/http/app.js';
 const env = parseEnvironment(process.env);
-// O caminho de carga tem pool próprio, sem tempo limite de consulta; entra
-// com o endpoint de ingestão, em P1-04 (ADR-012).
-const pool = createPool(env.DATABASE_URL, 'request');
+// O caminho de carga tem pool próprio, sem tempo limite curto; entra com o
+// endpoint de ingestão, em P1-04 (ADR-012).
+const database = connectDatabase(env.DATABASE_URL, 'request');
 const app = buildApp({
-  readiness: new CheckReadiness(new PostgresHealth(pool)),
+  // Prontidão olha o estado das migrações, não só a conexão: banco vazio
+  // respondendo 200 fazia o healthcheck do Compose mentir (REVIEW-02, 2).
+  readiness: new CheckReadiness(new SchemaReadiness(database.pool)),
   logLevel: env.LOG_LEVEL,
 });
-pool.on('error', (error) =>
+database.pool.on('error', (error) =>
   app.log.error(error, 'PostgreSQL idle connection error'),
 );
 app.addHook('onClose', async () => {
-  await pool.end();
+  await database.close();
 });
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {

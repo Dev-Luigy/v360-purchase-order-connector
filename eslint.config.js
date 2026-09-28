@@ -1,7 +1,15 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 export default tseslint.config(
-  { ignores: ['dist/**', 'node_modules/**', '.tools/**'] },
+  {
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      '.tools/**',
+      // Cliente gerado pelo Prisma: derivado do schema, não é código nosso.
+      'src/infrastructure/database/generated/**',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
