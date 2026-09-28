@@ -2,6 +2,8 @@ import { Readable } from 'node:stream';
 
 import { parse } from 'csv-parse';
 
+import { maxCsvRecordSize } from '../../domain/limits.js';
+
 /**
  * Leitura de CSV em fluxo, sobre csv-parse (ADR-011).
  *
@@ -43,6 +45,9 @@ export async function* streamCsvRecords(
   const parser = parse({
     delimiter: options.delimiter,
     bom: true,
+    // Sem teto, um campo ou uma linha sem fim enche o buffer: a opção existe
+    // justamente para isso e vem ilimitada por padrão (REVIEW-07, R07-02).
+    max_record_size: maxCsvRecordSize,
     info: true,
     skip_empty_lines: true,
     trim: true,
@@ -130,7 +135,24 @@ function assertHeader(
   header: readonly string[],
   required: readonly string[],
 ): void {
-  const present = new Set(header.map((column) => column.trim()));
+  const columns = header.map((column) => column.trim());
+
+  // Coluna sem nome não é endereçável, e coluna repetida fazia o último valor
+  // vencer em silêncio: um export com duas colunas de mesmo nome podia trocar
+  // identidade, quantidade ou preço sem ninguém perceber (REVIEW-07, R07-07).
+  if (columns.some((column) => column === '')) {
+    throw new SyntaxError('cabeçalho do CSV tem coluna sem nome');
+  }
+  const repetidas = columns.filter(
+    (column, indice) => columns.indexOf(column) !== indice,
+  );
+  if (repetidas.length > 0) {
+    throw new SyntaxError(
+      `cabeçalho do CSV tem coluna repetida: ${[...new Set(repetidas)].join(', ')}`,
+    );
+  }
+
+  const present = new Set(columns);
   const missing = required.filter((column) => !present.has(column));
   if (missing.length > 0) {
     throw new SyntaxError(

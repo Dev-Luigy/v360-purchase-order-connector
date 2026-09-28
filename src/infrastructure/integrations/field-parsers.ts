@@ -22,6 +22,9 @@ const brazilianNumber = /^[+-]?(?:\d{1,3}(?:\.\d{3})*|\d+)(?:,\d+)?$/;
  * pontuação opcional campo a campo, `12.345678/0001-90` passava, o que não é
  * nem uma coisa nem outra e contradizia este comentário (REVIEW-03, 4).
  */
+/** CNPJ sem nenhuma pontuação. */
+const cleanTaxId = /^\d{14}$/;
+
 const maskedTaxId = /^(?:\d{14}|\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})$/;
 
 /**
@@ -87,6 +90,12 @@ function assertCalendarDate(value: string, field: string): IsoDate {
  * Traduz a notação do cliente e devolve o decimal na escala do contrato, para
  * que o mesmo valor tenha o mesmo texto venha ele como `1.200,000`, `1200` ou
  * `120000` centavos (ADR-007).
+ *
+ * Com `scale`, valor com mais casas do que a escala é **rejeitado**, não
+ * arredondado. Antes, `toText(6)` fazia `0.0000001` virar `0.000000` — o valor
+ * sumia sem ninguém ser avisado, exatamente o que o `AGENTS.md` proíbe para
+ * dinheiro (REVIEW-07, R07-01). Cliente que precise de mais casas é decisão de
+ * contrato, não arredondamento por acidente.
  */
 export function parseDecimal(
   raw: string,
@@ -97,40 +106,49 @@ export function parseDecimal(
   const text = raw.trim();
   if (text === '') throw new FieldError(field, 'decimal vazio');
   try {
-    switch (format) {
-      case 'plain':
-        return Decimal.parse(text).toText(scale);
-      case 'br': {
-        // O ponto é separador de milhar, e separador de milhar aparece a cada
-        // três dígitos. Apagar todo ponto sem conferir onde ele estava faz
-        // `12.34` virar 1234: erro de cem vezes em dinheiro, que passa por
-        // toda a validação seguinte parecendo certo (REVIEW-01, achado 4).
-        if (!brazilianNumber.test(text)) {
-          throw new RangeError(`agrupamento de milhar inválido: ${text}`);
-        }
-        return Decimal.parse(text.replace(/\./g, '').replace(',', '.')).toText(
-          scale,
-        );
-      }
-      case 'cents': {
-        if (!/^[+-]?\d+$/.test(text)) {
-          throw new RangeError(`centavos não inteiros: ${text}`);
-        }
-        // Centavos para unidade monetária: divisão exata por cem, com as duas
-        // casas que o valor tem por construção.
-        return Decimal.parse(text).divide(hundred, 2).toText(scale);
-      }
+    const value = readNotation(text, format);
+    if (scale !== undefined && value.decimalPlaces > scale) {
+      throw new RangeError(
+        `${String(value.decimalPlaces)} casas decimais, acima das ${String(scale)} que o contrato guarda`,
+      );
     }
+    return value.toText(scale);
   } catch (cause) {
     // A razão específica precisa chegar a quem lê o relatório de carga:
-    // "agrupamento de milhar inválido" diz o que corrigir, "decimal inválido"
-    // não.
+    // "casas decimais acima do contrato" diz o que corrigir, "decimal
+    // inválido" não.
     const reason = cause instanceof Error ? `: ${cause.message}` : '';
     throw new FieldError(
       field,
       `decimal inválido para a notação ${format}${reason}`,
       { cause },
     );
+  }
+}
+
+/** Só traduz a notação do cliente; a escala do contrato é conferida fora. */
+function readNotation(text: string, format: NumberFormat): Decimal {
+  switch (format) {
+    case 'plain':
+      return Decimal.parse(text);
+    case 'br': {
+      // O ponto é separador de milhar, e separador de milhar aparece a cada
+      // três dígitos. Apagar todo ponto sem conferir onde ele estava faz
+      // `12.34` virar 1234: erro de cem vezes em dinheiro, que passa por toda
+      // a validação seguinte parecendo certo (REVIEW-01, achado 4).
+      if (!brazilianNumber.test(text)) {
+        throw new RangeError(`agrupamento de milhar inválido: ${text}`);
+      }
+      return Decimal.parse(text.replace(/\./g, '').replace(',', '.'));
+    }
+    case 'cents': {
+      if (!/^[+-]?\d+$/.test(text)) {
+        throw new RangeError(`centavos não inteiros: ${text}`);
+      }
+      // Centavos para unidade monetária: divisão exata por cem, com as duas
+      // casas que o valor tem por construção.
+      return Decimal.parse(text).divide(hundred, 2);
+    }
   }
 }
 
@@ -149,17 +167,31 @@ export function parseInteger(raw: string, field: string): number {
 /**
  * CNPJ sem máscara e com 14 dígitos.
  *
- * Só a pontuação da máscara é tolerada. Apagar todo caractere não numérico
- * aceitaria `abc12.345.678/0001-90xyz` como CNPJ válido, e identidade de
- * fornecedor não é campo para leniência (REVIEW-01, achado 1).
+ * `masked` diz se o cliente entrega com pontuação, e vem do `taxIdMasked` do
+ * perfil. Aceitar as duas formas de todo mundo fazia o campo do perfil
+ * prometer uma regra que ninguém cumpria (REVIEW-07, R07-06): agora ele decide
+ * o que é aceito, e uma mudança de formato no ERP do cliente vira rejeição em
+ * vez de passar despercebida.
  *
- * Dígito verificador continua sem conferência: o dado é do ERP do cliente e
- * recusar por checksum criaria rejeição que ninguém corrige do nosso lado.
+ * Em nenhum dos dois casos se apaga caractere qualquer: aceitar
+ * `abc12.345.678/0001-90xyz` seria leniência em campo de identidade
+ * (REVIEW-01, achado 1). Dígito verificador continua sem conferência, porque o
+ * dado é do ERP do cliente e recusar por checksum criaria rejeição que ninguém
+ * consegue corrigir do nosso lado.
  */
-export function parseTaxId(raw: string, field: string): TaxId {
+export function parseTaxId(raw: string, field: string, masked = true): TaxId {
   const text = raw.trim();
-  if (!maskedTaxId.test(text)) {
-    throw new FieldError(field, `CNPJ fora do formato esperado: ${raw}`);
+  const aceito = masked ? maskedTaxId : cleanTaxId;
+  if (!aceito.test(text)) {
+    // Duas causas diferentes merecem duas mensagens: valor torto é um
+    // problema, e formato certo para o cliente errado é outro.
+    const comPontuacao = /\D/.test(text);
+    throw new FieldError(
+      field,
+      !masked && comPontuacao
+        ? `CNPJ com máscara, mas o perfil do cliente declara formato limpo: ${raw}`
+        : `CNPJ fora do formato esperado: ${raw}`,
+    );
   }
   return text.replace(/\D/g, '');
 }

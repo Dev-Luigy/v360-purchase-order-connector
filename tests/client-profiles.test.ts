@@ -111,14 +111,19 @@ test('itens aninhados sem itemsArray são recusados', () => {
   );
 });
 
-test('moeda assumida fora de ISO 4217 é recusada', () => {
-  assert.throws(
-    () =>
-      assertValidProfile(
-        broken((profile) => ({ ...profile, assumedCurrency: 'real' })),
-      ),
-    /ISO 4217/,
-  );
+test('moeda assumida fora da allowlist é recusada', () => {
+  // Não basta ter a forma de ISO 4217: sem escala declarada, a conferência
+  // arredondaria por omissão (REVIEW-07, R07-08).
+  for (const invalida of ['real', 'ZZZ']) {
+    assert.throws(
+      () =>
+        assertValidProfile(
+          broken((profile) => ({ ...profile, assumedCurrency: invalida })),
+        ),
+      /não suportada/,
+      invalida,
+    );
+  }
   assert.doesNotThrow(() =>
     assertValidProfile(
       broken((profile) => ({ ...profile, assumedCurrency: 'USD' })),
