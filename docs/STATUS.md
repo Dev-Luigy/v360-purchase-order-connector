@@ -1,6 +1,6 @@
 # Estado do projeto
 
-Atualizado por Claude em 2026-09-28, após P1-05.
+Atualizado por Claude em 2026-09-28, após DOC-02.
 
 ## Implementado
 
@@ -23,7 +23,7 @@ Atualizado por Claude em 2026-09-28, após P1-05.
 - Duas mil combinações aritméticas inteiras comparadas com `BigInt` passaram; `/health` e `/ready` foram exercitados via `inject` nos limites atuais.
 - Três revisões registradas — [REVIEW-01](handoffs/REVIEW-01-codex.md), [REVIEW-02](handoffs/REVIEW-02-claude.md) e [REVIEW-03](handoffs/REVIEW-03-codex.md) — e os defeitos inequívocos das três estão fechados em [FIX-01](handoffs/FIX-01-claude.md), [FIX-02](handoffs/FIX-02-claude.md) e [FIX-03](handoffs/FIX-03-claude.md), cada um com regressão. Nenhum achado era falso positivo; dois defeitos adicionais apareceram durante as correções.
 - Os quatro pontos que dependiam de decisão foram fechados em [FIX-04](handoffs/FIX-04-claude.md) e registrados em [ADR-012](decisions/ADR-012-notacao-por-campo.md). Seguem abertos, como tarefa própria: política de auditoria npm e pipeline de CI ([REVIEW-06](handoffs/REVIEW-06-pos-fix-06-p1-02-codex.md), R06-04 e R06-07).
-- Cobertura por `npm run coverage`, comando versionado para o número não depender de quem mede: **94,69% de linhas e 89,50% de branches**. `purchase-order-repository.ts` continua o ponto baixo e não melhora sem banco (REVIEW-07, R07-11); as rotas de P1-04 são cobertas por teste que atravessa a borda HTTP com repositório em memória.
+- Cobertura por `npm run coverage`, comando versionado para o número não depender de quem mede: **94,68% de linhas e 89,28% de branches**. `purchase-order-repository.ts` continua o ponto baixo e não melhora sem banco (REVIEW-07, R07-11); as rotas de P1-04 são cobertas por teste que atravessa a borda HTTP com repositório em memória.
 - **ENV-03 fechou a lacuna que atravessava todo o projeto.** `npm run test:integration` roda 16 testes contra PostgreSQL real e prova transação, advisory lock sob carga concorrente, os nove `CHECK`, o `RESTRICT` do histórico, a ordem das divergências e a paginação por cursor. Os índices parciais foram confirmados por `EXPLAIN`, não supostos.
 - `docker compose up` do zero levanta banco, aplica a migração como etapa própria e só então sobe a API, com `/ready` em 200 — fecha os achados 1 e 2 de [REVIEW-02](handoffs/REVIEW-02-claude.md).
 - Persistência de pedidos **e** do histórico de conferências após reinício do banco provada por `scripts/verify-persistence.mjs`.
@@ -39,7 +39,7 @@ Pipeline de CI e política de auditoria. Gama/Delta somente após o marco da Par
 
 ## Próxima retomada
 
-**DOC-02 é o caminho crítico e o único bloqueio da tag.** O enunciado trata o README como artefato avaliado e cobra nele três defesas que hoje não estão lá: a justificativa de cada regra de conferência, a política de reenvio de pedido alterado e a decisão sobre os dois lados do Delta. Marcar `parte-1` antes seria marcar o marco com o artefato avaliado incompleto. Depois dela, a tag e então P2-01 (Gama e Delta).
+**A Parte 1 está fechada.** DOC-02 levou ao README as três defesas que o enunciado cobra — regras de conferência, política de reenvio e decisão do Delta — mais a da paginação por cursor, e a tag `parte-1` foi marcada. O próximo passo é P2-01: Gama (`flat-json`) e Delta (`split-json`).
 
 Limitações que P1-05 revelou e deixou abertas: a carga de 50.000 pedidos é uma requisição HTTP de 3,2 minutos, que qualquer balanceador com tempo limite padrão derruba sem retomada; o teto de requisições é por origem e não por identidade, porque não há autenticação; e Windows-1252 com CRLF tem teste unitário, não fixture ponta a ponta.
 
