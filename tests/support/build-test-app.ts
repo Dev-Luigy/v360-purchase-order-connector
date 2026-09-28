@@ -2,6 +2,10 @@ import type { FastifyInstance } from 'fastify';
 
 import { CheckReadiness } from '../../src/application/use-cases/check-readiness.js';
 import { IngestPurchaseOrders } from '../../src/application/use-cases/ingest-purchase-orders.js';
+import {
+  GetPurchaseOrder,
+  ListPurchaseOrders,
+} from '../../src/application/use-cases/query-purchase-orders.js';
 import { buildAdapterRegistry } from '../../src/infrastructure/integrations/adapter-registry.js';
 import { InMemoryClientProfiles } from '../../src/infrastructure/integrations/client-profiles.js';
 import { buildApp } from '../../src/presentation/http/app.js';
@@ -34,6 +38,8 @@ export async function buildTestApp(
       },
     }),
     ingest: new IngestPurchaseOrders(profiles, buildAdapterRegistry(), orders),
+    listOrders: new ListPurchaseOrders(orders),
+    getOrder: new GetPurchaseOrder(orders),
     profileFormatOf: async (clientId) =>
       (await profiles.find(clientId))?.deliveryFormat ?? null,
   });

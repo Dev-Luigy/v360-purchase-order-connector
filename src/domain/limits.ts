@@ -124,3 +124,10 @@ export const supportedCurrencies: Readonly<Record<string, number>> = {
   OMR: 3,
   TND: 3,
 };
+
+/**
+ * Comprimento máximo de um cursor de paginação. Um cursor legítimo tem cerca
+ * de oitenta caracteres; o teto existe para a borda HTTP recusar antes de
+ * decodificar (ADR-010).
+ */
+export const maxCursorLength = 256;

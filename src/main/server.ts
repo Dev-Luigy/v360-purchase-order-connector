@@ -1,5 +1,9 @@
 import { CheckReadiness } from '../application/use-cases/check-readiness.js';
 import { IngestPurchaseOrders } from '../application/use-cases/ingest-purchase-orders.js';
+import {
+  GetPurchaseOrder,
+  ListPurchaseOrders,
+} from '../application/use-cases/query-purchase-orders.js';
 import { parseEnvironment } from '../infrastructure/config/env.js';
 import { connectDatabase } from '../infrastructure/database/prisma-client.js';
 import { PrismaPurchaseOrderRepository } from '../infrastructure/database/purchase-order-repository.js';
@@ -16,6 +20,8 @@ const env = parseEnvironment(process.env);
 const database = connectDatabase(env.DATABASE_URL, 'request');
 const profiles = new InMemoryClientProfiles();
 
+const orderRepository = new PrismaPurchaseOrderRepository(database.prisma);
+
 const app = await buildApp({
   // Prontidão olha o estado das migrações, não só a conexão: banco vazio
   // respondendo 200 fazia o healthcheck do Compose mentir (REVIEW-02, 2).
@@ -23,8 +29,10 @@ const app = await buildApp({
   ingest: new IngestPurchaseOrders(
     profiles,
     buildAdapterRegistry(),
-    new PrismaPurchaseOrderRepository(database.prisma),
+    orderRepository,
   ),
+  listOrders: new ListPurchaseOrders(orderRepository),
+  getOrder: new GetPurchaseOrder(orderRepository),
   profileFormatOf: async (clientId) =>
     (await profiles.find(clientId))?.deliveryFormat ?? null,
   logLevel: env.LOG_LEVEL,

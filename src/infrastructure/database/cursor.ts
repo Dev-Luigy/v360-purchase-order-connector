@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 
+import { maxCursorLength } from '../../domain/limits.js';
+
 // Cursor legítimo tem cerca de 80 caracteres; o teto limita custo de parsing.
-const maxCursorLength = 256;
 
 const base64url = /^[A-Za-z0-9_-]+$/;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

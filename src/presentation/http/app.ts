@@ -8,9 +8,14 @@ import Fastify, { type FastifyInstance } from 'fastify';
 
 import type { CheckReadiness } from '../../application/use-cases/check-readiness.js';
 import type { IngestPurchaseOrders } from '../../application/use-cases/ingest-purchase-orders.js';
+import type {
+  GetPurchaseOrder,
+  ListPurchaseOrders,
+} from '../../application/use-cases/query-purchase-orders.js';
 
 import { toProblem } from './problem.js';
 import { registerIngestionRoutes } from './routes/ingestions.js';
+import { registerPurchaseOrderRoutes } from './routes/purchase-orders.js';
 
 /**
  * Limites da borda, em um lugar só.
@@ -43,6 +48,8 @@ export const httpLimits = {
 export interface AppDependencies {
   readonly readiness: CheckReadiness;
   readonly ingest: IngestPurchaseOrders;
+  readonly listOrders: ListPurchaseOrders;
+  readonly getOrder: GetPurchaseOrder;
   readonly profileFormatOf: (clientId: string) => Promise<string | null>;
   readonly logLevel?: string;
 }
@@ -100,6 +107,11 @@ export async function buildApp(
     app,
     dependencies.ingest,
     dependencies.profileFormatOf,
+  );
+  registerPurchaseOrderRoutes(
+    app,
+    dependencies.listOrders,
+    dependencies.getOrder,
   );
 
   return app;
