@@ -3,13 +3,21 @@ import type {
   PageRequest,
 } from '../../src/application/ports/pagination.js';
 import type {
+  LooseItemOutcome,
   PurchaseOrderFilters,
   PurchaseOrderRepository,
 } from '../../src/application/ports/purchase-order-repository.js';
 import type { ClientId } from '../../src/domain/client.js';
 import { Decimal, quantityScale } from '../../src/domain/decimal.js';
+import {
+  applyItemToOrder,
+  mergeWaitingItems,
+  type StagedItem,
+} from '../../src/domain/ingestion.js';
+import { normalizedItemSchema } from '../../src/domain/schemas.js';
 import type {
   NormalizedPurchaseOrder,
+  NormalizedPurchaseOrderItem,
   PurchaseOrder,
   PurchaseOrderItem,
   PurchaseOrderSummary,
@@ -29,16 +37,25 @@ import type {
  */
 export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository {
   private readonly byKey = new Map<string, PurchaseOrder>();
+  // A espera fica aqui, e não num colaborador à parte, pelo mesmo motivo do
+  // PostgreSQL: consumir a espera e gravar o pedido é uma operação só.
+  private readonly waiting = new Map<string, NormalizedPurchaseOrderItem[]>();
   private sequence = 0;
 
   replaceSnapshot(snapshot: NormalizedPurchaseOrder): Promise<PurchaseOrder> {
     const key = `${snapshot.clientId}:${snapshot.externalNumber}`;
     const existing = this.byKey.get(key);
+    const esperando = this.waiting.get(key) ?? [];
+    this.waiting.delete(key);
+    // O test double revalida como o repositório real: era a ausência disso
+    // que deixava R09-04 passar verde nos testes (REVIEW-09).
+    for (const item of esperando) normalizedItemSchema.parse(item);
+    const completo = mergeWaitingItems(snapshot, esperando);
 
     const items =
-      snapshot.items === null
+      completo.items === null
         ? (existing?.items ?? [])
-        : snapshot.items.map((item, index): PurchaseOrderItem => ({
+        : completo.items.map((item, index): PurchaseOrderItem => ({
             ...item,
             id: `item-${String(this.sequence)}-${String(index)}`,
             quantityPending: Decimal.parse(item.quantityOrdered)
@@ -64,6 +81,31 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
     };
     this.byKey.set(key, saved);
     return Promise.resolve(saved);
+  }
+
+  applyLooseItem(
+    clientId: ClientId,
+    staged: StagedItem,
+  ): Promise<LooseItemOutcome> {
+    const key = `${clientId}:${staged.externalNumber}`;
+    const existing = this.byKey.get(key);
+    if (existing === undefined) {
+      normalizedItemSchema.parse(staged.item);
+      const fila = this.waiting.get(key) ?? [];
+      const semAnterior = fila.filter(
+        (item) => item.externalLine !== staged.item.externalLine,
+      );
+      this.waiting.set(key, [...semAnterior, staged.item]);
+      return Promise.resolve('em-espera');
+    }
+    return this.replaceSnapshot(applyItemToOrder(existing, staged.item)).then(
+      () => 'aplicado' as const,
+    );
+  }
+
+  /** Só para teste: quantos itens ainda esperam por este pedido. */
+  waitingCountFor(clientId: ClientId, externalNumber: string): number {
+    return (this.waiting.get(`${clientId}:${externalNumber}`) ?? []).length;
   }
 
   findById(id: string): Promise<PurchaseOrder | null> {

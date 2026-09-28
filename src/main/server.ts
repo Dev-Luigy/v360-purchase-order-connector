@@ -13,7 +13,6 @@ import { parseEnvironment } from '../infrastructure/config/env.js';
 import { connectDatabase } from '../infrastructure/database/prisma-client.js';
 import { PrismaConferenceRepository } from '../infrastructure/database/conference-repository.js';
 import { PrismaPurchaseOrderRepository } from '../infrastructure/database/purchase-order-repository.js';
-import { PrismaStagingRepository } from '../infrastructure/database/staging-repository.js';
 import { SchemaReadiness } from '../infrastructure/database/schema-readiness.js';
 import { buildAdapterRegistry } from '../infrastructure/integrations/adapter-registry.js';
 import { InMemoryClientProfiles } from '../infrastructure/integrations/client-profiles.js';
@@ -22,14 +21,21 @@ import { sweepSpoolLeftovers } from '../presentation/http/spool.js';
 
 const env = parseEnvironment(process.env);
 
-// O caminho de carga tem pool próprio, sem tempo limite curto; entra com o
-// endpoint de ingestão, em P1-04 (ADR-012).
+// Dois pools, por propósito (ADR-012): o caminho de requisição desiste rápido
+// e o de carga aceita transação longa mas finita. O preset de ingestão existia
+// desde P1-02 e **nada o usava** — as cargas passavam pelo pool de requisição,
+// com tempo limite de 3 segundos (REVIEW-09, R09-07).
 const database = connectDatabase(env.DATABASE_URL, 'request');
+const ingestionDatabase = connectDatabase(env.DATABASE_URL, 'ingestion');
 const profiles = new InMemoryClientProfiles();
 
 const orderRepository = new PrismaPurchaseOrderRepository(database.prisma);
 const conferenceRepository = new PrismaConferenceRepository(database.prisma);
-const stagingRepository = new PrismaStagingRepository(database.prisma);
+// A carga grava pelo pool dela; consulta e conferência continuam no de
+// requisição, onde o tempo limite curto é proteção e não estorvo.
+const ingestionOrderRepository = new PrismaPurchaseOrderRepository(
+  ingestionDatabase.prisma,
+);
 
 const app = await buildApp({
   // Prontidão olha o estado das migrações, não só a conexão: banco vazio
@@ -38,8 +44,7 @@ const app = await buildApp({
   ingest: new IngestPurchaseOrders(
     profiles,
     buildAdapterRegistry(),
-    orderRepository,
-    stagingRepository,
+    ingestionOrderRepository,
   ),
   listOrders: new ListPurchaseOrders(orderRepository),
   getOrder: new GetPurchaseOrder(orderRepository),
@@ -59,11 +64,15 @@ if (removidos > 0) {
   app.log.warn({ removidos }, 'restos de carga anterior removidos');
 }
 
-database.pool.on('error', (error) =>
-  app.log.error(error, 'PostgreSQL idle connection error'),
-);
+for (const { pool } of [database, ingestionDatabase]) {
+  pool.on('error', (error) =>
+    app.log.error(error, 'PostgreSQL idle connection error'),
+  );
+}
 app.addHook('onClose', async () => {
-  await database.close();
+  // Os dois precisam fechar: deixar o de carga aberto segurava conexão e o
+  // processo não encerrava sozinho.
+  await Promise.all([database.close(), ingestionDatabase.close()]);
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

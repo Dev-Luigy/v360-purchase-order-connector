@@ -25,9 +25,25 @@ export class PrismaConferenceRepository implements ConferenceRepository {
   /** Persiste nota, versão do pedido e divergências como um único retrato. */
   async save(record: Omit<ConferenceRecord, 'id'>): Promise<ConferenceRecord> {
     // Valida textos variáveis antes de atingir os limites das colunas.
-    for (const divergence of record.divergences) {
-      divergenceSchema.parse(divergence);
+    const divergences = record.divergences.map((divergence) =>
+      divergenceSchema.parse(divergence),
+    );
+    // A nota é persistida **como o schema a devolve**, não como veio. Gravar
+    // o objeto original com cast deixava uma chave extra entrar no JSONB e
+    // desaparecer em silêncio na leitura, que aplica o schema (REVIEW-07,
+    // R07-04). Hoje a borda HTTP também filtra, mas a porta do repositório é
+    // pública e não pode depender de quem a chama.
+    const invoice = invoiceCheckRequestSchema.parse(record.invoice);
+
+    // Coerência que o banco não consegue garantir por linha: aprovada tem
+    // zero divergências e reprovada tem ao menos uma (REVIEW-07, R07-09).
+    const esperado = divergences.length === 0 ? 'aprovada' : 'reprovada';
+    if (record.outcome !== esperado) {
+      throw new RangeError(
+        `conferência ${record.outcome} com ${String(divergences.length)} divergências`,
+      );
     }
+
     const created = await this.prisma.conference.create({
       data: {
         purchaseOrderId: record.purchaseOrderId,
@@ -35,10 +51,11 @@ export class PrismaConferenceRepository implements ConferenceRepository {
         clientId: record.clientId,
         checkedAt: new Date(record.checkedAt),
         outcome: record.outcome,
-        invoice: record.invoice as unknown as Prisma.InputJsonValue,
+        // Sem cast: o valor vem tipado do schema, não do chamador.
+        invoice,
         divergences: {
           // UUID não preserva a ordem das regras do domínio.
-          create: record.divergences.map((divergence, position) => ({
+          create: divergences.map((divergence, position) => ({
             position,
             code: divergence.code,
             field: divergence.field,

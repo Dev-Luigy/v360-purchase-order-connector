@@ -1,13 +1,21 @@
 import type { Page, PageRequest } from '../../application/ports/pagination.js';
 import { maxPageLimit } from '../../application/ports/pagination.js';
 import type {
+  LooseItemOutcome,
   PurchaseOrderFilters,
   PurchaseOrderRepository,
 } from '../../application/ports/purchase-order-repository.js';
 import type { ClientId } from '../../domain/client.js';
 import { Decimal } from '../../domain/decimal.js';
+import {
+  applyItemToOrder,
+  mergeWaitingItems,
+  type StagedItem,
+} from '../../domain/ingestion.js';
+import { describeIssues, normalizedItemSchema } from '../../domain/schemas.js';
 import type {
   NormalizedPurchaseOrder,
+  NormalizedPurchaseOrderItem,
   PurchaseOrder,
   PurchaseOrderItem,
   PurchaseOrderSummary,
@@ -35,102 +43,68 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
    * Serializa cargas do mesmo pedido com lock transacional. `FOR UPDATE` não
    * cobre um pedido que ainda não existe.
    */
+  /**
+   * Serializa cargas do mesmo pedido com lock transacional. `FOR UPDATE` não
+   * cobre um pedido que ainda não existe.
+   */
   replaceSnapshot(snapshot: NormalizedPurchaseOrder): Promise<PurchaseOrder> {
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKeyFor(snapshot)}))`;
 
-      const existing = await tx.purchaseOrder.findUnique({
+      // Os itens que esperavam por este pedido entram aqui dentro. Eram
+      // consumidos numa transação própria, e uma falha na gravação abaixo os
+      // perdia para sempre (REVIEW-09, R09-01).
+      const esperando = await takeWaitingItems(
+        tx,
+        snapshot.clientId,
+        snapshot.externalNumber,
+      );
+      return persistSnapshot(tx, mergeWaitingItems(snapshot, esperando));
+    });
+  }
+
+  /**
+   * Item que chegou sem o cabeçalho dele na mesma carga.
+   *
+   * O adaptador só enxerga os cabeçalhos do payload atual, então o que ele
+   * chama de órfão pode ser item de pedido que já existe — o caso de mandar só
+   * a consulta de itens do Delta, que é uso normal. A decisão é aqui, sob o
+   * lock: ler o pedido fora dele deixava duas cargas simultâneas lerem o mesmo
+   * retrato, e a segunda gravação perdia a primeira (REVIEW-09, R09-06).
+   */
+  applyLooseItem(
+    clientId: ClientId,
+    staged: StagedItem,
+  ): Promise<LooseItemOutcome> {
+    const chave = lockKeyFor({
+      clientId,
+      externalNumber: staged.externalNumber,
+    });
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${chave}))`;
+
+      const encontrado = await tx.purchaseOrder.findUnique({
         where: {
           clientId_externalNumber: {
-            clientId: snapshot.clientId,
-            externalNumber: snapshot.externalNumber,
+            clientId,
+            externalNumber: staged.externalNumber,
           },
         },
         select: { id: true },
       });
-
-      const header = {
-        supplierTaxId: snapshot.supplier.taxId,
-        supplierName: snapshot.supplier.name,
-        currency: snapshot.currency,
-        status: snapshot.status,
-        issuedOn: isoDateToDate(snapshot.issuedOn),
-        ingestedAt: new Date(),
-      };
-
-      const id =
-        existing === null
-          ? (
-              await tx.purchaseOrder.create({
-                data: {
-                  ...header,
-                  clientId: snapshot.clientId,
-                  externalNumber: snapshot.externalNumber,
-                  hasPendingBalance: false,
-                },
-                select: { id: true },
-              })
-            ).id
-          : (
-              await tx.purchaseOrder.update({
-                where: { id: existing.id },
-                data: { ...header, ingestionVersion: { increment: 1 } },
-                select: { id: true },
-              })
-            ).id;
-
-      // `items: null` é carga que não trouxe os itens e preserva os conhecidos;
-      // `[]` é o cliente afirmando que não há itens, e remove (ADR-008).
-      if (snapshot.items !== null) {
-        await tx.purchaseOrderItem.deleteMany({
-          where: { purchaseOrderId: id },
-        });
-        if (snapshot.items.length > 0) {
-          await tx.purchaseOrderItem.createMany({
-            data: snapshot.items.map((item) => ({
-              purchaseOrderId: id,
-              externalLine: item.externalLine,
-              material: item.material,
-              description: item.description,
-              purchaseUnit: item.purchaseUnit,
-              conversionFactor: item.conversionFactor,
-              quantityOrdered: item.quantityOrdered,
-              quantityReceived: item.quantityReceived,
-              quantityPending: pendingOf(
-                item.quantityOrdered,
-                item.quantityReceived,
-              ),
-              unitPrice: item.unitPrice,
-              lineCreatedOn: isoDateToDateOrNull(item.lineCreatedOn),
-            })),
-          });
-        }
+      if (encontrado === null) {
+        await stageItem(tx, clientId, staged);
+        return 'em-espera';
       }
 
-      // Com `items: null`, o saldo depende dos itens preservados no banco.
-      const saldos = await tx.purchaseOrderItem.findMany({
-        where: { purchaseOrderId: id },
-        select: { quantityPending: true },
-      });
-      await tx.purchaseOrder.update({
-        where: { id },
-        data: {
-          hasPendingBalance: hasPendingBalance(
-            saldos.map((item) => ({
-              quantityPending: decimalToText(
-                item.quantityPending,
-                'quantityPending',
-              ),
-            })),
-          ),
-        },
-      });
-
-      const saved = await findFull(tx, id);
-      if (saved === null) {
-        throw new Error(`pedido ${id} desapareceu dentro da própria transação`);
+      const existente = await findFull(tx, encontrado.id);
+      if (existente === null) {
+        throw new Error(
+          `pedido ${encontrado.id} desapareceu dentro da própria transação`,
+        );
       }
-      return saved;
+      await persistSnapshot(tx, applyItemToOrder(existente, staged.item));
+      return 'aplicado';
     });
   }
 
@@ -196,6 +170,165 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
       },
     };
   }
+}
+
+/**
+ * Grava o retrato. Recebe a transação porque os dois caminhos que gravam —
+ * carga de pedido e item avulso — precisam do lock e da escrita na mesma.
+ */
+async function persistSnapshot(
+  tx: Transaction,
+  completo: NormalizedPurchaseOrder,
+): Promise<PurchaseOrder> {
+  const existing = await tx.purchaseOrder.findUnique({
+    where: {
+      clientId_externalNumber: {
+        clientId: completo.clientId,
+        externalNumber: completo.externalNumber,
+      },
+    },
+    select: { id: true },
+  });
+
+  const header = {
+    supplierTaxId: completo.supplier.taxId,
+    supplierName: completo.supplier.name,
+    currency: completo.currency,
+    status: completo.status,
+    issuedOn: isoDateToDate(completo.issuedOn),
+    ingestedAt: new Date(),
+  };
+
+  const id =
+    existing === null
+      ? (
+          await tx.purchaseOrder.create({
+            data: {
+              ...header,
+              clientId: completo.clientId,
+              externalNumber: completo.externalNumber,
+              hasPendingBalance: false,
+            },
+            select: { id: true },
+          })
+        ).id
+      : (
+          await tx.purchaseOrder.update({
+            where: { id: existing.id },
+            data: { ...header, ingestionVersion: { increment: 1 } },
+            select: { id: true },
+          })
+        ).id;
+
+  // `items: null` é carga que não trouxe os itens e preserva os conhecidos;
+  // `[]` é o cliente afirmando que não há itens, e remove (ADR-008).
+  if (completo.items !== null) {
+    await tx.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: id } });
+    if (completo.items.length > 0) {
+      await tx.purchaseOrderItem.createMany({
+        data: completo.items.map((item) => ({
+          purchaseOrderId: id,
+          externalLine: item.externalLine,
+          material: item.material,
+          description: item.description,
+          purchaseUnit: item.purchaseUnit,
+          conversionFactor: item.conversionFactor,
+          quantityOrdered: item.quantityOrdered,
+          quantityReceived: item.quantityReceived,
+          quantityPending: pendingOf(
+            item.quantityOrdered,
+            item.quantityReceived,
+          ),
+          unitPrice: item.unitPrice,
+          lineCreatedOn: isoDateToDateOrNull(item.lineCreatedOn),
+        })),
+      });
+    }
+  }
+
+  // Com `items: null`, o saldo depende dos itens preservados no banco.
+  const saldos = await tx.purchaseOrderItem.findMany({
+    where: { purchaseOrderId: id },
+    select: { quantityPending: true },
+  });
+  await tx.purchaseOrder.update({
+    where: { id },
+    data: {
+      hasPendingBalance: hasPendingBalance(
+        saldos.map((item) => ({
+          quantityPending: decimalToText(
+            item.quantityPending,
+            'quantityPending',
+          ),
+        })),
+      ),
+    },
+  });
+
+  const saved = await findFull(tx, id);
+  if (saved === null) {
+    throw new Error(`pedido ${id} desapareceu dentro da própria transação`);
+  }
+  return saved;
+}
+
+/**
+ * Remove e devolve os itens que esperavam por este pedido.
+ *
+ * Roda dentro da transação de quem grava: se a gravação falhar, o `DELETE` é
+ * desfeito junto e os itens continuam esperando.
+ */
+async function takeWaitingItems(
+  tx: Transaction,
+  clientId: ClientId,
+  externalNumber: string,
+): Promise<readonly NormalizedPurchaseOrderItem[]> {
+  const rows = await tx.ingestionStaging.findMany({
+    where: { clientId, externalNumber },
+    orderBy: { externalLine: 'asc' },
+  });
+  if (rows.length === 0) return [];
+  await tx.ingestionStaging.deleteMany({
+    where: { id: { in: rows.map((row) => row.id) } },
+  });
+  // O que sai daqui entra num pedido de verdade: uma linha gravada por uma
+  // versão anterior do contrato não atravessa sem conferência.
+  return rows.map((row) => {
+    const parsed = normalizedItemSchema.safeParse(row.item);
+    if (!parsed.success) {
+      throw new Error(
+        `item em espera do pedido ${externalNumber} não passou no contrato: ${describeIssues(parsed.error)}`,
+      );
+    }
+    return parsed.data;
+  });
+}
+
+/** Reenviar a mesma linha do mesmo pedido substitui a anterior (ADR-008). */
+async function stageItem(
+  tx: Transaction,
+  clientId: ClientId,
+  staged: StagedItem,
+): Promise<void> {
+  const item = staged.item as unknown as Prisma.InputJsonValue;
+  await tx.ingestionStaging.upsert({
+    where: {
+      clientId_externalNumber_externalLine: {
+        clientId,
+        externalNumber: staged.externalNumber,
+        externalLine: staged.item.externalLine,
+      },
+    },
+    create: {
+      clientId,
+      externalNumber: staged.externalNumber,
+      externalLine: staged.item.externalLine,
+      item,
+      raw: staged.raw,
+      stagedAt: new Date(),
+    },
+    update: { item, raw: staged.raw, stagedAt: new Date() },
+  });
 }
 
 /** Inclui o comprimento para evitar colisões na concatenação das partes. */

@@ -11,7 +11,6 @@ import {
 import { FlatJsonAdapter } from '../src/infrastructure/integrations/flat-json-adapter.js';
 import { SplitJsonAdapter } from '../src/infrastructure/integrations/split-json-adapter.js';
 import { IngestPurchaseOrders } from '../src/application/use-cases/ingest-purchase-orders.js';
-import { InMemoryStagingRepository } from '../src/infrastructure/database/in-memory-staging.js';
 import { InMemoryClientProfiles } from '../src/infrastructure/integrations/client-profiles.js';
 import { buildAdapterRegistry } from '../src/infrastructure/integrations/adapter-registry.js';
 import { InMemoryPurchaseOrderRepository } from './support/in-memory-repositories.js';
@@ -329,15 +328,12 @@ describe('Delta — split-json', () => {
 describe('Delta — reconciliação do staging', () => {
   const ingest = () => {
     const orders = new InMemoryPurchaseOrderRepository();
-    const staging = new InMemoryStagingRepository();
     return {
       orders,
-      staging,
       uso: new IngestPurchaseOrders(
         new InMemoryClientProfiles(),
         buildAdapterRegistry(),
         orders,
-        staging,
       ),
     };
   };
@@ -354,59 +350,71 @@ describe('Delta — reconciliação do staging', () => {
   it('o item órfão sobrevive à carga e volta quando o cabeçalho chega', async () => {
     const { uso, orders } = ingest();
 
-    // Primeira carga: só itens. DL-2026-0099 não tem cabeçalho em lugar nenhum.
     const primeira = await uso.execute(await partes(['items']));
     assert.equal(primeira.ordersAccepted, 0);
     assert.equal(primeira.stagedTotal, 4);
 
-    // Segunda carga: os cabeçalhos chegam. Antes desta tarefa os itens da
-    // primeira carga estavam perdidos e os pedidos entrariam vazios.
     const segunda = await uso.execute(await partes(['orders']));
     assert.equal(segunda.ordersAccepted, 3);
 
     const p44 = await orders.findByExternalNumber('delta', 'DL-2026-0044');
     assert.equal(p44?.items.length, 2, 'itens em espera não foram recuperados');
-    const linhas = p44?.items.map((i) => i.externalLine).sort((a, b) => a - b);
-    assert.deepEqual(linhas, [10, 20]);
+    assert.deepEqual(
+      p44?.items.map((i) => i.externalLine).sort((a, b) => a - b),
+      [10, 20],
+    );
   });
 
   it('o item cujo cabeçalho nunca chega continua esperando', async () => {
-    const { uso, staging } = ingest();
+    const { uso, orders } = ingest();
     await uso.execute(await partes(['items']));
     await uso.execute(await partes(['orders']));
 
-    // DL-2026-0099 não tem cabeçalho na amostra: continua em espera, sem
-    // virar pedido inventado nem ser descartado.
-    const ainda = await staging.takeFor('delta', 'DL-2026-0099');
-    assert.equal(ainda.length, 1);
-    assert.equal(ainda[0]?.item.material, 'EMB-500');
+    // Provado pelo comportamento, não espiando o estado: quando o cabeçalho
+    // de DL-2026-0099 finalmente chega, o item que esperava aparece nele.
+    const cabecalhoTardio = JSON.stringify({
+      orders: [
+        {
+          po_number: 'DL-2026-0099',
+          created_at: '2026-09-15',
+          status: 'open',
+          currency: 'BRL',
+          vendor: {
+            tax_id: '67890123000145',
+            name: 'Embalagens Norte Sul Ltda',
+          },
+        },
+      ],
+    });
+    await uso.execute({
+      clientId: 'delta',
+      formatVersion: '1',
+      parts: new Map([['orders', () => bytes(cabecalhoTardio)]]),
+    });
+
+    const p99 = await orders.findByExternalNumber('delta', 'DL-2026-0099');
+    assert.equal(p99?.items.length, 1, 'o item não esperou pelo cabeçalho');
+    assert.equal(p99?.items[0]?.material, 'EMB-500');
   });
 
   it('item de pedido que já existe atualiza, em vez de ir para espera', async () => {
-    const { uso, orders, staging } = ingest();
-    // Os dois lados juntos: os três pedidos entram completos.
+    const { uso, orders } = ingest();
     await uso.execute(await partes(['orders', 'items']));
 
-    // Agora só a consulta de itens, como o Delta pode entregar. O adaptador
-    // não vê cabeçalho nenhum nesta carga e chamaria tudo de órfão; o caso de
-    // uso sabe que os pedidos já existem.
+    // Só a consulta de itens. O adaptador não vê cabeçalho nenhum nesta carga
+    // e chamaria tudo de órfão; o repositório sabe que os pedidos já existem.
     const segunda = await uso.execute(await partes(['items']));
     assert.equal(segunda.stagedTotal, 1, 'só DL-2026-0099 deveria esperar');
 
     const p44 = await orders.findByExternalNumber('delta', 'DL-2026-0044');
     assert.equal(p44?.items.length, 2, 'itens do pedido existente se perderam');
-    assert.equal(
-      (await staging.takeFor('delta', 'DL-2026-0044')).length,
-      0,
-      'item de pedido existente foi parar na espera',
-    );
+    assert.equal(orders.waitingCountFor('delta', 'DL-2026-0044'), 0);
   });
 
   it('a carga desta vez manda: linha reenviada substitui a que esperava', async () => {
-    const { uso, orders, staging } = ingest();
+    const { uso, orders } = ingest();
     await uso.execute(await partes(['items']));
 
-    // O cabeçalho chega junto com uma versão nova da linha 10.
     const itensNovos = JSON.stringify({
       items: [
         {
@@ -439,11 +447,179 @@ describe('Delta — reconciliação do staging', () => {
       '999.000000',
       'venceu a versão velha',
     );
-    // A linha 20, que só existia em espera, entrou junto.
     assert.ok(
       p44?.items.some((i) => i.externalLine === 20),
       'linha que esperava não entrou',
     );
-    assert.equal((await staging.takeFor('delta', 'DL-2026-0044')).length, 0);
+    assert.equal(orders.waitingCountFor('delta', 'DL-2026-0044'), 0);
+  });
+
+  it('falha ao gravar o pedido NÃO perde os itens que esperavam', async () => {
+    // R09-01: o staging era consumido numa transação própria, antes da
+    // gravação. Uma falha depois disso apagava os itens para sempre.
+    const { uso, orders } = ingest();
+    await uso.execute(await partes(['items']));
+    assert.equal(orders.waitingCountFor('delta', 'DL-2026-0044'), 2);
+
+    const original = orders.replaceSnapshot.bind(orders);
+    orders.replaceSnapshot = () =>
+      Promise.reject(new Error('falha induzida na gravação'));
+    const relatorio = await uso.execute(await partes(['orders']));
+    assert.equal(relatorio.ordersAccepted, 0);
+    assert.ok(relatorio.rejectedTotal > 0, 'a falha não foi reportada');
+
+    orders.replaceSnapshot = original;
+    assert.equal(
+      orders.waitingCountFor('delta', 'DL-2026-0044'),
+      2,
+      'os itens que esperavam foram perdidos pela falha de gravação',
+    );
+  });
+});
+
+describe('REVIEW-09: o que a revisão do Codex expôs', () => {
+  const linhaGama = (over: Record<string, unknown> = {}) => ({
+    ped: 'GL-778',
+    item: 1,
+    cnpj_fornecedor: '34567890000112',
+    nome_fornecedor: 'Transportes Ideal ME',
+    dt_criacao: 1786752000,
+    cod_mat: 'TRP-01',
+    desc_mat: 'Pallet',
+    um: 'CX',
+    fator_conv: 12,
+    qtd_ped: 10,
+    qtd_rec: 2,
+    preco_unit_centavos: 120000,
+    situacao: 1,
+    ...over,
+  });
+
+  const lerGama = async (
+    linhas: readonly unknown[],
+    adaptador = new FlatJsonAdapter(),
+  ) =>
+    colher(
+      adaptador.read(
+        {
+          clientId: 'gama',
+          formatVersion: '1',
+          parts: new Map([['lines', () => bytes(JSON.stringify(linhas))]]),
+        },
+        gamaProfile,
+      ),
+    );
+
+  it('R09-02: cada linha do Gama tem o cabeçalho validado, não só a primeira', async () => {
+    // Com `??=`, situação fora do vocabulário numa linha seguinte atravessava
+    // sem ser olhada, e o resultado dependia da ordem das linhas.
+    const { rejected } = await lerGama([
+      linhaGama(),
+      linhaGama({ item: 2, situacao: 9 }),
+    ]);
+    assert.equal(rejected.length, 1, 'situação 9 passou despercebida');
+  });
+
+  it('R09-02: linhas que discordam no cabeçalho recusam o pedido inteiro', async () => {
+    // Os dois cabeçalhos são válidos e diferentes. Escolher um seria adivinhar.
+    const { orders, rejected } = await lerGama([
+      linhaGama(),
+      linhaGama({ item: 2, nome_fornecedor: 'Outro Fornecedor Ltda' }),
+    ]);
+    assert.equal(orders.length, 0, 'gravou um dos dois cabeçalhos');
+    assert.equal(rejected.length, 1);
+    assert.match(String(rejected[0]?.reason), /discordam/);
+  });
+
+  it('R09-03: pedido com linhas fora de ordem não vira dois retratos', async () => {
+    // O segundo retrato de GL-778 substituiria o primeiro na gravação e
+    // apagaria a linha já lida. O enunciado não garante ordenação.
+    const { orders, rejected } = await lerGama([
+      linhaGama({ item: 1 }),
+      { ...linhaGama({ item: 1 }), ped: 'GL-779' },
+      linhaGama({ item: 2 }),
+    ]);
+    const gl778 = orders.filter((o) => o.externalNumber === 'GL-778');
+    assert.equal(gl778.length, 1, 'GL-778 foi emitido mais de uma vez');
+    assert.equal(rejected.length, 1);
+    assert.match(String(rejected[0]?.reason), /não estão agrupadas/);
+  });
+
+  it('R09-04: item órfão fora do contrato é recusado, não guardado', async () => {
+    const itens = {
+      items: [
+        {
+          purchase_order: 'DL-9999',
+          created_at: '2026-09-15',
+          line: 10,
+          material: 'M'.repeat(129),
+          description: 'acima do contrato',
+          uom: 'UN',
+          quantity_ordered: 1,
+          quantity_received: 0,
+          unit_price: 1.0,
+        },
+      ],
+    };
+    const resultado = await colher(
+      new SplitJsonAdapter().read(
+        {
+          clientId: 'delta',
+          formatVersion: '1',
+          parts: new Map([['items', () => bytes(JSON.stringify(itens))]]),
+        },
+        deltaProfile,
+      ),
+    );
+    assert.equal(
+      resultado.staged.length,
+      0,
+      'material de 129 caracteres esperou',
+    );
+    assert.equal(resultado.rejected.length, 1);
+  });
+
+  it('R09-05: a espera do Delta sai em lotes, não toda no fim', async () => {
+    const texto = await fixture('delta/items.json');
+    const porLote: number[] = [];
+    for await (const lote of new SplitJsonAdapter(2).read(
+      {
+        clientId: 'delta',
+        formatVersion: '1',
+        parts: new Map([['items', () => bytes(texto)]]),
+      },
+      deltaProfile,
+    )) {
+      if (lote.staged.length > 0) porLote.push(lote.staged.length);
+    }
+    assert.ok(porLote.length > 1, `saiu em ${String(porLote.length)} lote(s)`);
+  });
+
+  it('R09-05: teto de cabeçalhos encerra a carga em vez de gravar pela metade', async () => {
+    const cabecalhos = {
+      orders: [0, 1, 2].map((n) => ({
+        po_number: `DL-${String(n)}`,
+        created_at: '2026-09-02',
+        status: 'open',
+        currency: 'BRL',
+        vendor: { tax_id: '67890123000145', name: 'Embalagens Norte Sul Ltda' },
+      })),
+    };
+    await assert.rejects(
+      () =>
+        colher(
+          new SplitJsonAdapter(200, 2).read(
+            {
+              clientId: 'delta',
+              formatVersion: '1',
+              parts: new Map([
+                ['orders', () => bytes(JSON.stringify(cabecalhos))],
+              ]),
+            },
+            deltaProfile,
+          ),
+        ),
+      /mais de 2 pedidos/,
+    );
   });
 });

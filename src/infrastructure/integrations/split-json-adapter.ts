@@ -5,13 +5,17 @@ import type {
 } from '../../application/ports/source-adapter.js';
 import type { ClientProfile } from '../../domain/client.js';
 import type { RejectedRecord, StagedItem } from '../../domain/ingestion.js';
-import { maxItemsPerOrder } from '../../domain/limits.js';
+import {
+  maxItemsPerOrder,
+  maxStagedRawCharacters,
+} from '../../domain/limits.js';
 import type {
   NormalizedPurchaseOrder,
   NormalizedPurchaseOrderItem,
 } from '../../domain/purchase-order.js';
 
 import { FieldError } from './field-parsers.js';
+import { describeIssues, normalizedItemSchema } from '../../domain/schemas.js';
 import { streamArrayAtKey, type JsonValue } from './json-stream.js';
 import {
   assertPayloadMatchesProfile,
@@ -49,7 +53,10 @@ interface Pending {
 export class SplitJsonAdapter implements SourceAdapter {
   readonly deliveryFormat = 'split-json' as const;
 
-  constructor(private readonly batchSize = 200) {}
+  constructor(
+    private readonly batchSize = 200,
+    private readonly maxIndexedHeaders = 100_000,
+  ) {}
 
   async *read(
     payload: SourcePayload,
@@ -90,11 +97,21 @@ export class SplitJsonAdapter implements SourceAdapter {
             reason: reasonOf(cause),
           });
         }
+        // Fora do `try`: estourar o teto encerra a carga inteira, não vira
+        // recusa de um registro. Aceitar em parte gravaria pedidos sem os
+        // itens que viriam depois (REVIEW-09, R09-05).
+        if (pendentes.size > this.maxIndexedHeaders) {
+          throw new FieldError(
+            splitJsonOrdersPart,
+            `carga com mais de ${String(this.maxIndexedHeaders)} pedidos; ` +
+              'divida o arquivo ou aumente o teto do adaptador',
+          );
+        }
         index += 1;
       }
     }
 
-    const staged: StagedItem[] = [];
+    let staged: StagedItem[] = [];
     if (temItens) {
       let index = 0;
       for await (const raw of streamArrayAtKey(
@@ -111,15 +128,33 @@ export class SplitJsonAdapter implements SourceAdapter {
             // data — e um pedido sem situação nunca poderia ser conferido,
             // porque a regra 2 depende dela (ADR-008).
             // O item é normalizado agora, com o perfil em mãos: quem
-            // reconcilia depois é o caso de uso, que não conhece o formato
-            // do cliente. O cru fica para auditoria.
+            // reconcilia depois é o repositório, que não conhece o formato do
+            // cliente. O cru fica para auditoria.
+            //
+            // E é **validado contra o contrato antes de esperar**: sem isso,
+            // material acima do limite entrava na espera e só estourava muito
+            // depois, fora do tratamento por registro (REVIEW-09, R09-04).
+            const item = readItem(jsonFieldSource(raw), profile);
+            const conferido = normalizedItemSchema.safeParse(item);
+            if (!conferido.success) {
+              throw new FieldError(
+                `item do pedido ${numero}`,
+                describeIssues(conferido.error),
+              );
+            }
             staged.push({
               reference: numero,
               externalNumber: numero,
               reason: 'cabecalho-ausente',
-              raw: JSON.stringify(raw),
-              item: readItem(jsonFieldSource(raw), profile),
+              raw: JSON.stringify(raw).slice(0, maxStagedRawCharacters),
+              item: conferido.data,
             });
+            if (staged.length >= this.batchSize) {
+              // A espera sai em lotes: acumular tudo até o fim do arquivo
+              // contradiz "nada exige a carga inteira em memória" (R09-05).
+              yield { orders: [], rejected: [], staged };
+              staged = [];
+            }
           } else if (alvo.items.length >= maxItemsPerOrder) {
             alvo.overflow = true;
           } else {
@@ -168,7 +203,6 @@ export class SplitJsonAdapter implements SourceAdapter {
       }
     }
 
-    // O staging sai no último lote: ele só se conhece depois de ler tudo.
     if (orders.length > 0 || lote.length > 0 || staged.length > 0) {
       yield { orders, rejected: lote, staged };
     }

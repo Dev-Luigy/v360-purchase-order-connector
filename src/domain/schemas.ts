@@ -19,7 +19,10 @@ import {
   maxSupplierNameLength,
   supportedCurrencies,
 } from './limits.js';
-import type { NormalizedPurchaseOrder } from './purchase-order.js';
+import type {
+  NormalizedPurchaseOrder,
+  NormalizedPurchaseOrderItem,
+} from './purchase-order.js';
 
 /**
  * O contrato normalizado expresso em schema, não só em tipo.
@@ -305,14 +308,59 @@ export function describeIssues(error: z.ZodError): string {
 }
 
 /**
- * Trava de deriva: se o schema e o tipo do contrato se separarem, isto para de
- * compilar. Sem ela, `normalizedOrderSchema` viraria documentação desatualizada
- * em vez de validação.
+ * Trava de deriva entre schema e contrato.
+ *
+ * A versão anterior só verificava se o tipo inferido era **atribuível** ao
+ * contrato, o que é meio caminho: uma propriedade a mais exigida pelo schema,
+ * ou uma opcional a mais no contrato, passava sem ser notada (REVIEW-07,
+ * R07-05). `Equal` compara nos dois sentidos.
  */
-const _schemaMatchesContract: NormalizedPurchaseOrder =
-  null as unknown as z.infer<typeof normalizedOrderSchema>;
-const _invoiceMatchesContract: InvoiceCheckRequest = null as unknown as z.infer<
-  typeof invoiceCheckRequestSchema
->;
-void _schemaMatchesContract;
-void _invoiceMatchesContract;
+type Mutavel<T> = T extends readonly (infer E)[]
+  ? Mutavel<E>[]
+  : T extends object
+    ? { -readonly [K in keyof T]: Mutavel<T[K]> }
+    : T;
+
+type Equal<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+    ? true
+    : false;
+
+/**
+ * Falha a compilação com o nome do par que divergiu.
+ *
+ * O contrato é `readonly` em profundidade e o Zod não expressa isso, então a
+ * comparação é contra a versão mutável. É a **única** diferença tolerada: o
+ * que esta trava existe para pegar — propriedade a mais, a menos, ou mudança
+ * de opcionalidade — continua sendo comparado nos dois sentidos.
+ */
+type Exact<Nome extends string, A, B> =
+  Equal<A, B> extends true
+    ? Nome
+    : ['divergiu do contrato:', Nome, 'schema:', A, 'contrato:', B];
+
+type _travas = [
+  Exact<
+    'normalizedOrderSchema',
+    z.infer<typeof normalizedOrderSchema>,
+    Mutavel<NormalizedPurchaseOrder>
+  >,
+  Exact<
+    'invoiceCheckRequestSchema',
+    z.infer<typeof invoiceCheckRequestSchema>,
+    Mutavel<InvoiceCheckRequest>
+  >,
+  Exact<
+    'normalizedItemSchema',
+    z.infer<typeof normalizedItemSchema>,
+    Mutavel<NormalizedPurchaseOrderItem>
+  >,
+];
+
+// Só existe para o compilador conferir a lista acima.
+const _travasConferidas: _travas = [
+  'normalizedOrderSchema',
+  'invoiceCheckRequestSchema',
+  'normalizedItemSchema',
+];
+void _travasConferidas;

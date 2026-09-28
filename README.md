@@ -20,7 +20,7 @@ Carregar as amostras e exercitar tudo:
 node scripts/validate-case.mjs    # 27 asserções, uma por exigência do enunciado
 ```
 
-Desenvolvimento local: `cp .env.example .env && npm ci && npm run db:up && npm run dev`. `npm run check` roda geração do cliente Prisma, tipagem, lint, formatação, 208 testes e build, **sem exigir banco**; `npm run test:integration` roda os 16 testes que exigem PostgreSQL real. O contrato completo das rotas está em [docs/API.md](docs/API.md).
+Desenvolvimento local: `cp .env.example .env && npm ci && npm run db:up && npm run dev`. `npm run check` roda geração do cliente Prisma, tipagem, lint, formatação, a suíte completa e o build, **sem exigir banco**; `npm run test:integration` roda o que exige PostgreSQL real. O contrato completo das rotas está em [docs/API.md](docs/API.md).
 
 ---
 
@@ -140,15 +140,15 @@ As demais escolhas: [TypeScript e Node](docs/decisions/ADR-002-typescript-nodejs
 
 ## Como isto está validado
 
-| O quê                       | Como                                                                     |
-| --------------------------- | ------------------------------------------------------------------------ |
-| cada exigência do enunciado | `scripts/validate-case.mjs` — 18 asserções contra o serviço no ar, 18/18 |
-| domínio, adaptadores, rotas | `npm run check` — 192 testes, sem exigir banco                           |
-| transação, locks, índices   | `npm run test:integration` — 16 testes contra PostgreSQL real            |
-| persistência após queda     | `scripts/verify-persistence.mjs` — reinicia o banco e reconta            |
-| volume                      | `scripts/volume-check.mjs` — 50.000 pedidos, 150.000 itens               |
+| O quê                       | Como                                                                      |
+| --------------------------- | ------------------------------------------------------------------------- |
+| cada exigência do enunciado | `scripts/validate-case.mjs` — uma asserção por exigência, **27/27** no ar |
+| domínio, adaptadores, rotas | `npm run check` — a suíte completa, sem exigir banco                      |
+| transação, locks, índices   | `npm run test:integration` — 16 testes contra PostgreSQL real             |
+| persistência após queda     | `scripts/verify-persistence.mjs` — reinicia o banco e reconta             |
+| volume                      | `scripts/volume-check.mjs` — 50.000 pedidos, 150.000 itens                |
 
-A cobertura é de **94,68% de linhas**, medida por comando versionado para o número não depender de quem mede.
+Contagens de teste e cobertura ficam em [docs/STATUS.md](docs/STATUS.md), e **só lá**: repetidas em dois documentos elas divergem, que foi o que aconteceu ([REVIEW-09](docs/handoffs/REVIEW-09-pos-p2-01-codex.md), R09-09). O 27/27 acima é exceção porque está atado à lista fixa de exigências do enunciado, não ao código.
 
 ## Organização
 
@@ -166,7 +166,7 @@ src/
   main/                        composição das dependências e inicialização
 ```
 
-As dependências apontam para dentro: o domínio não conhece Prisma nem Fastify, e os casos de uso dependem de interfaces que a infraestrutura implementa. Isso não é organização de pastas — é o que permite os 208 testes rodarem sem banco, substituindo o adaptador e mantendo o contrato. Adaptadores de clientes novos estendem a ingestão sem adicionar condicionais de cliente às regras de conferência.
+As dependências apontam para dentro: o domínio não conhece Prisma nem Fastify, e os casos de uso dependem de interfaces que a infraestrutura implementa. Isso não é organização de pastas — é o que permite a suíte inteira rodar sem banco, substituindo o adaptador e mantendo o contrato. Adaptadores de clientes novos estendem a ingestão sem adicionar condicionais de cliente às regras de conferência.
 
 Os objetos e as portas estão desenhados em [docs/diagrams/](docs/diagrams/README.md), derivados do código.
 
