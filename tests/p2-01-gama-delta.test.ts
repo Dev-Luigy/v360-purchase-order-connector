@@ -10,6 +10,11 @@ import {
 } from '../src/infrastructure/integrations/client-profiles.js';
 import { FlatJsonAdapter } from '../src/infrastructure/integrations/flat-json-adapter.js';
 import { SplitJsonAdapter } from '../src/infrastructure/integrations/split-json-adapter.js';
+import { IngestPurchaseOrders } from '../src/application/use-cases/ingest-purchase-orders.js';
+import { InMemoryStagingRepository } from '../src/infrastructure/database/in-memory-staging.js';
+import { InMemoryClientProfiles } from '../src/infrastructure/integrations/client-profiles.js';
+import { buildAdapterRegistry } from '../src/infrastructure/integrations/adapter-registry.js';
+import { InMemoryPurchaseOrderRepository } from './support/in-memory-repositories.js';
 
 import type { AdapterBatch } from '../src/application/ports/source-adapter.js';
 import type {
@@ -318,5 +323,127 @@ describe('Delta — split-json', () => {
         ),
       /sem nenhuma das partes/,
     );
+  });
+});
+
+describe('Delta — reconciliação do staging', () => {
+  const ingest = () => {
+    const orders = new InMemoryPurchaseOrderRepository();
+    const staging = new InMemoryStagingRepository();
+    return {
+      orders,
+      staging,
+      uso: new IngestPurchaseOrders(
+        new InMemoryClientProfiles(),
+        buildAdapterRegistry(),
+        orders,
+        staging,
+      ),
+    };
+  };
+
+  const partes = async (nomes: readonly ('orders' | 'items')[]) => {
+    const mapa = new Map<string, () => AsyncIterable<Uint8Array>>();
+    for (const nome of nomes) {
+      const texto = await fixture(`delta/${nome}.json`);
+      mapa.set(nome, () => bytes(texto));
+    }
+    return { clientId: 'delta', formatVersion: '1', parts: mapa };
+  };
+
+  it('o item órfão sobrevive à carga e volta quando o cabeçalho chega', async () => {
+    const { uso, orders } = ingest();
+
+    // Primeira carga: só itens. DL-2026-0099 não tem cabeçalho em lugar nenhum.
+    const primeira = await uso.execute(await partes(['items']));
+    assert.equal(primeira.ordersAccepted, 0);
+    assert.equal(primeira.stagedTotal, 4);
+
+    // Segunda carga: os cabeçalhos chegam. Antes desta tarefa os itens da
+    // primeira carga estavam perdidos e os pedidos entrariam vazios.
+    const segunda = await uso.execute(await partes(['orders']));
+    assert.equal(segunda.ordersAccepted, 3);
+
+    const p44 = await orders.findByExternalNumber('delta', 'DL-2026-0044');
+    assert.equal(p44?.items.length, 2, 'itens em espera não foram recuperados');
+    const linhas = p44?.items.map((i) => i.externalLine).sort((a, b) => a - b);
+    assert.deepEqual(linhas, [10, 20]);
+  });
+
+  it('o item cujo cabeçalho nunca chega continua esperando', async () => {
+    const { uso, staging } = ingest();
+    await uso.execute(await partes(['items']));
+    await uso.execute(await partes(['orders']));
+
+    // DL-2026-0099 não tem cabeçalho na amostra: continua em espera, sem
+    // virar pedido inventado nem ser descartado.
+    const ainda = await staging.takeFor('delta', 'DL-2026-0099');
+    assert.equal(ainda.length, 1);
+    assert.equal(ainda[0]?.item.material, 'EMB-500');
+  });
+
+  it('item de pedido que já existe atualiza, em vez de ir para espera', async () => {
+    const { uso, orders, staging } = ingest();
+    // Os dois lados juntos: os três pedidos entram completos.
+    await uso.execute(await partes(['orders', 'items']));
+
+    // Agora só a consulta de itens, como o Delta pode entregar. O adaptador
+    // não vê cabeçalho nenhum nesta carga e chamaria tudo de órfão; o caso de
+    // uso sabe que os pedidos já existem.
+    const segunda = await uso.execute(await partes(['items']));
+    assert.equal(segunda.stagedTotal, 1, 'só DL-2026-0099 deveria esperar');
+
+    const p44 = await orders.findByExternalNumber('delta', 'DL-2026-0044');
+    assert.equal(p44?.items.length, 2, 'itens do pedido existente se perderam');
+    assert.equal(
+      (await staging.takeFor('delta', 'DL-2026-0044')).length,
+      0,
+      'item de pedido existente foi parar na espera',
+    );
+  });
+
+  it('a carga desta vez manda: linha reenviada substitui a que esperava', async () => {
+    const { uso, orders, staging } = ingest();
+    await uso.execute(await partes(['items']));
+
+    // O cabeçalho chega junto com uma versão nova da linha 10.
+    const itensNovos = JSON.stringify({
+      items: [
+        {
+          purchase_order: 'DL-2026-0044',
+          created_at: '2026-09-20',
+          line: 10,
+          material: 'EMB-500',
+          description: 'Caixa papelão 40x30',
+          uom: 'UN',
+          quantity_ordered: 999,
+          quantity_received: 0,
+          unit_price: 3.75,
+        },
+      ],
+    });
+    const cabecalhos = await fixture('delta/orders.json');
+    await uso.execute({
+      clientId: 'delta',
+      formatVersion: '1',
+      parts: new Map([
+        ['orders', () => bytes(cabecalhos)],
+        ['items', () => bytes(itensNovos)],
+      ]),
+    });
+
+    const p44 = await orders.findByExternalNumber('delta', 'DL-2026-0044');
+    const linha10 = p44?.items.find((i) => i.externalLine === 10);
+    assert.equal(
+      linha10?.quantityOrdered,
+      '999.000000',
+      'venceu a versão velha',
+    );
+    // A linha 20, que só existia em espera, entrou junto.
+    assert.ok(
+      p44?.items.some((i) => i.externalLine === 20),
+      'linha que esperava não entrou',
+    );
+    assert.equal((await staging.takeFor('delta', 'DL-2026-0044')).length, 0);
   });
 });

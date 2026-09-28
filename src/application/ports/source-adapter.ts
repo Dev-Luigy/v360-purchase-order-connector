@@ -3,7 +3,7 @@ import type {
   ClientProfile,
   DeliveryFormat,
 } from '../../domain/client.js';
-import type { RejectedRecord, StagedRecord } from '../../domain/ingestion.js';
+import type { RejectedRecord, StagedItem } from '../../domain/ingestion.js';
 import type { NormalizedPurchaseOrder } from '../../domain/purchase-order.js';
 
 /** As fábricas permitem reabrir uma parte sem manter o conteúdo em memória. */
@@ -16,7 +16,7 @@ export interface SourcePayload {
 export interface AdapterBatch {
   readonly orders: readonly NormalizedPurchaseOrder[];
   readonly rejected: readonly RejectedRecord[];
-  readonly staged: readonly StagedRecord[];
+  readonly staged: readonly StagedItem[];
 }
 
 /** Traduz uma forma de entrega em lotes do contrato normalizado. */

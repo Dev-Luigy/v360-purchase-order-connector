@@ -4,7 +4,7 @@ import type {
   SourcePayload,
 } from '../../application/ports/source-adapter.js';
 import type { ClientProfile } from '../../domain/client.js';
-import type { RejectedRecord, StagedRecord } from '../../domain/ingestion.js';
+import type { RejectedRecord, StagedItem } from '../../domain/ingestion.js';
 import { maxItemsPerOrder } from '../../domain/limits.js';
 import type {
   NormalizedPurchaseOrder,
@@ -94,7 +94,7 @@ export class SplitJsonAdapter implements SourceAdapter {
       }
     }
 
-    const staged: StagedRecord[] = [];
+    const staged: StagedItem[] = [];
     if (temItens) {
       let index = 0;
       for await (const raw of streamArrayAtKey(
@@ -110,10 +110,15 @@ export class SplitJsonAdapter implements SourceAdapter {
             // partir do item significaria inventar fornecedor, situação e
             // data — e um pedido sem situação nunca poderia ser conferido,
             // porque a regra 2 depende dela (ADR-008).
+            // O item é normalizado agora, com o perfil em mãos: quem
+            // reconcilia depois é o caso de uso, que não conhece o formato
+            // do cliente. O cru fica para auditoria.
             staged.push({
               reference: numero,
+              externalNumber: numero,
               reason: 'cabecalho-ausente',
               raw: JSON.stringify(raw),
+              item: readItem(jsonFieldSource(raw), profile),
             });
           } else if (alvo.items.length >= maxItemsPerOrder) {
             alvo.overflow = true;

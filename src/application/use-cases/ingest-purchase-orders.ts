@@ -2,14 +2,21 @@ import { randomUUID } from 'node:crypto';
 
 import type { ClientProfiles } from '../ports/client-profiles.js';
 import type { PurchaseOrderRepository } from '../ports/purchase-order-repository.js';
+import type { StagingRepository } from '../ports/staging-repository.js';
 import type { SourceAdapter, SourcePayload } from '../ports/source-adapter.js';
 import type { ClientId, DeliveryFormat } from '../../domain/client.js';
 import type {
   IngestionReport,
   RejectedRecord,
+  StagedItem,
   StagedRecord,
 } from '../../domain/ingestion.js';
 import { maxReportedRecords } from '../../domain/limits.js';
+import type {
+  NormalizedPurchaseOrder,
+  NormalizedPurchaseOrderItem,
+  PurchaseOrder,
+} from '../../domain/purchase-order.js';
 
 /**
  * Carga de pedidos de um cliente.
@@ -26,6 +33,7 @@ export class IngestPurchaseOrders {
     private readonly profiles: ClientProfiles,
     private readonly adapters: ReadonlyMap<DeliveryFormat, SourceAdapter>,
     private readonly orders: PurchaseOrderRepository,
+    private readonly staging: StagingRepository,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -50,16 +58,17 @@ export class IngestPurchaseOrders {
 
     for await (const batch of adapter.read(payload, profile)) {
       rejected.addAll(batch.rejected);
-      staged.addAll(batch.staged);
 
       for (const snapshot of batch.orders) {
         try {
+          // O cabeçalho chegou: itens que esperavam por ele entram agora,
+          // sem pedir a carga de novo (ADR-008).
+          const completo = await this.reconcile(snapshot);
           // Transação por pedido, não por carga: é o que permite o resto
           // entrar quando um pedido falha na gravação (ADR-008).
-          const saved = await this.orders.replaceSnapshot(snapshot);
+          await this.orders.replaceSnapshot(completo);
           ordersAccepted += 1;
-          itemsAccepted += snapshot.items?.length ?? 0;
-          void saved;
+          itemsAccepted += completo.items?.length ?? 0;
         } catch (cause) {
           rejected.add({
             reference: `pedido ${snapshot.externalNumber}`,
@@ -67,6 +76,34 @@ export class IngestPurchaseOrders {
           });
         }
       }
+
+      // O adaptador só enxerga os cabeçalhos **desta** carga, então o que ele
+      // chama de órfão pode ser item de pedido que já existe no banco — o caso
+      // de mandar só a consulta de itens do Delta. Quem sabe disso é aqui.
+      const aindaOrfaos: StagedItem[] = [];
+      for (const candidato of batch.staged) {
+        const existente = await this.orders.findByExternalNumber(
+          payload.clientId,
+          candidato.externalNumber,
+        );
+        if (existente === null) {
+          aindaOrfaos.push(candidato);
+          staged.add(candidato);
+          continue;
+        }
+        try {
+          await this.orders.replaceSnapshot(
+            applyItem(existente, candidato.item),
+          );
+          itemsAccepted += 1;
+        } catch (cause) {
+          rejected.add({
+            reference: `item do pedido ${candidato.externalNumber}`,
+            reason: cause instanceof Error ? cause.message : String(cause),
+          });
+        }
+      }
+      await this.staging.stage(payload.clientId, aindaOrfaos);
     }
 
     return {
@@ -83,6 +120,61 @@ export class IngestPurchaseOrders {
       stagedTotal: staged.total,
     };
   }
+
+  /** Traz para o pedido os itens que esperavam pelo cabeçalho dele. */
+  private async reconcile(
+    snapshot: NormalizedPurchaseOrder,
+  ): Promise<NormalizedPurchaseOrder> {
+    const esperando = await this.staging.takeFor(
+      snapshot.clientId,
+      snapshot.externalNumber,
+    );
+    if (esperando.length === 0) return snapshot;
+
+    // Os itens desta carga mandam: se ela trouxe a linha, a versão em espera
+    // está velha. `items: null` significa que a carga não trouxe itens, e aí
+    // os que esperavam são tudo o que se sabe.
+    const desta = snapshot.items ?? [];
+    const linhas = new Set(desta.map((item) => item.externalLine));
+    const recuperados = esperando
+      .map((staged) => staged.item)
+      .filter((item) => !linhas.has(item.externalLine));
+
+    return { ...snapshot, items: [...desta, ...recuperados] };
+  }
+}
+
+/**
+ * Aplica um item avulso a um pedido que já existe, substituindo a linha de
+ * mesmo número. O retrato continua completo, que é o que `replaceSnapshot`
+ * espera receber.
+ */
+function applyItem(
+  existente: PurchaseOrder,
+  item: NormalizedPurchaseOrderItem,
+): NormalizedPurchaseOrder {
+  const outros = existente.items.filter(
+    (atual) => atual.externalLine !== item.externalLine,
+  );
+  return {
+    clientId: existente.clientId,
+    externalNumber: existente.externalNumber,
+    supplier: existente.supplier,
+    currency: existente.currency,
+    status: existente.status,
+    issuedOn: existente.issuedOn,
+    items: [...outros.map(semPersistencia), item],
+  };
+}
+
+/** Descarta o que a persistência acrescentou, deixando o item do contrato. */
+function semPersistencia(
+  item: PurchaseOrder['items'][number],
+): NormalizedPurchaseOrderItem {
+  const { id, quantityPending, ...contrato } = item;
+  void id;
+  void quantityPending;
+  return contrato;
 }
 
 /**
