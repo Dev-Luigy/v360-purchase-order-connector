@@ -39,7 +39,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado           |
 | P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                         |
 | P1-05     | Validar desafio e registrar marco parte-1                        | concluída                      | Claude      | 18/18 exigências verificadas no ar; tag depende de DOC-02                     |
-| P2-01     | Integrar Gama/Delta e documentar mudanças                        | aguardando                     | —           | P1-05                                                                         |
+| P2-01     | Integrar Gama/Delta e documentar mudanças                        | em andamento                   | Claude      | Parte 1 fechada e marcada; Gama (flat-json) e Delta (split-json)              |
 
 Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e dependências. Uma tarefa só pode ter um responsável de implementação por vez.
 
@@ -204,6 +204,14 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Evidência: [handoff ARCH-05](handoffs/ARCH-05-claude.md); `npm run check` verde; nada validado contra Grafana ou Prometheus reais, que não existem nesta máquina.
 - Escopo: registrar como a aplicação se conecta a Grafana e Prometheus, o consentimento de quem executa e a convenção de nomes e labels. Nenhuma dependência instalada, nenhum endpoint criado.
 - Dependências: nenhuma para o registro. A implementação depende de P1-01 e P1-03, porque os labels saem do contrato e dos adaptadores.
+
+## P2-01 — Gama e Delta
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `src/infrastructure/integrations/{flat-json-adapter,split-json-adapter,json-stream,record-mapping,client-profiles,adapter-registry}.ts`, `src/domain/client.ts` (campo de unidade da quantidade), `src/presentation/http/routes/ingestions.ts` (allowlist de partes), `docs/API.md`, `README.md`, `tests/**`, `docs/TASKS.md`, `docs/STATUS.md`, `docs/handoffs/P2-01-claude.md`.
+- Escopo: Gama (`flat-json`: tudo achatado, timestamp Unix, centavos, situação numérica, quantidade em unidade de compra) e Delta (`split-json`: duas consultas independentes ligadas por `purchase_order`, com staging para item sem cabeçalho). Registrar no README o que foi só adicionar e o que exigiu mexer no que já existia, inclusive migração — o enunciado cobra isso explicitamente.
+- Dependências: Parte 1 concluída e marcada com a tag `parte-1`.
 
 ## P1-01 — contrato normalizado e decisões de negócio
 
