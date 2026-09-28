@@ -13,7 +13,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | ARCH-04   | Registrar escolha do ORM Prisma 7                                | concluída                      | Codex       | ADR-001, ADR-002 e ADR-003; documentação apenas                             |
 | ARCH-05   | Registrar desenho de observabilidade (Grafana/Prometheus)        | aceita, implementação diferida | Claude      | Pedido do usuário; decisão apenas, sem dependência instalada                |
 | ENV-02    | Instalar ferramentas do sistema                                  | aguardando                     | Usuário     | docs/SETUP.md                                                               |
-| ENV-03    | Validar Compose, conexão e reinício do banco                     | aguardando                     | —           | ENV-02; destrava a validação de P1-02 e a suíte de integração               |
+| ENV-03    | Validar Compose, conexão e reinício do banco                     | em andamento                   | Claude      | Autorizado pelo usuário; valida P1-02 e P1-04 contra PostgreSQL real        |
 | ENV-04    | Verificar portas e isolar o Compose antes de subir               | concluída                      | Claude      | Pedido do usuário; preflight, nome fixo do projeto e portas por env         |
 | REPO-01   | Inicializar Git, commit base e fluxo de branches                 | concluída                      | Claude      | Commit base autorizado pelo usuário; docs/GIT_WORKFLOW.md                   |
 | REVIEW-01 | Revisar base e plano técnico                                     | concluída                      | Codex       | Limites de P1-03 e HTTP testados; achados no handoff                        |
@@ -338,3 +338,12 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Decisões do usuário nesta tarefa: manter o invólucro do `Decimal`; adotar `cpf-cnpj-validator` com o checksum como política por perfil; instalar provider Zod, multipart, rate-limit e fast-check.
 - Dependências: P1-02 e P1-03. A validação contra PostgreSQL real continua sendo ENV-03.
 - Evidência: [handoff P1-04](handoffs/P1-04-claude.md); `npm run check` verde com 169 testes; cobertura 94,69% de linhas e 89,50% de branches. As seis rotas existem e são exercitadas por `inject`, com repositório em memória — **nada rodou contra PostgreSQL**.
+
+## ENV-03 — Compose, banco real e suíte de integração
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `tests/integration/**`, `package.json` (script da suíte), `compose.yaml` e `.env.example` se a validação exigir, `docs/TASKS.md`, `docs/STATUS.md`, `docs/handoffs/ENV-03-claude.md`.
+- Escopo: subir o Compose, aplicar a migração, escrever a suíte que prova o que nenhum teste unitário alcança — transação, advisory lock em carga concorrente, `CHECK`, `RESTRICT`, paginação por cursor, persistência após reinício do banco — e medir o plano das consultas quentes com `EXPLAIN`.
+- Autorização: o usuário liberou explicitamente subir serviço e mexer no banco, o que o `AGENTS.md` reservava a ele.
+- Dependências: P1-02 e P1-04. Fecha R07-11 e destrava P1-05.
