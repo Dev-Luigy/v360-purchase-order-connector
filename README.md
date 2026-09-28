@@ -96,7 +96,7 @@ Medido, não suposto: 50.000 pedidos em 500 páginas, **zero repetidos**, e a ú
 
 **Um adaptador por forma de entrega, não por cliente.** São quatro formas (`nested-json`, `paired-csv`, `flat-json`, `split-json`) e N clientes. O que é estrutura é código; o que é rótulo — caminho do campo, formato de data e número, máscara de CNPJ, delimitador, encoding, vocabulário de situação — é configuração do perfil do cliente. Cliente novo numa forma conhecida é um perfil novo, sem código novo.
 
-**Nenhum valor monetário passa por ponto flutuante.** `unit_price` do Alfa é número JSON (`45.9`) e `JSON.parse` produz float; o JSON é lido em fluxo com os números preservados **como texto**, e a aritmética é decimal exata, persistida em `NUMERIC(30,6)` ([ADR-007](docs/decisions/ADR-007-decimal-e-unidade.md)). Quantidade e preço são convertidos à unidade de consumo na entrada, porque as notas dos fornecedores sempre informam unidades, nunca caixas.
+**Nenhum valor monetário passa por ponto flutuante.** `unit_price` do Alfa é número JSON (`45.9`) e `JSON.parse` produz float; o JSON é lido em fluxo com os números preservados **como texto**, e a aritmética é decimal exata, persistida em `NUMERIC(30,6)` ([ADR-007](docs/decisions/ADR-007-decimal-e-unidade.md)). A **quantidade** é convertida à unidade de consumo na entrada, porque as notas dos fornecedores sempre informam unidades, nunca caixas. O **preço não é**: ele fica por unidade de compra, com o fator guardado em cada item. Converter o preço produziria dízima — no Gama, R$ 100,00 por caixa de fator 3 dá R$ 33,3333… por unidade — e arredondá-lo na gravação embutiria erro permanente. O valor esperado sai de `quantidade ÷ fator × preço`, arredondado uma única vez no fim.
 
 ## Por que PostgreSQL
 
