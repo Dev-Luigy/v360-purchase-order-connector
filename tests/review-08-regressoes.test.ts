@@ -115,14 +115,14 @@ test('R08-02: o formato do CNPJ é exclusivo nos dois sentidos', () => {
   // perfil prometia uma regra e cumpria metade dela.
   const mascarado = '12.345.678/0001-90';
   const limpo = '12345678000190';
-  assert.equal(parseTaxId(mascarado, 'c', true), limpo);
-  assert.equal(parseTaxId(limpo, 'c', false), limpo);
+  assert.equal(parseTaxId(mascarado, 'c', true, false), limpo);
+  assert.equal(parseTaxId(limpo, 'c', false, false), limpo);
   assert.throws(
-    () => parseTaxId(limpo, 'c', true),
+    () => parseTaxId(limpo, 'c', true, false),
     /declara formato mascarado/,
   );
   assert.throws(
-    () => parseTaxId(mascarado, 'c', false),
+    () => parseTaxId(mascarado, 'c', false, false),
     /declara formato limpo/,
   );
 });
@@ -150,4 +150,24 @@ test('R08-02: o perfil do Beta exige a máscara que declara', async () => {
   assert.deepEqual(orders, []);
   assert.equal(rejected.length, 1);
   assert.match(rejected[0]?.reason ?? '', /formato mascarado/);
+});
+
+test('ADR-013: o checksum do CNPJ é política declarada por perfil', () => {
+  // Nenhum dos sete CNPJs do enunciado passa no dígito verificador: são
+  // números fictícios. Ligar a validação para eles rejeitaria toda a amostra,
+  // então ela é do perfil, desligada para os clientes do desafio.
+  const doEnunciado = '12.345.678/0001-90';
+  assert.equal(parseTaxId(doEnunciado, 'c', true, false), '12345678000190');
+  assert.throws(
+    () => parseTaxId(doEnunciado, 'c', true, true),
+    /dígito verificador inválido/,
+  );
+  // E um CNPJ de dígito correto passa nas duas políticas.
+  const valido = '12.345.678/0001-95';
+  assert.equal(parseTaxId(valido, 'c', true, true), '12345678000195');
+  assert.equal(
+    betaProfile.validatesTaxIdChecksum,
+    false,
+    'os clientes do desafio usam dado fictício',
+  );
 });

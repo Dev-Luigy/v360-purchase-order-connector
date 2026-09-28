@@ -4,6 +4,8 @@ import type {
   NumberFormat,
   PurchaseOrderStatus,
 } from '../../domain/client.js';
+import { cnpj } from 'cpf-cnpj-validator';
+
 import { Decimal } from '../../domain/decimal.js';
 import type { DecimalText, IsoDate, TaxId } from '../../domain/primitives.js';
 import { isCalendarDate } from '../../domain/schemas.js';
@@ -183,9 +185,15 @@ export function parseInteger(raw: string, field: string): number {
  * `abc12.345.678/0001-90xyz` seria leniência em campo de identidade
  * (REVIEW-01, achado 1). Dígito verificador continua sem conferência, porque o
  * dado é do ERP do cliente e recusar por checksum criaria rejeição que ninguém
- * consegue corrigir do nosso lado.
+ * consegue corrigir do nosso lado — a menos que o perfil declare
+ * `validatesTaxIdChecksum`, que é quando o cliente tem dado real (ADR-013).
  */
-export function parseTaxId(raw: string, field: string, masked: boolean): TaxId {
+export function parseTaxId(
+  raw: string,
+  field: string,
+  masked: boolean,
+  validatesChecksum: boolean,
+): TaxId {
   const text = raw.trim();
   const aceito = masked ? brazilianTaxIdMask : cleanTaxId;
   if (!aceito.test(text)) {
@@ -201,7 +209,15 @@ export function parseTaxId(raw: string, field: string, masked: boolean): TaxId {
     }
     throw new FieldError(field, reason);
   }
-  return text.replace(/\D/g, '');
+
+  const digits = text.replace(/\D/g, '');
+  // Dígito verificador só quando o perfil declara. Os CNPJs do enunciado são
+  // fictícios e nenhum passa; a validação existe para cliente com dado real
+  // (ADR-013).
+  if (validatesChecksum && !cnpj.isValid(digits)) {
+    throw new FieldError(field, `CNPJ com dígito verificador inválido: ${raw}`);
+  }
+  return digits;
 }
 
 /**

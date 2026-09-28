@@ -26,6 +26,8 @@ Consultar este índice apenas quando a tarefa envolver contratos, schema, depend
 
 - [ADR-012 — Notação numérica por natureza do campo, e pool por caminho](ADR-012-notacao-por-campo.md): aceita por autorização do usuário; desbloqueia o Gama e separa o caminho de carga do de requisição. Afeta FIX-04, P1-04 e P2-01.
 
+- [ADR-013 — Checksum de CNPJ por perfil, e bibliotecas da borda HTTP](ADR-013-checksum-e-bibliotecas-p1-04.md): aceita por escolha do usuário; mantém o invólucro do `Decimal`, adota `cpf-cnpj-validator` com checksum por perfil e instala o provider Zod, multipart, rate-limit e fast-check. Afeta P1-04.
+
 ## Como registrar
 
 Antes do trabalho dependente, reservar no quadro o arquivo `ADR-NNN-titulo.md` e este índice. Adicionar aqui um link com título, estado e tarefas afetadas. Usar o próximo número livre.

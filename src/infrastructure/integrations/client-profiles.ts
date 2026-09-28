@@ -31,6 +31,8 @@ export const alfaProfile: ClientProfile = deepFreeze({
   dateFormat: 'iso-date',
   numberFormat: { quantity: 'plain', money: 'plain' },
   taxIdMasked: false,
+  // Os CNPJs do enunciado são fictícios e nenhum passa no checksum (ADR-013).
+  validatesTaxIdChecksum: false,
   assumedCurrency: null,
   statusVocabulary: {
     OPEN: 'aberto',
@@ -72,6 +74,8 @@ export const betaProfile: ClientProfile = deepFreeze({
   dateFormat: 'br-date',
   numberFormat: { quantity: 'br', money: 'br' },
   taxIdMasked: true,
+  // Os CNPJs do enunciado são fictícios e nenhum passa no checksum (ADR-013).
+  validatesTaxIdChecksum: false,
   assumedCurrency: null,
   statusVocabulary: {
     'EM ABERTO': 'aberto',
@@ -161,6 +165,7 @@ const profileSchema = z
       money: z.enum(['plain', 'br', 'cents']),
     }),
     taxIdMasked: z.boolean(),
+    validatesTaxIdChecksum: z.boolean(),
     assumedCurrency: currencySchema.nullable(),
     statusVocabulary: z
       .record(z.string().min(1), purchaseOrderStatusSchema)

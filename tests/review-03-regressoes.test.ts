@@ -84,19 +84,25 @@ test('R03/3: o domínio sozinho não aprova CNPJ contaminado', () => {
 
 test('R03/4: máscara de CNPJ é tudo ou nada', () => {
   assert.throws(
-    () => parseTaxId('12.345678/0001-90', 'c', true),
+    () => parseTaxId('12.345678/0001-90', 'c', true, false),
     /fora do formato/,
   );
   assert.throws(
-    () => parseTaxId('12345678/0001-90', 'c', true),
+    () => parseTaxId('12345678/0001-90', 'c', true, false),
     /fora do formato/,
   );
   assert.throws(
-    () => parseTaxId('12.345.678/000190', 'c', true),
+    () => parseTaxId('12.345.678/000190', 'c', true, false),
     /fora do formato/,
   );
-  assert.equal(parseTaxId('12.345.678/0001-90', 'c', true), '12345678000190');
-  assert.equal(parseTaxId('12345678000190', 'c', false), '12345678000190');
+  assert.equal(
+    parseTaxId('12.345.678/0001-90', 'c', true, false),
+    '12345678000190',
+  );
+  assert.equal(
+    parseTaxId('12345678000190', 'c', false, false),
+    '12345678000190',
+  );
 });
 
 test('R03/5: instante ISO também é verificado no calendário', () => {

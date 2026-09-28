@@ -107,6 +107,7 @@ test('cliente novo em forma conhecida entra só com perfil, sem código novo', a
     dateFormat: 'unix-seconds',
     numberFormat: { quantity: 'plain', money: 'cents' },
     taxIdMasked: false,
+    validatesTaxIdChecksum: false,
     assumedCurrency: 'BRL',
     statusVocabulary: { '1': 'aberto', '2': 'encerrado', '3': 'bloqueado' },
     csv: null,

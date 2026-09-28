@@ -56,6 +56,7 @@ export function readOrderHeader(
         source.text(map.supplierTaxId),
         map.supplierTaxId,
         profile.taxIdMasked,
+        profile.validatesTaxIdChecksum,
       ),
       name: source.text(map.supplierName).trim(),
     },
