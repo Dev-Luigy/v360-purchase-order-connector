@@ -1,6 +1,6 @@
 # Estado do projeto
 
-Atualizado por Claude em 2026-09-28, após P1-02.
+Atualizado por Claude em 2026-09-28, após FIX-06.
 
 ## Implementado
 
@@ -17,7 +17,8 @@ Atualizado por Claude em 2026-09-28, após P1-02.
 
 ## Evidências e limitações
 
-- `npm run check` passou após P1-02: tipagem, lint com tipo em `src`, formatação, 109 casos de teste e build.
+- `npm run check` passou após FIX-06: geração do cliente, formato do schema Prisma, tipagem, lint com tipo em `src`, formatação, 114 casos de teste e build.
+- Imagem de runtime construída e inspecionada sem executar container: sem CLI do Prisma e sem `mysql2`, que entrava por peer opcional e trazia CVE de credencial para uma aplicação que só fala PostgreSQL.
 - Duas mil combinações aritméticas inteiras comparadas com `BigInt` passaram; `/health` e `/ready` foram exercitados via `inject` nos limites atuais.
 - Três revisões registradas — [REVIEW-01](handoffs/REVIEW-01-codex.md), [REVIEW-02](handoffs/REVIEW-02-claude.md) e [REVIEW-03](handoffs/REVIEW-03-codex.md) — e os defeitos inequívocos das três estão fechados em [FIX-01](handoffs/FIX-01-claude.md), [FIX-02](handoffs/FIX-02-claude.md) e [FIX-03](handoffs/FIX-03-claude.md), cada um com regressão. Nenhum achado era falso positivo; dois defeitos adicionais apareceram durante as correções.
 - Quatro pontos seguem abertos **por exigirem decisão**, não por falta de trabalho: notação por campo no perfil (bloqueia a Parte 2), teto de memória do Beta, `query_timeout` na ingestão e lint type-aware. Detalhe em [FIX-03](handoffs/FIX-03-claude.md).

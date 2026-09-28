@@ -37,7 +37,11 @@ export class PrismaConferenceRepository implements ConferenceRepository {
         outcome: record.outcome,
         invoice: record.invoice as unknown as Prisma.InputJsonValue,
         divergences: {
-          create: record.divergences.map((divergence) => ({
+          // A posição vem do array que o domínio produziu: as regras de
+          // ADR-009 avaliam em ordem, e ler de volta por UUID não reproduz
+          // isso (REVIEW-05, achado 9).
+          create: record.divergences.map((divergence, position) => ({
+            position,
             code: divergence.code,
             field: divergence.field,
             invoiceLineIndex: divergence.invoiceLineIndex,
@@ -47,7 +51,7 @@ export class PrismaConferenceRepository implements ConferenceRepository {
           })),
         },
       },
-      include: { divergences: { orderBy: { id: 'asc' } } },
+      include: { divergences: { orderBy: { position: 'asc' } } },
     });
     return toConferenceRecord(created);
   }
@@ -75,7 +79,7 @@ export class PrismaConferenceRepository implements ConferenceRepository {
       },
       orderBy: { id: 'asc' },
       take: page.limit + 1,
-      include: { divergences: { orderBy: { id: 'asc' } } },
+      include: { divergences: { orderBy: { position: 'asc' } } },
     });
 
     const visible = rows.slice(0, page.limit);

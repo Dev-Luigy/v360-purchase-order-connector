@@ -26,9 +26,18 @@ export class CursorError extends Error {
   }
 }
 
+/**
+ * Formato do cursor. A ADR-010 especifica `{ v, after, f }`, e o `v` não é
+ * enfeite: sem versão, mudar o formato no futuro não tem caminho explícito —
+ * cursor antigo viraria erro de estrutura, ou pior, seria lido errado.
+ */
+export const cursorVersion = 1;
+
 interface CursorPayload {
+  /** Versão do formato. */
+  readonly v: number;
   /** Último identificador entregue na página anterior. */
-  readonly a: string;
+  readonly after: string;
   /** Impressão digital dos filtros. */
   readonly f: string;
 }
@@ -59,7 +68,11 @@ export function fingerprintOf(
 }
 
 export function encodeCursor(after: string, fingerprint: string): string {
-  const payload: CursorPayload = { a: after, f: fingerprint };
+  const payload: CursorPayload = {
+    v: cursorVersion,
+    after,
+    f: fingerprint,
+  };
   return Buffer.from(JSON.stringify(payload), 'utf-8').toString('base64url');
 }
 
@@ -86,14 +99,20 @@ export function decodeCursor(cursor: string, fingerprint: string): string {
   if (
     payload === null ||
     typeof payload !== 'object' ||
-    typeof (payload as CursorPayload).a !== 'string' ||
+    typeof (payload as CursorPayload).v !== 'number' ||
+    typeof (payload as CursorPayload).after !== 'string' ||
     typeof (payload as CursorPayload).f !== 'string'
   ) {
     throw new CursorError('estrutura inesperada');
   }
 
-  const { a, f } = payload as CursorPayload;
-  if (!uuid.test(a)) {
+  const { v, after, f } = payload as CursorPayload;
+  if (v !== cursorVersion) {
+    throw new CursorError(
+      `versão ${String(v)} desconhecida; esperada ${String(cursorVersion)}`,
+    );
+  }
+  if (!uuid.test(after)) {
     throw new CursorError('posição não é um identificador válido');
   }
   if (f !== fingerprint) {
@@ -101,5 +120,5 @@ export function decodeCursor(cursor: string, fingerprint: string): string {
       'os filtros mudaram desde a página anterior; recomece a varredura',
     );
   }
-  return a;
+  return after;
 }

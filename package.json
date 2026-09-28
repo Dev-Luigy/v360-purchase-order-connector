@@ -15,7 +15,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run build",
+    "check": "npm run generate && npm run schema:check && npm run typecheck && npm run lint && npm run format:check && npm test && npm run build",
     "preflight": "node scripts/preflight-docker.mjs",
     "preup": "npm run preflight",
     "up": "docker compose up --build",
@@ -23,9 +23,9 @@
     "db:up": "docker compose up -d db",
     "db:down": "docker compose down",
     "generate": "prisma generate",
-    "pretypecheck": "npm run generate",
     "prebuild": "npm run generate",
-    "pretest": "npm run generate"
+    "pretest": "npm run generate",
+    "schema:check": "prisma format --check"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",

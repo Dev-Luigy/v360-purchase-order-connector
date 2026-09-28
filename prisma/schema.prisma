@@ -59,7 +59,7 @@ model PurchaseOrder {
   issuedOn      DateTime            @map("issued_on") @db.Date
 
   /// Cresce a cada carga aceita. Toda conferência guarda a versão que conferiu.
-  ingestionVersion Int      @map("ingestion_version") @default(1)
+  ingestionVersion Int      @default(1) @map("ingestion_version")
   ingestedAt       DateTime @map("ingested_at") @db.Timestamptz(3)
 
   /// Verdadeiro quando algum item ainda tem saldo. Persistido e indexado
@@ -69,7 +69,15 @@ model PurchaseOrder {
   items       PurchaseOrderItem[]
   conferences Conference[]
 
+  // Índices derivados das consultas reais de `list`, que sempre ordena por
+  // `id` (ADR-010). `(clientId, status, id)` sozinho não serve para "cliente
+  // sem status": o status no meio impede a ordenação direta por `id`.
+  //
+  // Caminhos não indexados, de propósito: filtrar só por situação, ou só por
+  // fornecedor com saldo, sobre todos os clientes. Não são a varredura que o
+  // enunciado descreve, e cada índice custa escrita em toda ingestão.
   @@unique([clientId, externalNumber])
+  @@index([clientId, id])
   @@index([clientId, status, id])
   @@index([supplierTaxId, id])
   @@map("purchase_order")
@@ -86,7 +94,7 @@ model PurchaseOrderItem {
 
   /// Unidade de compra. O preço é sempre por ela; a nota fala em unidade de
   /// consumo, e o fator faz a ponte (ADR-007).
-  purchaseUnit     String @map("purchase_unit") @db.VarChar(16)
+  purchaseUnit     String  @map("purchase_unit") @db.VarChar(16)
   conversionFactor Decimal @map("conversion_factor") @db.Decimal(30, 6)
 
   /// Escala 6, precisão 30: o contrato admite até 24 dígitos inteiros.
@@ -123,10 +131,16 @@ model Conference {
   /// serve para explicar o histórico, então JSONB basta.
   invoice Json @db.JsonB
 
-  purchaseOrder PurchaseOrder          @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  /// `Restrict`, não `Cascade`: o histórico de conferência é imutável por
+  /// decisão de negócio (ADR-009), e apagar um pedido não pode levar junto o
+  /// registro do que já foi conferido contra ele.
+  purchaseOrder PurchaseOrder          @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
   divergences   ConferenceDivergence[]
 
-  @@index([clientId, checkedAt, id])
+  // Ordenação é por `id`; o recorte por data filtra e depois ordena. Um cursor
+  // composto `(checkedAt, id)` é a pendência já registrada em ADR-010.
+  @@index([clientId, id])
+  @@index([checkedAt])
   @@index([purchaseOrderId])
   @@map("conference")
 }
@@ -134,10 +148,16 @@ model Conference {
 /// Tabela própria, e não um campo JSON, porque o relatório do requisito 3 conta
 /// ocorrências por código e isso precisa de índice (ADR-009).
 model ConferenceDivergence {
-  id           String         @id @default(uuid(7)) @db.Uuid
-  conferenceId String         @map("conference_id") @db.Uuid
-  code         DivergenceCode
-  field        String         @db.VarChar(128)
+  id           String @id @default(uuid(7)) @db.Uuid
+  conferenceId String @map("conference_id") @db.Uuid
+
+  /// Posição na lista que o domínio produziu. As regras de ADR-009 avaliam em
+  /// ordem, e essa ordem é informação: ler de volta ordenando por UUID não a
+  /// reproduz, porque v7 só garante ordem entre milissegundos diferentes.
+  position Int
+
+  code  DivergenceCode
+  field String         @db.VarChar(128)
 
   /// Índice da linha da nota; nulo quando a divergência é do cabeçalho.
   invoiceLineIndex  Int?    @map("invoice_line_index")
@@ -147,7 +167,7 @@ model ConferenceDivergence {
 
   conference Conference @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
 
-  @@index([conferenceId])
+  @@unique([conferenceId, position])
   @@index([code])
   @@map("conference_divergence")
 }

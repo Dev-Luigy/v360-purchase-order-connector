@@ -62,6 +62,7 @@ CREATE TABLE "conference" (
 CREATE TABLE "conference_divergence" (
     "id" UUID NOT NULL,
     "conference_id" UUID NOT NULL,
+    "position" INTEGER NOT NULL,
     "code" "divergence_code" NOT NULL,
     "field" VARCHAR(128) NOT NULL,
     "invoice_line_index" INTEGER,
@@ -71,6 +72,9 @@ CREATE TABLE "conference_divergence" (
 
     CONSTRAINT "conference_divergence_pkey" PRIMARY KEY ("id")
 );
+
+-- CreateIndex
+CREATE INDEX "purchase_order_client_id_id_idx" ON "purchase_order"("client_id", "id");
 
 -- CreateIndex
 CREATE INDEX "purchase_order_client_id_status_id_idx" ON "purchase_order"("client_id", "status", "id");
@@ -88,40 +92,77 @@ CREATE INDEX "purchase_order_item_purchase_order_id_material_idx" ON "purchase_o
 CREATE UNIQUE INDEX "purchase_order_item_purchase_order_id_external_line_key" ON "purchase_order_item"("purchase_order_id", "external_line");
 
 -- CreateIndex
-CREATE INDEX "conference_client_id_checked_at_id_idx" ON "conference"("client_id", "checked_at", "id");
+CREATE INDEX "conference_client_id_id_idx" ON "conference"("client_id", "id");
+
+-- CreateIndex
+CREATE INDEX "conference_checked_at_idx" ON "conference"("checked_at");
 
 -- CreateIndex
 CREATE INDEX "conference_purchase_order_id_idx" ON "conference"("purchase_order_id");
 
 -- CreateIndex
-CREATE INDEX "conference_divergence_conference_id_idx" ON "conference_divergence"("conference_id");
+CREATE INDEX "conference_divergence_code_idx" ON "conference_divergence"("code");
 
 -- CreateIndex
-CREATE INDEX "conference_divergence_code_idx" ON "conference_divergence"("code");
+CREATE UNIQUE INDEX "conference_divergence_conference_id_position_key" ON "conference_divergence"("conference_id", "position");
 
 -- AddForeignKey
 ALTER TABLE "purchase_order_item" ADD CONSTRAINT "purchase_order_item_purchase_order_id_fkey" FOREIGN KEY ("purchase_order_id") REFERENCES "purchase_order"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "conference" ADD CONSTRAINT "conference_purchase_order_id_fkey" FOREIGN KEY ("purchase_order_id") REFERENCES "purchase_order"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "conference" ADD CONSTRAINT "conference_purchase_order_id_fkey" FOREIGN KEY ("purchase_order_id") REFERENCES "purchase_order"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "conference_divergence" ADD CONSTRAINT "conference_divergence_conference_id_fkey" FOREIGN KEY ("conference_id") REFERENCES "conference"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- Índices parciais escritos à mão: o schema do Prisma não declara `WHERE`.
+-- ---------------------------------------------------------------------------
+-- SQL escrito à mão. O schema do Prisma não declara índice parcial nem CHECK.
+-- ---------------------------------------------------------------------------
+
+-- Índices parciais do filtro "apenas os que ainda têm algo a receber", que é a
+-- consulta mais quente do requisito 1: varredura de madrugada sobre dezenas de
+-- milhares de pedidos em aberto. Como `has_pending_balance` é mantido na
+-- ingestão (ADR-006), o índice cobre só as linhas que interessam e encolhe com
+-- o tempo, em vez de crescer junto com o histórico de pedidos encerrados.
 --
--- O filtro "apenas os que ainda têm algo a receber" é a consulta mais quente do
--- requisito 1, varrida de madrugada sobre dezenas de milhares de pedidos em
--- aberto. Como `has_pending_balance` é mantido na ingestão (ADR-006), o índice
--- parcial cobre só as linhas que interessam e encolhe com o tempo, em vez de
--- crescer junto com o histórico de pedidos encerrados (REVIEW-02, achado 3).
---
--- O `id` na segunda posição é o cursor de ADR-010: com UUID v7 ele é ordenável
--- no tempo, então a paginação avança pelo próprio índice, sem ordenação extra.
+-- O `id` ao final é o cursor de ADR-010: com UUID v7 ele é ordenável no tempo,
+-- então a paginação avança pelo próprio índice, sem ordenação extra.
 CREATE INDEX "purchase_order_pending_by_client_idx"
   ON "purchase_order" ("client_id", "id")
   WHERE "has_pending_balance";
 
-CREATE INDEX "purchase_order_pending_by_supplier_idx"
-  ON "purchase_order" ("supplier_tax_id", "id")
+-- Saldo pendente sem recorte por cliente: a plataforma pode varrer todos.
+CREATE INDEX "purchase_order_pending_idx"
+  ON "purchase_order" ("id")
   WHERE "has_pending_balance";
+
+-- Invariantes que o banco consegue garantir sozinho, por linha. A aplicação já
+-- os valida (ADR-011), mas validação só na aplicação some com um `psql` ou com
+-- um bug de repositório (REVIEW-05, achado 7).
+ALTER TABLE "purchase_order"
+  ADD CONSTRAINT "purchase_order_ingestion_version_check"
+    CHECK ("ingestion_version" >= 1),
+  ADD CONSTRAINT "purchase_order_supplier_tax_id_check"
+    CHECK ("supplier_tax_id" ~ '^[0-9]{14}$'),
+  ADD CONSTRAINT "purchase_order_currency_check"
+    CHECK ("currency" ~ '^[A-Z]{3}$');
+
+ALTER TABLE "purchase_order_item"
+  -- Fator zero fazia a conferência dividir por zero (ADR-007).
+  ADD CONSTRAINT "purchase_order_item_conversion_factor_check"
+    CHECK ("conversion_factor" > 0),
+  ADD CONSTRAINT "purchase_order_item_quantity_ordered_check"
+    CHECK ("quantity_ordered" >= 0),
+  ADD CONSTRAINT "purchase_order_item_quantity_received_check"
+    CHECK ("quantity_received" >= 0),
+  ADD CONSTRAINT "purchase_order_item_unit_price_check"
+    CHECK ("unit_price" >= 0),
+  -- O saldo é derivado, e derivado que pode divergir da origem é erro esperando
+  -- acontecer. Recebimento acima do pedido continua válido: dá saldo negativo,
+  -- que é informação real e não é o que esta regra proíbe.
+  ADD CONSTRAINT "purchase_order_item_quantity_pending_check"
+    CHECK ("quantity_pending" = "quantity_ordered" - "quantity_received");
+
+ALTER TABLE "conference_divergence"
+  ADD CONSTRAINT "conference_divergence_position_check"
+    CHECK ("position" >= 0);
