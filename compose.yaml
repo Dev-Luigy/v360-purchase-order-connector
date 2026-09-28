@@ -3,8 +3,28 @@
 name: v360-purchase-order-connector
 
 services:
+  # Migração é etapa própria, executada antes da API subir. Sem ela,
+  # `docker compose up` entregava serviço e banco vazio: o avaliador recebia
+  # 200 em /ready e 500 em todo endpoint de negócio (REVIEW-02, achado 1).
+  # A API nunca cria nem altera schema no start.
+  migrate:
+    build:
+      context: .
+      target: migrate
+    environment:
+      DATABASE_URL: postgresql://v360:v360@db:5432/v360
+    depends_on:
+      db:
+        condition: service_healthy
+    # Não verificado contra container real: ENV-03. Se o CLI precisar de
+    # diretório gravável, é aqui que aparece.
+    user: node
+    restart: 'no'
+
   api:
-    build: .
+    build:
+      context: .
+      target: runtime
     ports:
       - '127.0.0.1:${API_PORT:-3000}:3000'
     environment:
@@ -16,6 +36,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     init: true
     healthcheck:
       test:
