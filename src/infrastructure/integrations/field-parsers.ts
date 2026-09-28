@@ -17,15 +17,16 @@ const hundred = Decimal.parse('100');
  */
 const brazilianNumber = /^[+-]?(?:\d{1,3}(?:\.\d{3})*|\d+)(?:,\d+)?$/;
 
-/**
- * CNPJ limpo, ou com a máscara brasileira completa. Tudo ou nada: com a
- * pontuação opcional campo a campo, `12.345678/0001-90` passava, o que não é
- * nem uma coisa nem outra e contradizia este comentário (REVIEW-03, 4).
- */
 /** CNPJ sem nenhuma pontuação. */
 const cleanTaxId = /^\d{14}$/;
 
-const maskedTaxId = /^(?:\d{14}|\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})$/;
+/**
+ * Máscara brasileira completa. Tudo ou nada: com a pontuação opcional campo a
+ * campo, `12.345678/0001-90` passava, o que não é nem uma coisa nem outra
+ * (REVIEW-01, achado 4). E sem a alternativa de catorze dígitos limpos, porque
+ * um perfil que declara máscara precisa exigi-la (REVIEW-08, R08-02).
+ */
+const brazilianTaxIdMask = /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/;
 
 /**
  * Tradutores de notação, um por rótulo declarado no perfil. Todos recusam o
@@ -168,10 +169,15 @@ export function parseInteger(raw: string, field: string): number {
  * CNPJ sem máscara e com 14 dígitos.
  *
  * `masked` diz se o cliente entrega com pontuação, e vem do `taxIdMasked` do
- * perfil. Aceitar as duas formas de todo mundo fazia o campo do perfil
- * prometer uma regra que ninguém cumpria (REVIEW-07, R07-06): agora ele decide
- * o que é aceito, e uma mudança de formato no ERP do cliente vira rejeição em
- * vez de passar despercebida.
+ * perfil. O campo é **exclusivo nos dois sentidos**: `true` exige a máscara
+ * completa e `false` exige a forma limpa. Aceitar as duas formas de todo mundo
+ * fazia o perfil prometer uma regra que ninguém cumpria (REVIEW-07, R07-06), e
+ * aceitar a forma limpa num perfil mascarado deixava a mesma promessa pela
+ * metade (REVIEW-08, R08-02). Mudança de formato no ERP do cliente vira
+ * rejeição, que é o aviso de que o perfil precisa de versão nova.
+ *
+ * Sem valor padrão de propósito: quem chama declara o formato, e um padrão
+ * implícito é exatamente o que produz leniência por descuido.
  *
  * Em nenhum dos dois casos se apaga caractere qualquer: aceitar
  * `abc12.345.678/0001-90xyz` seria leniência em campo de identidade
@@ -179,19 +185,21 @@ export function parseInteger(raw: string, field: string): number {
  * dado é do ERP do cliente e recusar por checksum criaria rejeição que ninguém
  * consegue corrigir do nosso lado.
  */
-export function parseTaxId(raw: string, field: string, masked = true): TaxId {
+export function parseTaxId(raw: string, field: string, masked: boolean): TaxId {
   const text = raw.trim();
-  const aceito = masked ? maskedTaxId : cleanTaxId;
+  const aceito = masked ? brazilianTaxIdMask : cleanTaxId;
   if (!aceito.test(text)) {
-    // Duas causas diferentes merecem duas mensagens: valor torto é um
-    // problema, e formato certo para o cliente errado é outro.
+    // Três causas diferentes merecem três mensagens: valor torto é um
+    // problema, e formato certo para o cliente errado é outro, nos dois lados.
     const comPontuacao = /\D/.test(text);
-    throw new FieldError(
-      field,
-      !masked && comPontuacao
-        ? `CNPJ com máscara, mas o perfil do cliente declara formato limpo: ${raw}`
-        : `CNPJ fora do formato esperado: ${raw}`,
-    );
+    const soDigitos = cleanTaxId.test(text);
+    let reason = `CNPJ fora do formato esperado: ${raw}`;
+    if (!masked && comPontuacao) {
+      reason = `CNPJ com máscara, mas o perfil do cliente declara formato limpo: ${raw}`;
+    } else if (masked && soDigitos) {
+      reason = `CNPJ sem máscara, mas o perfil do cliente declara formato mascarado: ${raw}`;
+    }
+    throw new FieldError(field, reason);
   }
   return text.replace(/\D/g, '');
 }

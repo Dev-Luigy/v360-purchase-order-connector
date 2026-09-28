@@ -29,7 +29,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-06    | Fechar os achados de REVIEW-05 sobre P1-02                       | concluída                      | Claude      | Oito achados fechados; dois estavam desatualizados                          |
 | FIX-07    | Fechar os achados de código de REVIEW-06                         | concluída                      | Claude      | R06-01, 02, 03, 05 e 08 fechados; CI e auditoria ficam para tarefa própria  |
 | FIX-08    | Fechar os achados de código de REVIEW-07                         | concluída                      | Claude      | Seis achados de código fechados; CI, integração e P1-04 seguem fora         |
-| FIX-09    | Corrigir o retrato truncado introduzido em FIX-08                | em andamento                   | Claude      | R08-01 a R08-04; regressão passando pelo adaptador                          |
+| FIX-09    | Corrigir o retrato truncado introduzido em FIX-08                | concluída                      | Claude      | R08-01 a R08-04; regressão atravessando o adaptador                         |
 | P1-03     | Implementar domínio e adaptadores Alfa/Beta                      | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                                |
 | FIX-01    | Estabilizar validação e limites de REVIEW-01                     | concluída                      | Claude      | REVIEW-01; sete achados corrigidos com regressão; libera P1-04              |
 | FIX-02    | Verificação pós-FIX-01: vazamento de origem e notações sem teste | concluída                      | Claude      | Dois defeitos corrigidos; notação por campo fica para decisão               |
@@ -312,8 +312,9 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## FIX-09 — retrato truncado e máscara do perfil
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/domain/limits.ts`, `src/infrastructure/integrations/{paired-csv-adapter,field-parsers}.ts`, `package.json` (script de cobertura), `tests/*.test.ts`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-09-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `src/domain/limits.ts`, `src/infrastructure/integrations/{paired-csv-adapter,field-parsers}.ts`, `package.json` (script de cobertura), `tests/*.test.ts`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-09-claude.md`.
 - Escopo: R08-01 a R08-04 de [REVIEW-08](handoffs/REVIEW-08-pos-fix-08-codex.md). **R08-01 é regressão que eu introduzi em FIX-08**: o teto de itens rejeitava a linha excedente e emitia o pedido com as primeiras 10.000, o que `replaceSnapshot` gravaria como retrato completo.
 - Escopo adicional, pela mesma causa: qualquer grupo com linha rejeitada emitia retrato parcial, que também apagaria itens conhecidos. A política passa a usar `items: null`, que existe exatamente para isso (ADR-008).
 - Dependências: FIX-08.
+- Evidência: [handoff FIX-09](handoffs/FIX-09-claude.md); `npm run check` verde com 138 testes; sonda de 10.001 itens agora devolve zero pedidos e uma rejeição.
