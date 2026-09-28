@@ -73,6 +73,13 @@ const beta = await carregar('beta', {
   headers: 'tests/fixtures/beta/cabecalho.csv',
   items: 'tests/fixtures/beta/itens.csv',
 });
+const gama = await carregar('gama', {
+  lines: 'tests/fixtures/gama/purchase-order-lines.json',
+});
+const delta = await carregar('delta', {
+  orders: 'tests/fixtures/delta/orders.json',
+  items: 'tests/fixtures/delta/items.json',
+});
 
 await exige(
   'Parte 1',
@@ -148,8 +155,8 @@ await exige('Req 1', 'filtro por situação do pedido', async () => {
 await exige('Req 1', 'apenas os que ainda têm algo a receber', async () => {
   const { corpo } = await pegar('/purchase-orders?pending=true&limit=100');
   confere(
-    corpo.data.length === 3,
-    `esperava 3 com saldo, veio ${corpo.data.length}`,
+    corpo.data.length === 5,
+    `esperava 5 com saldo, veio ${corpo.data.length}`,
   );
   confere(
     corpo.data.every((p) => p.hasPendingBalance),
@@ -385,6 +392,184 @@ await exige(
     confere(status === 400, `cursor de outro filtro respondeu ${status}`);
   },
 );
+
+// ----------------------------------------------------- Parte 2: Gama e Delta
+
+await exige(
+  'Parte 2',
+  'Gama (linhas achatadas) e Delta (duas consultas) entram sem código de cliente',
+  () => {
+    confere(
+      gama.ordersAccepted === 2 && gama.itemsAccepted === 3,
+      `gama: ${JSON.stringify(gama)}`,
+    );
+    confere(
+      delta.ordersAccepted === 3 && delta.itemsAccepted === 3,
+      `delta: ${JSON.stringify(delta)}`,
+    );
+  },
+);
+
+await exige(
+  'Parte 2',
+  'os quatro clientes aparecem no mesmo contrato',
+  async () => {
+    const { corpo } = await pegar('/purchase-orders?limit=100');
+    const clientes = [...new Set(corpo.data.map((p) => p.clientId))].sort();
+    confere(
+      clientes.join(',') === 'alfa,beta,delta,gama',
+      `clientes: ${clientes.join(',')}`,
+    );
+    const chaves = corpo.data.map((p) => Object.keys(p).sort().join(','));
+    confere(
+      new Set(chaves).size === 1,
+      'clientes diferentes devolveram campos diferentes',
+    );
+  },
+);
+
+await exige(
+  'Gama',
+  'timestamp Unix, centavos e situação numérica viram o contrato',
+  async () => {
+    const { corpo } = await pegar('/purchase-orders?clientId=gama&limit=10');
+    const aberto = corpo.data.find((p) => p.externalNumber === 'GL-778');
+    confere(aberto.issuedOn === '2026-08-15', `data: ${aberto.issuedOn}`);
+    confere(aberto.status === 'aberto', `situação 1 virou: ${aberto.status}`);
+    confere(aberto.currency === 'BRL', `moeda assumida: ${aberto.currency}`);
+    const encerrado = corpo.data.find((p) => p.externalNumber === 'GL-779');
+    confere(
+      encerrado.status === 'encerrado',
+      `situação 2 virou: ${encerrado.status}`,
+    );
+  },
+);
+
+await exige(
+  'Gama',
+  'quantidade em caixa é convertida a unidade na conferência',
+  async () => {
+    // O pedido guarda 8 caixas pendentes de fator 12; a nota fiscal do
+    // fornecedor fala em unidades, então o saldo conferível é 96.
+    const exata = await postar('/conferences', {
+      clientId: 'gama',
+      purchaseOrderNumber: 'GL-778',
+      supplierTaxId: '34567890000112',
+      lines: [{ material: 'TRP-01', quantity: '96', totalValue: '9600.00' }],
+    });
+    confere(
+      exata.corpo.outcome === 'aprovada',
+      `96 unidades: ${JSON.stringify(exata.corpo.divergences)}`,
+    );
+
+    const acima = await postar('/conferences', {
+      clientId: 'gama',
+      purchaseOrderNumber: 'GL-778',
+      supplierTaxId: '34567890000112',
+      lines: [{ material: 'TRP-01', quantity: '97', totalValue: '9700.00' }],
+    });
+    const saldo = acima.corpo.divergences.find(
+      (d) => d.code === 'QUANTIDADE_ACIMA_DO_SALDO',
+    );
+    confere(
+      saldo !== undefined,
+      `97 unidades não estourou o saldo: ${JSON.stringify(acima.corpo.divergences)}`,
+    );
+    confere(
+      saldo.expected === '96.000000',
+      `saldo informado: ${saldo.expected}`,
+    );
+  },
+);
+
+await exige(
+  'Gama',
+  'preço por caixa não vira dízima: R$ 100,00 ÷ 3 fecha exato',
+  async () => {
+    // O caso que o enunciado levanta. A divisão só acontece no cálculo.
+    const { corpo } = await postar('/conferences', {
+      clientId: 'gama',
+      purchaseOrderNumber: 'GL-778',
+      supplierTaxId: '34567890000112',
+      lines: [{ material: 'TRP-09', quantity: '12', totalValue: '400.00' }],
+    });
+    confere(
+      corpo.outcome === 'aprovada',
+      `divergências: ${JSON.stringify(corpo.divergences)}`,
+    );
+  },
+);
+
+await exige(
+  'Delta',
+  'item sem cabeçalho espera em staging, não vira pedido inventado',
+  () => {
+    confere(delta.stagedTotal === 1, `staged: ${delta.stagedTotal}`);
+    confere(
+      delta.staged[0].reference === 'DL-2026-0099',
+      `staged: ${JSON.stringify(delta.staged[0])}`,
+    );
+    confere(
+      delta.staged[0].reason === 'cabecalho-ausente',
+      'motivo do staging errado',
+    );
+  },
+);
+
+await exige(
+  'Delta',
+  'cabeçalho sem itens é pedido legítimo, sem saldo pendente',
+  async () => {
+    const { corpo } = await pegar('/purchase-orders?clientId=delta&limit=10');
+    const vazio = corpo.data.find((p) => p.externalNumber === 'DL-2026-0046');
+    confere(vazio !== undefined, 'cabeçalho sem itens sumiu da consulta');
+    confere(vazio.itemCount === 0, `itens: ${vazio.itemCount}`);
+    confere(
+      vazio.hasPendingBalance === false,
+      'pedido sem itens marcou saldo pendente',
+    );
+  },
+);
+
+await exige(
+  'Delta',
+  'mandar só cabeçalhos NÃO apaga os itens já conhecidos',
+  async () => {
+    const { corpo: antes } = await pegar(
+      '/purchase-orders?clientId=delta&limit=10',
+    );
+    const itensAntes = antes.data.find(
+      (p) => p.externalNumber === 'DL-2026-0044',
+    ).itemCount;
+    confere(itensAntes === 2, `esperava 2 itens antes, veio ${itensAntes}`);
+
+    await carregar('delta', { orders: 'tests/fixtures/delta/orders.json' });
+
+    const { corpo: depois } = await pegar(
+      '/purchase-orders?clientId=delta&limit=10',
+    );
+    const itensDepois = depois.data.find(
+      (p) => p.externalNumber === 'DL-2026-0044',
+    ).itemCount;
+    confere(
+      itensDepois === 2,
+      `carga só de cabeçalhos apagou itens: ${itensDepois}`,
+    );
+  },
+);
+
+await exige('Delta', 'cada item guarda a própria data de criação', async () => {
+  const { corpo: lista } = await pegar(
+    '/purchase-orders?clientId=delta&limit=10',
+  );
+  const id = lista.data.find((p) => p.externalNumber === 'DL-2026-0044').id;
+  const { corpo } = await pegar(`/purchase-orders/${id}`);
+  const linhas = corpo.items.map((i) => i.lineCreatedOn).sort();
+  confere(
+    linhas.join(',') === '2026-09-02,2026-09-08',
+    `datas: ${linhas.join(',')}`,
+  );
+});
 
 // ------------------------------------------------------------- veredito
 

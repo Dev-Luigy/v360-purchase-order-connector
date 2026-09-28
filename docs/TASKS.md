@@ -39,7 +39,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado           |
 | P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                         |
 | P1-05     | Validar desafio e registrar marco parte-1                        | concluída                      | Claude      | 18/18 exigências verificadas no ar; tag depende de DOC-02                     |
-| P2-01     | Integrar Gama/Delta e documentar mudanças                        | em andamento                   | Claude      | Parte 1 fechada e marcada; Gama (flat-json) e Delta (split-json)              |
+| P2-01     | Integrar Gama/Delta e documentar mudanças                        | concluída                      | Claude      | Os quatro clientes integrados; 27/27 exigências no ar                         |
 
 Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e dependências. Uma tarefa só pode ter um responsável de implementação por vez.
 
@@ -208,10 +208,11 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## P2-01 — Gama e Delta
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/infrastructure/integrations/{flat-json-adapter,split-json-adapter,json-stream,record-mapping,client-profiles,adapter-registry}.ts`, `src/domain/client.ts` (campo de unidade da quantidade), `src/presentation/http/routes/ingestions.ts` (allowlist de partes), `docs/API.md`, `README.md`, `tests/**`, `docs/TASKS.md`, `docs/STATUS.md`, `docs/handoffs/P2-01-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `src/infrastructure/integrations/{flat-json-adapter,split-json-adapter,json-stream,record-mapping,client-profiles,adapter-registry}.ts`, `src/infrastructure/database/{staging-repository,in-memory-staging,migrations}.ts`, `src/application/ports/{staging-repository,source-adapter}.ts`, `src/application/use-cases/ingest-purchase-orders.ts`, `src/domain/ingestion.ts`, `src/main/server.ts`, `src/presentation/http/routes/ingestions.ts`, `prisma/schema.prisma` (só o modelo novo), `database/migrations/0002_staging_de_itens_orfaos/**`, `docs/API.md`, `docs/decisions/ADR-008-ingestao.md`, `README.md`, `tests/**`, `docs/TASKS.md`, `docs/STATUS.md`, `docs/handoffs/P2-01-claude.md`.
 - Escopo: Gama (`flat-json`: tudo achatado, timestamp Unix, centavos, situação numérica, quantidade em unidade de compra) e Delta (`split-json`: duas consultas independentes ligadas por `purchase_order`, com staging para item sem cabeçalho). Registrar no README o que foi só adicionar e o que exigiu mexer no que já existia, inclusive migração — o enunciado cobra isso explicitamente.
 - Dependências: Parte 1 concluída e marcada com a tag `parte-1`.
+- Evidência: [handoff P2-01](handoffs/P2-01-claude.md); 208 testes, 16 de integração e 27/27 exigências do enunciado no ar. O contrato absorveu os dois clientes sem mudar uma coluna; a única migração foi para persistir a espera do Delta, decidida com o usuário.
 
 ## P1-01 — contrato normalizado e decisões de negócio
 

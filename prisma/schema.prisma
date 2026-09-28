@@ -171,3 +171,27 @@ model ConferenceDivergence {
   @@index([code])
   @@map("conference_divergence")
 }
+
+/// Itens que chegaram antes do cabeçalho deles (ADR-008).
+///
+/// O Delta entrega pedidos e itens em duas consultas independentes, sem
+/// garantia de retratarem o mesmo instante. O item espera aqui em vez de virar
+/// pedido inventado — sem fornecedor e sem situação, ele nunca poderia ser
+/// conferido — e sai daqui quando o cabeçalho chega.
+model IngestionStaging {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  clientId       String @map("client_id") @db.VarChar(64)
+  externalNumber String @map("external_number") @db.VarChar(64)
+  externalLine   Int    @map("external_line")
+
+  /// O item já normalizado; quem reconcilia não conhece o formato do cliente.
+  item Json
+  /// O conteúdo original, para auditoria e para o relatório da carga.
+  raw  String
+
+  stagedAt DateTime @map("staged_at") @db.Timestamptz(3)
+
+  @@unique([clientId, externalNumber, externalLine], map: "ingestion_staging_client_external_line_key")
+  @@map("ingestion_staging")
+}

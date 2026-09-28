@@ -13,6 +13,7 @@ import { parseEnvironment } from '../infrastructure/config/env.js';
 import { connectDatabase } from '../infrastructure/database/prisma-client.js';
 import { PrismaConferenceRepository } from '../infrastructure/database/conference-repository.js';
 import { PrismaPurchaseOrderRepository } from '../infrastructure/database/purchase-order-repository.js';
+import { PrismaStagingRepository } from '../infrastructure/database/staging-repository.js';
 import { SchemaReadiness } from '../infrastructure/database/schema-readiness.js';
 import { buildAdapterRegistry } from '../infrastructure/integrations/adapter-registry.js';
 import { InMemoryClientProfiles } from '../infrastructure/integrations/client-profiles.js';
@@ -28,6 +29,7 @@ const profiles = new InMemoryClientProfiles();
 
 const orderRepository = new PrismaPurchaseOrderRepository(database.prisma);
 const conferenceRepository = new PrismaConferenceRepository(database.prisma);
+const stagingRepository = new PrismaStagingRepository(database.prisma);
 
 const app = await buildApp({
   // Prontidão olha o estado das migrações, não só a conexão: banco vazio
@@ -37,6 +39,7 @@ const app = await buildApp({
     profiles,
     buildAdapterRegistry(),
     orderRepository,
+    stagingRepository,
   ),
   listOrders: new ListPurchaseOrders(orderRepository),
   getOrder: new GetPurchaseOrder(orderRepository),

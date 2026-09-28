@@ -135,7 +135,7 @@ test('cliente sem perfil é 404, não 500', async (t) => {
   ]);
   const resposta = await app.inject({
     method: 'POST',
-    url: '/clients/gama/ingestions',
+    url: '/clients/omega/ingestions',
     headers: { ...headers, 'x-format-version': '1' },
     payload: body,
   });

@@ -113,10 +113,105 @@ export const betaProfile: ClientProfile = deepFreeze({
   },
 });
 
-/** Os clientes da Parte 1. Gama e Delta entram na Parte 2, com a forma deles. */
+export const gamaProfile: ClientProfile = deepFreeze({
+  clientId: 'gama',
+  name: 'Gama Logística',
+  deliveryFormat: 'flat-json',
+  formatVersion: '1',
+  dateFormat: 'unix-seconds',
+  // Quantidade é número simples; dinheiro vem em centavos inteiros.
+  numberFormat: { quantity: 'plain', money: 'cents' },
+  taxIdMasked: false,
+  validatesTaxIdChecksum: false,
+  // O payload não traz moeda. BRL é hipótese registrada em docs/CASE.md, e
+  // precisa ser declarada: sem ela todo registro seria rejeitado.
+  assumedCurrency: 'BRL',
+  // Situação como código numérico. O vocabulário é fechado: código fora dele
+  // é rejeitado em vez de interpretado, como no Beta.
+  statusVocabulary: { '1': 'aberto', '2': 'encerrado', '3': 'bloqueado' },
+  csv: null,
+  fields: {
+    // A raiz do payload já é o array de linhas.
+    ordersArray: null,
+    itemsArray: null,
+    order: {
+      externalNumber: 'ped',
+      issuedOn: 'dt_criacao',
+      status: 'situacao',
+      currency: null,
+      supplierTaxId: 'cnpj_fornecedor',
+      supplierName: 'nome_fornecedor',
+    },
+    item: {
+      orderNumber: 'ped',
+      externalLine: 'item',
+      material: 'cod_mat',
+      description: 'desc_mat',
+      purchaseUnit: 'um',
+      quantityOrdered: 'qtd_ped',
+      quantityReceived: 'qtd_rec',
+      unitPrice: 'preco_unit_centavos',
+      conversionFactor: 'fator_conv',
+      lineCreatedOn: null,
+    },
+  },
+});
+
+/**
+ * Delta: mesmos nomes de campo do Alfa — é o mesmo produto de mercado, em
+ * outra versão. O que muda é só a entrega, em duas consultas independentes.
+ * Por isso o cliente vai no caminho da URL e nunca é deduzido do conteúdo.
+ */
+export const deltaProfile: ClientProfile = deepFreeze({
+  clientId: 'delta',
+  name: 'Delta Distribuição',
+  deliveryFormat: 'split-json',
+  formatVersion: '1',
+  dateFormat: 'iso-date',
+  numberFormat: { quantity: 'plain', money: 'plain' },
+  taxIdMasked: false,
+  validatesTaxIdChecksum: false,
+  assumedCurrency: null,
+  statusVocabulary: {
+    OPEN: 'aberto',
+    CLOSED: 'encerrado',
+    BLOCKED: 'bloqueado',
+  },
+  csv: null,
+  fields: {
+    ordersArray: 'orders',
+    itemsArray: 'items',
+    order: {
+      externalNumber: 'po_number',
+      issuedOn: 'created_at',
+      status: 'status',
+      currency: 'currency',
+      supplierTaxId: 'vendor.tax_id',
+      supplierName: 'vendor.name',
+    },
+    item: {
+      orderNumber: 'purchase_order',
+      externalLine: 'line',
+      material: 'material',
+      description: 'description',
+      purchaseUnit: 'uom',
+      quantityOrdered: 'quantity_ordered',
+      quantityReceived: 'quantity_received',
+      unitPrice: 'unit_price',
+      conversionFactor: null,
+      // Cada item do Delta traz a própria data de criação, que pode ser
+      // posterior à do cabeçalho quando a linha foi incluída depois.
+      lineCreatedOn: 'created_at',
+    },
+  },
+});
+
+/** Os quatro clientes do enunciado. */
 export const configuredProfiles: readonly ClientProfile[] = [
   alfaProfile,
   betaProfile,
+  gamaProfile,
+  deltaProfile,
 ];
 
 export class ProfileError extends Error {

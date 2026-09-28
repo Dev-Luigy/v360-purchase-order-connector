@@ -1,3 +1,5 @@
+import type { NormalizedPurchaseOrderItem } from './purchase-order.js';
+
 import type { ClientId } from './client.js';
 import type { IsoInstant } from './primitives.js';
 
@@ -21,6 +23,18 @@ export interface StagedRecord {
   readonly reason: 'cabecalho-ausente' | 'itens-ausentes';
   /** Conteúdo original, para reprocessar sem pedir a carga de novo. */
   readonly raw: string;
+}
+
+/**
+ * O que o adaptador entrega quando um item não encontrou o pedido dele.
+ *
+ * Carrega o item **já normalizado** além do conteúdo cru: quem reconcilia mais
+ * tarde é o caso de uso, que não conhece o formato do cliente e não teria como
+ * reparsear. O cru fica para auditoria e para o relatório da carga.
+ */
+export interface StagedItem extends StagedRecord {
+  readonly externalNumber: string;
+  readonly item: NormalizedPurchaseOrderItem;
 }
 
 /**

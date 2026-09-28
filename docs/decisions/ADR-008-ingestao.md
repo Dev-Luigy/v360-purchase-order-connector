@@ -33,4 +33,19 @@ Perfil em tabela desde o início: descartada por dimensionamento, com critério 
 
 P1-03 implementa os adaptadores Alfa e Beta e os perfis; P1-02 implementa `replaceSnapshot` com transação, serialização e staging; P1-04 expõe o endpoint e o relatório de carga.
 
-Pendências: mecanismo de serialização (advisory lock por hash de `(clientId, externalNumber)` versus trava na linha do pedido) fica para P1-02; política para impedir regressão por carga atrasada não está decidida; reconciliação do staging ainda não tem disparo definido.
+Pendências: mecanismo de serialização (advisory lock por hash de `(clientId, externalNumber)` versus trava na linha do pedido) fica para P1-02; política para impedir regressão por carga atrasada não está decidida.
+
+## Atualização — P2-01, 2026-09-28
+
+**O disparo da reconciliação ficou definido: é a chegada do cabeçalho.** Até P2-01 esta decisão estava escrita e não implementada — o item órfão voltava no relatório da carga e se perdia, então a promessa de "reconciliar sem pedir a carga de novo" não se cumpria. Agora ele é persistido em `ingestion_staging` (migração `0002`) e entra no pedido quando o cabeçalho chega.
+
+Quatro escolhas da implementação, todas defensáveis e nenhuma dedutível do texto acima:
+
+- **O item é gravado já normalizado**, com o conteúdo cru ao lado. Quem reconcilia é o caso de uso, que não conhece o formato do cliente e não teria como reparsear; o cru fica para auditoria e para o relatório.
+- **A leitura revalida contra o contrato.** O que sai da espera entra num pedido de verdade, e uma linha gravada por uma versão anterior do contrato não pode atravessar sem conferência.
+- **Ler e apagar acontecem na mesma transação**, então uma falha ao gravar o pedido deixa o item esperando em vez de sumir com ele.
+- **A carga da vez manda.** Se ela traz a linha 10, a versão que esperava está velha e é descartada — coerente com "prevalece a última carga aceita".
+
+E um limite que a implementação revelou: **o adaptador só enxerga os cabeçalhos da carga atual**, então o que ele chama de órfão pode ser item de pedido que já existe no banco — o caso de mandar só a consulta de itens do Delta, que é uso normal. A decisão ficou com o caso de uso, que tem o repositório: item cujo pedido já existe é aplicado, item de pedido desconhecido espera.
+
+Segue em aberto: não há expiração nem teto para a espera. Um cliente que mande itens de pedidos que nunca existirão acumula linhas indefinidamente. Falta decidir a política — descarte por idade, teto por cliente, ou visibilidade operacional — e nenhuma delas se decide sem dado de uso real.
