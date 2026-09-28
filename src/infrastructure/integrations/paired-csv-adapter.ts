@@ -115,18 +115,32 @@ export class PairedCsvAdapter implements SourceAdapter {
         return;
       }
       headers.delete(current.orderNumber);
+
+      // Pedido acima do teto não vira retrato truncado. Emitir as primeiras
+      // `maxItemsPerOrder` linhas seria pior que recusar: `replaceSnapshot`
+      // substitui, então o excedente sumiria e o retrato se diria completo
+      // (REVIEW-08, R08-01). Uma rejeição por pedido, não por linha.
+      if (current.overflow) {
+        rejected.push({
+          reference: `pedido ${current.orderNumber}`,
+          reason:
+            `mais de ${String(maxItemsPerOrder)} itens; o pedido inteiro foi recusado ` +
+            'para não gravar um retrato parcial',
+        });
+        current = null;
+        return;
+      }
+
       try {
         orders.push(
           validateNormalizedOrder({
             clientId: payload.clientId,
             ...header,
-            // Grupo em que toda linha foi rejeitada não afirma "pedido sem
-            // itens": `null` aplica o cabeçalho e preserva os itens já
-            // conhecidos, em vez de apagá-los (ADR-008).
-            items:
-              current.items.length === 0 && current.rejected > 0
-                ? null
-                : current.items,
+            // Qualquer linha rejeitada torna a lista incompleta, e lista
+            // incompleta não é retrato. `null` aplica o cabeçalho e preserva
+            // os itens já conhecidos; a lista parcial os apagaria (ADR-008).
+            // A aceitação parcial é por pedido, não por item dentro do pedido.
+            items: current.rejected > 0 ? null : current.items,
           }),
         );
       } catch (cause) {
@@ -165,19 +179,20 @@ export class PairedCsvAdapter implements SourceAdapter {
           });
           continue;
         }
-        current = { orderNumber, items: [], rejected: 0 };
+        current = { orderNumber, items: [], rejected: 0, overflow: false };
+      }
+
+      // O teto entra **antes** do push. O `.max()` do Zod só roda quando a
+      // lista já existe, então um pedido malicioso acumularia milhões de itens
+      // antes de alguém reclamar (REVIEW-07, R07-02). Marcar o grupo e parar
+      // de acumular é o que evita tanto a memória quanto o retrato parcial.
+      if (current.items.length >= maxItemsPerOrder) {
+        current.overflow = true;
+        current.items.length = 0;
+        continue;
       }
 
       try {
-        // O teto entra **antes** do push. O `.max()` do Zod só roda quando a
-        // lista já existe, então um pedido malicioso acumularia milhões de
-        // itens antes de alguém reclamar (REVIEW-07, R07-02).
-        if (current.items.length >= maxItemsPerOrder) {
-          throw new FieldError(
-            csvItemsPart,
-            `pedido ${current.orderNumber} com mais de ${String(maxItemsPerOrder)} itens`,
-          );
-        }
         current.items.push(readItem(source, profile));
       } catch (cause) {
         current.rejected += 1;
@@ -230,6 +245,8 @@ interface Group {
   readonly orderNumber: string;
   readonly items: NormalizedPurchaseOrderItem[];
   rejected: number;
+  /** Passou do teto de itens: o pedido inteiro é recusado, não truncado. */
+  overflow: boolean;
 }
 
 async function indexHeaders(

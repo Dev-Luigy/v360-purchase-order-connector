@@ -25,7 +25,8 @@
     "generate": "prisma generate",
     "prebuild": "npm run generate",
     "pretest": "npm run generate",
-    "schema:check": "prisma format --check"
+    "schema:check": "prisma format --check",
+    "coverage": "node --import tsx --test --experimental-test-coverage \"tests/**/*.test.ts\""
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",

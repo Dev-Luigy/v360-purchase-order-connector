@@ -1,6 +1,6 @@
 # Estado do projeto
 
-Atualizado por Claude em 2026-09-28, após FIX-08.
+Atualizado por Claude em 2026-09-28, após FIX-09.
 
 ## Implementado
 
@@ -17,12 +17,12 @@ Atualizado por Claude em 2026-09-28, após FIX-08.
 
 ## Evidências e limitações
 
-- `npm run check` passou após FIX-08: geração do cliente, formato do schema Prisma, tipagem, lint com tipo em `src`, formatação, 132 casos de teste e build.
+- `npm run check` passou após FIX-09: geração do cliente, formato do schema Prisma, tipagem, lint com tipo em `src`, formatação, 138 casos de teste e build.
 - Imagem de runtime construída e inspecionada sem executar container: sem CLI do Prisma e sem `mysql2`, que entrava por peer opcional e trazia CVE de credencial para uma aplicação que só fala PostgreSQL.
 - Duas mil combinações aritméticas inteiras comparadas com `BigInt` passaram; `/health` e `/ready` foram exercitados via `inject` nos limites atuais.
 - Três revisões registradas — [REVIEW-01](handoffs/REVIEW-01-codex.md), [REVIEW-02](handoffs/REVIEW-02-claude.md) e [REVIEW-03](handoffs/REVIEW-03-codex.md) — e os defeitos inequívocos das três estão fechados em [FIX-01](handoffs/FIX-01-claude.md), [FIX-02](handoffs/FIX-02-claude.md) e [FIX-03](handoffs/FIX-03-claude.md), cada um com regressão. Nenhum achado era falso positivo; dois defeitos adicionais apareceram durante as correções.
 - Os quatro pontos que dependiam de decisão foram fechados em [FIX-04](handoffs/FIX-04-claude.md) e registrados em [ADR-012](decisions/ADR-012-notacao-por-campo.md). Seguem abertos, como tarefa própria: política de auditoria npm e pipeline de CI ([REVIEW-06](handoffs/REVIEW-06-pos-fix-06-p1-02-codex.md), R06-04 e R06-07).
-- Cobertura medida em FIX-08: **94,08% de linhas e 89,20% de branches**. O número anterior, de 98,26%, era de antes dos repositórios e não representava mais a base: `purchase-order-repository.ts` está em 57,73% de linhas e 30,77% de funções, e não melhora sem banco (REVIEW-07, R07-11).
+- Cobertura por `npm run coverage`, comando versionado para o número não depender de quem mede: **94,32% de linhas e 89,21% de branches**. O número anterior, de 98,26%, era de antes dos repositórios e não representava mais a base: `purchase-order-repository.ts` está em 57,73% de linhas e 30,77% de funções, e não melhora sem banco (REVIEW-07, R07-11).
 - Os testes substituem banco e conexão; não validam PostgreSQL real, persistência ou reinício.
 - Docker e Compose estão instalados, mas a tentativa de validação real foi interrompida e o usuário pediu para ignorá-la por enquanto. Não havia container do projeto depois da interrupção.
 - `scripts/activate-node.sh` está apagado no working tree por alteração preexistente, preservada nesta revisão; o README ainda o referencia.
