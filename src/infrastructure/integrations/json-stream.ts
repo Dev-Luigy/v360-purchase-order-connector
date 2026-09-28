@@ -58,6 +58,45 @@ export async function* streamArrayAtKey(
   }
 }
 
+/**
+ * Rende cada elemento de um array que é a **raiz** do payload.
+ *
+ * O Gama entrega `[{…}, {…}]` sem envelope, então não há chave para apontar.
+ * Raiz que não é array falha alto, pelo mesmo motivo de `streamArrayAtKey`:
+ * perfil que não corresponde ao payload não pode render zero em silêncio.
+ */
+export async function* streamRootArray(
+  chunks: AsyncIterable<Uint8Array>,
+): AsyncIterable<JsonValue> {
+  let found = false;
+  const pipeline = chain([
+    parser(),
+    (token: Token) => {
+      if (token.name === 'startArray') found = true;
+      return token;
+    },
+    streamArray({ numberAsString: true }),
+  ]);
+
+  const source = Readable.from(toBuffers(chunks));
+  source.on('error', (error: Error) => {
+    pipeline.emit('error', error);
+  });
+  source.pipe(pipeline);
+
+  try {
+    for await (const entry of pipeline) {
+      yield (entry as { key: number; value: JsonValue }).value;
+    }
+    if (!found) {
+      throw new SyntaxError('a raiz do JSON não é um array');
+    }
+  } finally {
+    source.destroy();
+    pipeline.destroy();
+  }
+}
+
 async function* toBuffers(
   chunks: AsyncIterable<Uint8Array>,
 ): AsyncIterable<Buffer> {

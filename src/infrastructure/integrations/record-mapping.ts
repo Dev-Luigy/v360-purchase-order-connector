@@ -88,15 +88,22 @@ export function readItem(
       quantityScale,
     );
 
+  const conversionFactor =
+    map.conversionFactor === null
+      ? neutralFactor
+      : measure(map.conversionFactor);
+
   return {
     externalLine: parseInteger(source.text(map.externalLine), map.externalLine),
     material: source.text(map.material).trim(),
     description: source.text(map.description).trim(),
     purchaseUnit: source.text(map.purchaseUnit).trim(),
-    conversionFactor:
-      map.conversionFactor === null
-        ? neutralFactor
-        : measure(map.conversionFactor),
+    conversionFactor,
+    // A quantidade é guardada **como o cliente mandou**, na unidade de compra
+    // dele: `10` caixas do Gama continuam 10, e o detalhe do pedido mostra o
+    // mesmo número que aparece no sistema do cliente. A conversão para unidade
+    // de consumo acontece na conferência, onde a nota fiscal fala em unidades
+    // (`consumptionBalanceOf` em `conference-rules.ts`, ADR-007).
     quantityOrdered: measure(map.quantityOrdered),
     quantityReceived: measure(map.quantityReceived),
     unitPrice: money(map.unitPrice),

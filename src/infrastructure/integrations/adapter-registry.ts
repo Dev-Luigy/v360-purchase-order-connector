@@ -1,8 +1,10 @@
 import type { SourceAdapter } from '../../application/ports/source-adapter.js';
 import type { DeliveryFormat } from '../../domain/client.js';
 
+import { FlatJsonAdapter } from './flat-json-adapter.js';
 import { NestedJsonAdapter } from './nested-json-adapter.js';
 import { PairedCsvAdapter } from './paired-csv-adapter.js';
+import { SplitJsonAdapter } from './split-json-adapter.js';
 
 /**
  * Um adaptador por forma de entrega, não por cliente (ADR-008).
@@ -18,6 +20,7 @@ export function buildAdapterRegistry(): ReadonlyMap<
   return new Map<DeliveryFormat, SourceAdapter>([
     ['nested-json', new NestedJsonAdapter()],
     ['paired-csv', new PairedCsvAdapter()],
-    // `flat-json` (Gama) e `split-json` (Delta) entram na Parte 2.
+    ['flat-json', new FlatJsonAdapter()],
+    ['split-json', new SplitJsonAdapter()],
   ]);
 }

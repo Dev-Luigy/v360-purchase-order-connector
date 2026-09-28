@@ -24,6 +24,22 @@ import { spoolMultipart } from '../spool.js';
 const partsByFormat: Readonly<Record<string, readonly string[]>> = {
   'nested-json': ['orders'],
   'paired-csv': ['headers', 'items'],
+  'flat-json': ['lines'],
+  // Delta entrega duas consultas independentes e qualquer uma pode vir
+  // sozinha; `requiredParts` é quem diz que nenhuma é obrigatória.
+  'split-json': ['orders', 'items'],
+};
+
+/**
+ * Partes sem as quais a carga não faz sentido. Para `split-json` a lista é
+ * vazia de propósito: mandar só `orders` é uso normal e **não apaga** os itens
+ * já conhecidos (ADR-008).
+ */
+const requiredPartsByFormat: Readonly<Record<string, readonly string[]>> = {
+  'nested-json': ['orders'],
+  'paired-csv': ['headers', 'items'],
+  'flat-json': ['lines'],
+  'split-json': [],
 };
 
 const paramsSchema = z.object({
@@ -74,7 +90,10 @@ export function registerIngestionRoutes(
       // parser ou desconexão do cliente (REVIEW-04, R04-01).
       const spooled = await spoolMultipart(request.files(), allowed);
       try {
-        const faltando = allowed.filter((part) => !spooled.parts.has(part));
+        const obrigatorias = requiredPartsByFormat[format] ?? allowed;
+        const faltando = obrigatorias.filter(
+          (part) => !spooled.parts.has(part),
+        );
         if (faltando.length > 0) {
           return reply.code(400).send({
             error: 'partes_ausentes',
