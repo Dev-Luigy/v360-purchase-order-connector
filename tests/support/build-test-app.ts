@@ -29,7 +29,10 @@ export interface TestApp {
  * uso → adaptador sem banco. O que depende de PostgreSQL continua em ENV-03.
  */
 export async function buildTestApp(
-  options: { readonly databaseAvailable?: boolean } = {},
+  options: {
+    readonly databaseAvailable?: boolean;
+    readonly rateLimit?: { readonly max: number; readonly timeWindow: string };
+  } = {},
 ): Promise<TestApp> {
   const profiles = new InMemoryClientProfiles();
   const orders = new InMemoryPurchaseOrderRepository();
@@ -38,6 +41,7 @@ export async function buildTestApp(
 
   const app = await buildApp({
     logLevel: 'silent',
+    ...(options.rateLimit ? { rateLimit: options.rateLimit } : {}),
     readiness: new CheckReadiness({
       ping() {
         return disponivel

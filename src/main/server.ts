@@ -46,6 +46,7 @@ const app = await buildApp({
   profileFormatOf: async (clientId) =>
     (await profiles.find(clientId))?.deliveryFormat ?? null,
   logLevel: env.LOG_LEVEL,
+  rateLimit: { max: env.RATE_LIMIT_MAX, timeWindow: env.RATE_LIMIT_WINDOW },
 });
 
 // Resto de carga que morreu com o processo: `finally` não roda quando o
