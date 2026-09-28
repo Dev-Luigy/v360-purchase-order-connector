@@ -65,3 +65,55 @@ describe('a documentação e o código concordam', () => {
     );
   });
 });
+
+const servidor = await readFile(
+  new URL('../src/main/server.ts', import.meta.url),
+  'utf-8',
+);
+
+/**
+ * O preset de ingestão existia desde P1-02 e **nada o usava**: a composição
+ * criava só o pool de requisição, e um comentário afirmava o contrário. Cargas
+ * longas rodavam com tempo limite de 3 segundos (REVIEW-09, R09-07).
+ *
+ * Testar os presets isoladamente não pegava isso, porque o defeito estava na
+ * ligação entre eles — a mesma classe de "duas fontes que ninguém obriga a
+ * concordar" de FIX-05 e do cabeçalho da ingestão.
+ */
+describe('a composição usa os pools que declara', () => {
+  it('cria uma conexão por propósito declarado', () => {
+    for (const proposito of ['request', 'ingestion']) {
+      assert.ok(
+        servidor.includes(`connectDatabase(env.DATABASE_URL, '${proposito}')`),
+        `nenhuma conexão criada com o propósito ${proposito}`,
+      );
+    }
+  });
+
+  it('a ingestão recebe o repositório do pool de carga', () => {
+    const chamada =
+      /ingest: new IngestPurchaseOrders\(([\s\S]*?)\n {2}\),/.exec(
+        servidor,
+      )?.[1];
+    assert.ok(chamada, 'não achei a composição da ingestão');
+    assert.match(
+      chamada,
+      /ingestionOrderRepository/,
+      'a carga voltou a usar o repositório do pool de requisição',
+    );
+  });
+
+  it('todos os pools criados são fechados no encerramento', () => {
+    const criados = [
+      ...servidor.matchAll(/const (\w+) = connectDatabase\(/g),
+    ].map((m) => m[1]);
+    assert.ok(criados.length >= 2);
+    const fechamento = /onClose[\s\S]*?\n\}\);/.exec(servidor)?.[0] ?? '';
+    for (const nome of criados) {
+      assert.ok(
+        fechamento.includes(`${String(nome)}.close()`),
+        `${String(nome)} não é fechado no encerramento`,
+      );
+    }
+  });
+});

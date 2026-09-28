@@ -11,7 +11,6 @@ import {
   GetPurchaseOrder,
   ListPurchaseOrders,
 } from '../../src/application/use-cases/query-purchase-orders.js';
-import { InMemoryStagingRepository } from '../../src/infrastructure/database/in-memory-staging.js';
 import { buildAdapterRegistry } from '../../src/infrastructure/integrations/adapter-registry.js';
 import { InMemoryClientProfiles } from '../../src/infrastructure/integrations/client-profiles.js';
 import { buildApp } from '../../src/presentation/http/app.js';
@@ -50,12 +49,7 @@ export async function buildTestApp(
           : Promise.reject(new Error('Database offline'));
       },
     }),
-    ingest: new IngestPurchaseOrders(
-      profiles,
-      buildAdapterRegistry(),
-      orders,
-      new InMemoryStagingRepository(),
-    ),
+    ingest: new IngestPurchaseOrders(profiles, buildAdapterRegistry(), orders),
     listOrders: new ListPurchaseOrders(orders),
     getOrder: new GetPurchaseOrder(orders),
     checkInvoice: new CheckInvoice(orders, conferences),

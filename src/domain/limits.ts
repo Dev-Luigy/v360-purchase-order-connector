@@ -97,6 +97,15 @@ export const maxInvoiceLines = 1_000;
 export const maxReportedRecords = 100;
 
 /**
+ * Teto do conteúdo cru guardado por item em espera.
+ *
+ * O cru existe para auditoria, não para reprocessar o payload inteiro: sem
+ * teto, um registro gigante entra no banco e volta no relatório da carga
+ * (REVIEW-09, R09-05).
+ */
+export const maxStagedRawCharacters = 8 * 1024;
+
+/**
  * Moedas suportadas e as casas decimais de cada uma.
  *
  * Allowlist versionada, e não "três letras maiúsculas": `ZZZ` passava por ISO

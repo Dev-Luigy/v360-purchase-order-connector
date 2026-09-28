@@ -1,4 +1,8 @@
-import type { NormalizedPurchaseOrderItem } from './purchase-order.js';
+import type {
+  NormalizedPurchaseOrder,
+  NormalizedPurchaseOrderItem,
+  PurchaseOrder,
+} from './purchase-order.js';
 
 import type { ClientId } from './client.js';
 import type { IsoInstant } from './primitives.js';
@@ -59,4 +63,56 @@ export interface IngestionReport {
   /** Amostra do que ficou em staging, limitada do mesmo jeito. */
   readonly staged: readonly StagedRecord[];
   readonly stagedTotal: number;
+}
+
+/**
+ * Traz para o retrato os itens que esperavam pelo cabeçalho dele.
+ *
+ * A carga da vez manda: se ela trouxe a linha, a versão que esperava está
+ * velha e é descartada — coerente com "prevalece a última carga aceita"
+ * (ADR-008). `items: null` é carga que não trouxe itens, e aí os que
+ * esperavam são tudo o que se sabe sobre eles.
+ */
+export function mergeWaitingItems(
+  snapshot: NormalizedPurchaseOrder,
+  waiting: readonly NormalizedPurchaseOrderItem[],
+): NormalizedPurchaseOrder {
+  if (waiting.length === 0) return snapshot;
+  const desta = snapshot.items ?? [];
+  const linhas = new Set(desta.map((item) => item.externalLine));
+  const recuperados = waiting.filter((item) => !linhas.has(item.externalLine));
+  if (recuperados.length === 0 && snapshot.items !== null) return snapshot;
+  return { ...snapshot, items: [...desta, ...recuperados] };
+}
+
+/**
+ * Substitui a linha de mesmo número num pedido que já existe, devolvendo um
+ * retrato completo — que é o que `replaceSnapshot` espera receber.
+ */
+export function applyItemToOrder(
+  existing: PurchaseOrder,
+  item: NormalizedPurchaseOrderItem,
+): NormalizedPurchaseOrder {
+  const outros = existing.items
+    .filter((atual) => atual.externalLine !== item.externalLine)
+    .map(semPersistencia);
+  return {
+    clientId: existing.clientId,
+    externalNumber: existing.externalNumber,
+    supplier: existing.supplier,
+    currency: existing.currency,
+    status: existing.status,
+    issuedOn: existing.issuedOn,
+    items: [...outros, item],
+  };
+}
+
+/** Descarta o que a persistência acrescentou, deixando o item do contrato. */
+function semPersistencia(
+  item: PurchaseOrder['items'][number],
+): NormalizedPurchaseOrderItem {
+  const { id, quantityPending, ...contrato } = item;
+  void id;
+  void quantityPending;
+  return contrato;
 }
