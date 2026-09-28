@@ -23,6 +23,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-05 | Revisar a entrega parcial de P1-02                               | concluída                      | Codex       | Handoff para Claude; somente documentação                                   |
 | P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03        |
 | P1-02     | Implementar schema, migrações e repositórios                     | concluída                      | Claude      | Código pronto; validação contra PostgreSQL real é ENV-03                    |
+| FIX-06    | Fechar os achados de REVIEW-05 sobre P1-02                       | em andamento                   | Claude      | Imagem de runtime, cursor versionado, índices, integridade do histórico     |
 | P1-03     | Implementar domínio e adaptadores Alfa/Beta                      | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                                |
 | FIX-01    | Estabilizar validação e limites de REVIEW-01                     | concluída                      | Claude      | REVIEW-01; sete achados corrigidos com regressão; libera P1-04              |
 | FIX-02    | Verificação pós-FIX-01: vazamento de origem e notações sem teste | concluída                      | Claude      | Dois defeitos corrigidos; notação por campo fica para decisão               |
@@ -244,3 +245,12 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Dependências: P1-01 (contrato), ADR-004 (Prisma 7), ADR-012 (pool por propósito). **A validação contra PostgreSQL real é ENV-03** e depende de o usuário autorizar subir o Compose; até lá, migração e consultas não são exercitadas contra banco.
 - Nota de posse: `package.json` liberado.
 - Evidência: [handoff P1-02](handoffs/P1-02-claude.md); `npm run check` verde com 109 testes; `docker compose config` e `docker build --check` passam. **Nada rodou contra PostgreSQL**: os repositórios não têm teste até ENV-03.
+
+## FIX-06 — achados de REVIEW-05
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `prisma/schema.prisma`, `database/migrations/**`, `src/infrastructure/database/**`, `Dockerfile`, `package.json`, `tests/*.test.ts`, `docs/TASKS.md`, `docs/handoffs/FIX-06-claude.md`.
+- Escopo: os oito achados de [REVIEW-05](handoffs/REVIEW-05-codex.md) que verifiquei e procedem. Dois estavam desatualizados — o Codex revisou o commit `7f2aba3` mais arquivos não commitados, antes de `24f656d` fechar o Dockerfile, o lint e os testes.
+- Decisão de método: a migração `0001` é **reescrita no lugar**, não sucedida por uma `0002`. Nenhum banco a aplicou ainda, então corrigir a primeira é mais barato e não deixa dívida de schema. Depois de ENV-03 isso deixa de ser possível.
+- Dependências: P1-02. `package.json` volta a ficar reservado.
