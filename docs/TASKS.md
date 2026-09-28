@@ -22,10 +22,12 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-04 | Preparar plano de fix: arquitetura, segurança, CI/CD e Docker    | concluída                      | Codex       | Revisão documental; não altera código nem arquivos reservados por FIX-04/05 |
 | REVIEW-05 | Revisar a entrega parcial de P1-02                               | concluída                      | Codex       | Handoff para Claude; somente documentação                                   |
 | REVIEW-06 | Verificar FIX-06 e funcionalidades concluídas de P1-02           | concluída                      | Codex       | Handoff para Claude; somente documentação                                   |
+| REVIEW-07 | Revisão geral de código, segurança e engenharia                  | concluída                      | Codex       | Código completo, Zod e avaliação de bibliotecas; somente documentação       |
 | P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03        |
 | P1-02     | Implementar schema, migrações e repositórios                     | concluída                      | Claude      | Código pronto; validação contra PostgreSQL real é ENV-03                    |
 | FIX-06    | Fechar os achados de REVIEW-05 sobre P1-02                       | concluída                      | Claude      | Oito achados fechados; dois estavam desatualizados                          |
 | FIX-07    | Fechar os achados de código de REVIEW-06                         | concluída                      | Claude      | R06-01, 02, 03, 05 e 08 fechados; CI e auditoria ficam para tarefa própria  |
+| FIX-08    | Fechar os achados de código de REVIEW-07                         | em andamento                   | Claude      | Arredondamento silencioso, NUL, limites antes da alocação                   |
 | P1-03     | Implementar domínio e adaptadores Alfa/Beta                      | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                                |
 | FIX-01    | Estabilizar validação e limites de REVIEW-01                     | concluída                      | Claude      | REVIEW-01; sete achados corrigidos com regressão; libera P1-04              |
 | FIX-02    | Verificação pós-FIX-01: vazamento de origem e notações sem teste | concluída                      | Claude      | Dois defeitos corrigidos; notação por campo fica para decisão               |
@@ -82,6 +84,15 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: conferir no código cada fechamento de REVIEW-05, revisar schema, migração, repositórios, Docker, segurança, documentação e testes; executar validações locais sem subir PostgreSQL nem editar código de produção.
 - Dependências: FIX-06 e P1-02 concluídas como código; execução contra PostgreSQL real continua pertencendo a ENV-03 e requer autorização do usuário.
 - Evidência: [handoff REVIEW-06](handoffs/REVIEW-06-pos-fix-06-p1-02-codex.md); `npm run check` e builds Docker verdes; 114 testes passaram; três falhas novas reproduzidas e quatro advisories altas ainda presentes na árvore npm.
+
+## REVIEW-07 — revisão geral de código e engenharia
+
+- Responsável: Codex.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `docs/TASKS.md`, `docs/handoffs/REVIEW-07-geral-codex.md`.
+- Escopo: revisão estática e dinâmica de todo o código existente, fronteiras de validação com Zod, segurança, arquitetura, testes, dependências e oportunidades justificadas de substituir código próprio por bibliotecas; sem alterar produção.
+- Dependências: FIX-07 concluída; persistência real continua dependente de ENV-03.
+- Evidência: [handoff REVIEW-07](handoffs/REVIEW-07-geral-codex.md); `npm run check` e build runtime verdes, 122 testes, cobertura medida, limites reproduzidos e quatro advisories altas ainda presentes na árvore npm.
 
 ## COL-02 — contexto compartilhado e leitura sob demanda
 
@@ -276,3 +287,12 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - **Fora de escopo, por exigirem decisão:** R06-04 (política de auditoria npm) e R06-07 (pipeline de CI) são tarefa própria; R06-06 depende de ENV-03.
 - Dependências: FIX-06.
 - Evidência: [handoff FIX-07](handoffs/FIX-07-claude.md); `npm run check` verde com 122 testes; os três achados de código reproduzidos por sonda antes da correção; aviso de OpenSSL confirmado resolvido dentro da imagem de migração.
+
+## FIX-08 — achados de código de REVIEW-07
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `src/domain/{limits,schemas,decimal}.ts`, `src/infrastructure/integrations/{field-parsers,csv-stream,paired-csv-adapter,client-profiles}.ts`, `prisma/schema.prisma`, `Dockerfile`, `tests/*.test.ts`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-08-claude.md`.
+- Escopo: R07-01, R07-02, R07-03, R07-06, R07-07 e R07-08 de [REVIEW-07](handoffs/REVIEW-07-geral-codex.md), todos reproduzidos por sonda antes da correção. Mais o aviso de OpenSSL no estágio de build (parte de R07-10).
+- **Fora de escopo, por dependerem de P1-04, de ENV-03 ou de decisão:** R07-04 e R07-09 (agregado da conferência montado pelo caso de uso), R07-05 (parte), R07-10 (CI e política de auditoria), R07-11 (integração com banco), R07-12 (observabilidade e hardening).
+- Dependências: FIX-07.
