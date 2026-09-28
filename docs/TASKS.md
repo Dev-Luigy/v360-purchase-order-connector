@@ -8,7 +8,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | COL-01    | Organizar colaboração e instalação                               | concluída                      | Codex       | AGENTS.md, CLAUDE.md, docs e link no README                                   |
 | COL-02    | Estruturar contexto compartilhado e leitura sob demanda          | concluída                      | Codex       | Documentação; registro e arquivos abaixo                                      |
 | DOC-01    | Versionar o enunciado e as amostras dos clientes                 | concluída                      | Claude      | Nenhuma; enunciado e fixtures, sem código de negócio                          |
-| DOC-02    | Reestruturar README como artefato avaliado                       | em andamento                   | Claude      | P1-05; bloqueia a tag parte-1, porque o README é avaliado                     |
+| DOC-02    | Reestruturar README como artefato avaliado                       | concluída                      | Claude      | As três defesas que o enunciado cobra entraram; destrava a tag parte-1        |
 | DOC-03    | Diagramar objetos e relações do contrato normalizado             | concluída                      | Claude      | P1-01; diagramas em docs/diagrams, sem código de negócio                      |
 | ARCH-04   | Registrar escolha do ORM Prisma 7                                | concluída                      | Codex       | ADR-001, ADR-002 e ADR-003; documentação apenas                               |
 | ARCH-05   | Registrar desenho de observabilidade (Grafana/Prometheus)        | aceita, implementação diferida | Claude      | Pedido do usuário; decisão apenas, sem dependência instalada                  |
@@ -217,10 +217,11 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## DOC-02 — README como artefato avaliado
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `README.md`, `docs/TASKS.md`, `docs/STATUS.md`, `docs/handoffs/DOC-02-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `README.md`, `docs/TASKS.md`, `docs/STATUS.md`, `docs/handoffs/DOC-02-claude.md`.
 - Escopo: o enunciado cobra explicitamente no README a justificativa de cada regra de conferência, a política de reenvio de pedido alterado e a decisão sobre os dois lados do Delta que não se encontram. Nenhuma das três está lá hoje. A decisão detalhada continua em `decisions/`; o README precisa carregar ou linkar a defesa, e a avaliação inclui defendê-la oralmente.
-- Dependências: P1-05 concluída. **Bloqueia a tag `parte-1`**: marcar o marco com o artefato avaliado incompleto seria marcar cedo.
+- Dependências: P1-05 concluída. **Bloqueava a tag `parte-1`**: marcar o marco com o artefato avaliado incompleto seria marcar cedo.
+- Evidência: [handoff DOC-02](handoffs/DOC-02-claude.md); as três defesas entraram, mais a da paginação; o README descrevia um projeto de duas semanas atrás e afirmava que só `/health` e `/ready` existiam. Links verificados e cobertura remedida (94,68%, não 94,69%).
 
 ## DOC-03 — diagramas de objetos e relacoes
 

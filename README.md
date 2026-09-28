@@ -1,69 +1,124 @@
 # V360 — Conector de Pedidos de Compra
 
-Base de desenvolvimento do desafio [Case — Engenheiro SAP Junior](https://docs.google.com/document/d/1nbIIEDPKxx83hPHnd5P6ddwY1ukQUvWurQCrrNgv3f8/edit). O enunciado está transcrito em [docs/CASE.md](docs/CASE.md), com a exportação em [docs/CASE.pdf](docs/CASE.pdf); as amostras dos quatro clientes estão em [tests/fixtures/](tests/fixtures/README.md).
+Cada cliente expõe pedidos de compra em um sistema e formato diferente. Este serviço fica no meio: lê o formato de cada um, normaliza para um contrato único e responde três perguntas — **quais pedidos existem**, **esta nota fiscal bate com o pedido** e **como foram as conferências**.
 
-## Colaboração e instalação
+Desafio [Case — Engenheiro SAP Junior](https://docs.google.com/document/d/1nbIIEDPKxx83hPHnd5P6ddwY1ukQUvWurQCrrNgv3f8/edit), transcrito em [docs/CASE.md](docs/CASE.md). Amostras dos quatro clientes em [tests/fixtures/](tests/fixtures/README.md).
 
-Codex e Claude seguem [AGENTS.md](AGENTS.md). Consulte o [fluxo de colaboração](docs/COLLABORATION.md), o [quadro de tarefas](docs/TASKS.md), o [estado atual](docs/STATUS.md) e as [dependências para instalar](docs/SETUP.md).
-
-## Estado atual
-
-Ambiente preparado com TypeScript estrito, Fastify, PostgreSQL via Docker Compose, configuração validada, logs, encerramento gracioso, testes HTTP, ESLint e Prettier. Somente `GET /health` (processo ativo) e `GET /ready` (banco acessível, 503 se indisponível) estão implementados. Ainda faltam tabelas, migrações executáveis, ingestão, consultas de pedidos, conferência e relatórios. A Parte 1 ainda não está concluída.
+**Parte 1 (Alfa e Beta) está completa e validada.** Gama e Delta são a Parte 2.
 
 ## Executar
 
-Com Docker Engine e o plugin Compose disponíveis:
-
 ```sh
-npm run up
+docker compose up
 ```
 
-`npm run up` executa `npm run preflight` antes de `docker compose up --build`. A verificação existe porque este é um serviço de integração e a máquina pode já estar rodando algo: ela confere o daemon, se as portas publicadas estão livres, quem as ocupa quando não estão, e se não existe outro projeto Compose com o mesmo nome. Em caso de conflito ela **aborta sem tocar em nada** — só lê estado, nunca para, remove ou recria container. `docker compose up --build` continua funcionando direto, sem a verificação.
+Sobe PostgreSQL 17, aplica a migração como etapa própria e só então inicia a API — `/ready` responde 200 quando a migração esperada está aplicada, não apenas quando o banco aceita conexão. A API atende em `http://localhost:3000`; o banco é publicado no host em `55432` para nunca disputar a porta de um PostgreSQL já instalado. `npm run up` roda antes uma verificação de portas e daemon que **aborta sem tocar em nada** se houver conflito.
 
-A API atende em `http://localhost:3000`. O PostgreSQL é publicado no host em `55432`, não em 5432, para nunca disputar a porta de um banco já em execução na máquina; dentro da rede do Compose ele continua em 5432. As duas portas do host são configuráveis por `API_PORT` e `DB_PORT` no `.env`.
-
-O volume é persistente: `docker compose down` preserva os dados, `docker compose down -v` apaga o volume. Esse `-v` é a única forma de perder o que foi carregado e nenhuma verificação o impede. As credenciais do Compose são exclusivas para desenvolvimento local.
-
-Para desenvolvimento com Node.js 24 e npm:
+Carregar as amostras e exercitar tudo:
 
 ```sh
-cp .env.example .env
-npm ci
-npm run db:up
-npm run dev
+node scripts/validate-case.mjs    # 18 asserções, uma por exigência do enunciado
 ```
 
-`npm run db:up` também passa pela verificação de portas.
+Desenvolvimento local: `cp .env.example .env && npm ci && npm run db:up && npm run dev`. `npm run check` roda geração do cliente Prisma, tipagem, lint, formatação, 192 testes e build, **sem exigir banco**; `npm run test:integration` roda os 16 testes que exigem PostgreSQL real. O contrato completo das rotas está em [docs/API.md](docs/API.md).
 
-Neste workspace também foi instalado um Node isolado em `.tools/node` (ignorado pelo Git). Para ativá-lo no Bash, a partir da pasta do projeto:
+---
 
-```sh
-source scripts/activate-node.sh
-```
+# As decisões, e por que
 
-Essa instalação local não acompanha o repositório; em outra máquina use Node 24 conforme `.nvmrc`, ou apenas Docker Compose. O arquivo `.env` já foi criado neste workspace.
+O enunciado é explícito: as regras de conferência não existem como especificação, saem do entendimento do negócio, e precisam ser defendidas. O que segue é a defesa; o registro detalhado de cada uma está em [docs/decisions/](docs/decisions/README.md).
 
-```sh
-curl http://localhost:3000/health
-curl http://localhost:3000/ready
-npm run check
-```
+## As regras de conferência
 
-`npm run check` executa geração do cliente Prisma, verificação do formato do schema, tipagem, lint, formatação, testes e build. Os testes não exigem banco: exercitam domínio, adaptadores e as partes puras do acesso a dados, com substitutos para a conexão. **Persistência real continua sem validação** — isso é ENV-03. `npm run build` gera `dist/`; `npm start` executa o build. Os pools têm limites por propósito: o caminho de requisição desiste rápido, o de carga aceita transação longa mas finita ([ADR-012](docs/decisions/ADR-012-notacao-por-campo.md)). `/ready` verifica se a migração esperada foi aplicada, não apenas se o banco responde.
+A plataforma manda o fornecedor e, por item, material, quantidade e valor total. Conferimos **nesta ordem** ([ADR-009](docs/decisions/ADR-009-conferencia.md)):
 
-## Decisões de tecnologia
+| #   | Regra                                                    | Código da divergência       |
+| --- | -------------------------------------------------------- | --------------------------- |
+| 1   | fornecedor da nota é o do pedido                         | `FORNECEDOR_DIVERGENTE`     |
+| 2   | pedido está `aberto` — encerrado ou bloqueado não recebe | `PEDIDO_NAO_ABERTO`         |
+| 3   | o material existe em alguma linha do pedido              | `MATERIAL_NAO_ENCONTRADO`   |
+| 4   | o material não está ambíguo entre linhas                 | `MATERIAL_AMBIGUO`          |
+| 5   | a quantidade é positiva                                  | `QUANTIDADE_NAO_POSITIVA`   |
+| 6   | a quantidade cabe no saldo que falta receber             | `QUANTIDADE_ACIMA_DO_SALDO` |
+| 7   | o valor total bate com quantidade ÷ fator × preço        | `VALOR_TOTAL_DIVERGENTE`    |
 
-PostgreSQL foi confirmado em [ADR-001](docs/decisions/ADR-001-postgresql.md); TypeScript e Node.js em [ADR-002](docs/decisions/ADR-002-typescript-nodejs.md), priorizando manutenção e facilidade de encontrar desenvolvedores experientes nessa stack. Fastify foi confirmado em [ADR-003](docs/decisions/ADR-003-fastify.md) e Prisma ORM 7 em [ADR-004](docs/decisions/ADR-004-prisma-7.md). As demais ferramentas e estratégias permanecem em discussão antes da consolidação da arquitetura.
+Quatro dessas decisões não são óbvias e são as que eu defendo:
 
-- **TypeScript:** escolha motivada pela familiaridade da linguagem no ecossistema JavaScript e pela intenção de facilitar a contratação de alguém para manutenção, caso necessário. Tipagem estrita ajuda a explicitar os contratos entre clientes e o modelo normalizado.
-- **Fastify:** camada HTTP, com construção da aplicação independente da abertura de porta, facilitando testes.
-- **PostgreSQL:** relações entre pedidos, itens e conferências, unicidade composta, transações e índices para filtros. Quantidades e valores usarão `NUMERIC`, preservados como strings decimais na aplicação até a implementação de aritmética decimal; evitar cálculo monetário com ponto flutuante.
-- **Prisma ORM 7:** acesso tipado e organizado ao PostgreSQL, isolado nos adaptadores de infraestrutura. A linha principal será fixada em 7 e a resolução exata ficará no lockfile.
-- **npm:** instalação reproduzível com `package-lock.json` e `npm ci`.
+**Conferir não é receber.** A conferência não consome saldo. A quantidade recebida é dado do sistema do cliente e só muda por ingestão. Se a conferência a consumisse, o número divergiria da fonte na primeira carga seguinte, e o serviço passaria a mentir sobre o que o cliente tem — justamente o oposto do que ele existe para fazer.
 
-Referências técnicas: [Node.js](https://nodejs.org/en/download) e [Fastify](https://fastify.dev/docs/latest/Guides/Getting-Started/).
+**Devolvemos todas as divergências, não a primeira.** O enunciado exige que a plataforma mostre ao usuário o que não bate "sem adivinhar nada". Parar na primeira obrigaria o usuário a corrigir, reenviar e descobrir a próxima. Aprovada significa lista vazia.
 
-## Organização e SOLID
+**Material ambíguo é divergência, não palpite.** Se o material aparece em mais de uma linha do pedido e a nota não diz qual, devolvemos `MATERIAL_AMBIGUO` em vez de escolher. Não existe regra de alocação combinada com o cliente, e escolher errado consumiria o saldo da linha errada — um erro silencioso, que só aparece muito depois. Preferimos parar e perguntar.
+
+**Linhas repetidas da nota são somadas antes de comparar com o saldo.** Uma nota com duas linhas de 60 do mesmo material passaria, item por item, contra um saldo de 100. Somadas, não passam.
+
+E duas fronteiras: **pedido inexistente é `404`, não divergência** — a nota pode estar certa e o pedido simplesmente ainda não ter sido carregado; e a **taxonomia é fechada de propósito**, para a plataforma mostrar o motivo sem interpretar texto livre. Código novo é mudança de contrato, consciente.
+
+## Política de reenvio de pedido alterado
+
+**Retrato completo, por pedido, em uma transação.** Quando o cliente reenvia um pedido que mudou — a quantidade recebida de um item aumentou, por exemplo — o pedido é substituído inteiro: a identidade interna é preservada, `ingestionVersion` incrementa, o saldo é recalculado e o **histórico de conferências não é tocado** ([ADR-008](docs/decisions/ADR-008-ingestao.md)).
+
+Substituir o retrato inteiro, em vez de aplicar diferenças, é a escolha central. Nenhum dos formatos informa o que mudou; deduzir a diferença exigiria confiar que a carga anterior estava completa, e uma carga parcial passaria a corromper o saldo de forma silenciosa. O retrato completo é idempotente: reenviar o mesmo arquivo duas vezes dá o mesmo resultado, o que é exatamente o que se quer de uma integração que pode reenviar por falha de rede.
+
+Três consequências que assumo:
+
+- **Cargas concorrentes do mesmo pedido são serializadas** por advisory lock em `(clientId, externalNumber)`. Sem isso, duas cargas simultâneas não se enxergam e a unicidade derruba uma delas. Está provado com carga concorrente real em [ENV-03](docs/handoffs/ENV-03-claude.md).
+- **Prevalece a última carga aceita.** Nenhuma fonte informa versão confiável, então uma carga atrasada pode regredir o retrato. Não impedimos; registramos `ingestedAt` para que a regressão seja **detectável**, e deixamos a política registrada como pendência em vez de inventar agora um relógio em que ninguém confia.
+- **O histórico guarda o que foi comparado**, inclusive a versão do pedido conferida. Sem isso, uma reingestão mudaria retroativamente o sentido do histórico e o relatório passaria a descrever outra coisa.
+
+**Carga só de cabeçalho não apaga itens.** No contrato, `items: null` significa "esta carga não trouxe os itens" e `items: []` significa "o cliente afirma que não há itens". Sem essa distinção, uma consulta de cabeçalhos apagaria todos os itens já conhecidos.
+
+**Aceitação parcial:** a transação é por pedido, não por carga. Um registro inválido em dez mil não derruba o lote — o resto entra e cada rejeitado volta com referência e motivo. Tudo-ou-nada, no volume que o enunciado descreve, transformaria um erro de digitação em indisponibilidade.
+
+## Delta: os dois lados que não se encontram
+
+_Decisão registrada; implementação é a Parte 2._
+
+O Delta entrega pedidos e itens em duas consultas independentes, sem garantia de retratarem o mesmo instante. Um lado pode conhecer um pedido que o outro ainda não conhece. Os dois casos têm respostas diferentes ([ADR-008](docs/decisions/ADR-008-ingestao.md)):
+
+**Item sem cabeçalho vai para staging, não para pedido incompleto.** O item fica guardado com o conteúdo cru e é reconciliado quando o cabeçalho aparecer. Inventar um pedido a partir do item significaria inventar fornecedor, situação e data — e um pedido sem situação nunca poderia ser conferido, porque a regra 2 depende dela. Descartar o item obrigaria o cliente a reenviar algo que ele já mandou corretamente.
+
+**Cabeçalho sem itens é pedido legítimo.** Ele existe no sistema do cliente; fica persistido com `hasPendingBalance: false`, aparece na consulta e não precisa de sinalização especial — uma conferência contra ele devolve `MATERIAL_NAO_ENCONTRADO` pelas regras que já existem. A assimetria é proposital: o cabeçalho é a identidade do pedido, o item não é.
+
+## Paginação: cursor, e por quê
+
+Toda lista é paginada — consulta de pedidos e histórico de conferências. **Padrão 50, teto 100**, acima disso a requisição é recusada em vez de silenciosamente reduzida ([ADR-010](docs/decisions/ADR-010-paginacao.md)).
+
+A estratégia é **cursor opaco**, não deslocamento. O enunciado descreve o caso de uso que decide isso: dezenas de milhares de pedidos varridos em lote, de madrugada, **enquanto novas cargas continuam entrando**. Com `OFFSET`, as duas coisas quebram — a página 500 faz o banco varrer 50.000 linhas para descartar 49.900, e uma carga que insere no meio desloca a janela, fazendo a varredura pular ou repetir pedidos. Repetir é o pior dos dois: faria reconferir nota já conferida.
+
+O cursor carrega o **filtro** junto com a posição. Trocar de filtro no meio de uma varredura é recusado com 400, não silenciosamente aceito com um resultado que ninguém consegue interpretar.
+
+Medido, não suposto: 50.000 pedidos em 500 páginas, **zero repetidos**, e a última página custa 0,54× a primeira ([P1-05](docs/handoffs/P1-05-claude.md)).
+
+## O modelo único
+
+**A identidade de um pedido é `(clientId, externalNumber)`**, não o número sozinho: o enunciado avisa que o mesmo número existe em clientes diferentes. O `clientId` vem da ingestão, no caminho da URL, e **nunca é deduzido do conteúdo** — o Delta usa os mesmos nomes de campo do Alfa, então dedução por conteúdo quebra exatamente aí ([ADR-006](docs/decisions/ADR-006-modelo-normalizado.md)).
+
+**Um adaptador por forma de entrega, não por cliente.** São quatro formas (`nested-json`, `paired-csv`, `flat-json`, `split-json`) e N clientes. O que é estrutura é código; o que é rótulo — caminho do campo, formato de data e número, máscara de CNPJ, delimitador, encoding, vocabulário de situação — é configuração do perfil do cliente. Cliente novo numa forma conhecida é um perfil novo, sem código novo.
+
+**Nenhum valor monetário passa por ponto flutuante.** `unit_price` do Alfa é número JSON (`45.9`) e `JSON.parse` produz float; o JSON é lido em fluxo com os números preservados **como texto**, e a aritmética é decimal exata, persistida em `NUMERIC(30,6)` ([ADR-007](docs/decisions/ADR-007-decimal-e-unidade.md)). Quantidade e preço são convertidos à unidade de consumo na entrada, porque as notas dos fornecedores sempre informam unidades, nunca caixas.
+
+## Por que PostgreSQL
+
+Relacional, porque o problema é relacional: pedido e itens com integridade referencial, unicidade composta por cliente, transação por pedido no reenvio e conferência que não pode apagar histórico. Os filtros do requisito 1 são sustentados por **índices parciais** (`WHERE has_pending_balance`), confirmados por `EXPLAIN` e não supostos ([ADR-001](docs/decisions/ADR-001-postgresql.md), [ENV-03](docs/handoffs/ENV-03-claude.md)).
+
+As demais escolhas: [TypeScript e Node](docs/decisions/ADR-002-typescript-nodejs.md), [Fastify](docs/decisions/ADR-003-fastify.md), [Prisma 7](docs/decisions/ADR-004-prisma-7.md) e as [bibliotecas](docs/decisions/ADR-011-bibliotecas-p1-03.md).
+
+---
+
+## Como isto está validado
+
+| O quê                       | Como                                                                     |
+| --------------------------- | ------------------------------------------------------------------------ |
+| cada exigência do enunciado | `scripts/validate-case.mjs` — 18 asserções contra o serviço no ar, 18/18 |
+| domínio, adaptadores, rotas | `npm run check` — 192 testes, sem exigir banco                           |
+| transação, locks, índices   | `npm run test:integration` — 16 testes contra PostgreSQL real            |
+| persistência após queda     | `scripts/verify-persistence.mjs` — reinicia o banco e reconta            |
+| volume                      | `scripts/volume-check.mjs` — 50.000 pedidos, 150.000 itens               |
+
+A cobertura é de **94,68% de linhas**, medida por comando versionado para o número não depender de quem mede.
+
+## Organização
 
 ```text
 src/
@@ -77,28 +132,27 @@ src/
     integrations/              adaptadores Alfa (nested-json) e Beta (paired-csv)
   presentation/http/           rotas e tradução HTTP
   main/                        composição das dependências e inicialização
-database/migrations/           reservado para migrações versionadas
-tests/                         testes automatizados
 ```
 
-SOLID é aplicado às responsabilidades e dependências, não apenas aos diretórios: `CheckReadiness` depende da interface pequena `DatabaseHealth`; `SchemaReadiness` implementa esse contrato; `main/server.ts` faz a injeção pelo construtor. O teste substitui o adaptador mantendo o contrato. Novos adaptadores de clientes deverão estender a ingestão sem adicionar condicionais específicos de cliente às regras de conferência. Não há container de injeção ou hierarquia de classes desnecessária.
+As dependências apontam para dentro: o domínio não conhece Prisma nem Fastify, e os casos de uso dependem de interfaces que a infraestrutura implementa. Isso não é organização de pastas — é o que permite os 192 testes rodarem sem banco, substituindo o adaptador e mantendo o contrato. Adaptadores de clientes novos estendem a ingestão sem adicionar condicionais de cliente às regras de conferência.
 
-## Contrato e diagramas
+Os objetos e as portas estão desenhados em [docs/diagrams/](docs/diagrams/README.md), derivados do código.
 
-O contrato normalizado está em [docs/API.md](docs/API.md) e em `src/domain/` e `src/application/ports/`. Os objetos e as portas estão desenhados em [docs/diagrams/](docs/diagrams/README.md): o diagrama é derivado do código e se atualiza junto com ele.
+## Limitações conhecidas
 
-## Plano técnico
+Registradas porque são reais, não porque não têm solução:
 
-Consulte [o plano de Alfa/Beta e Gama/Delta](docs/TECHNICAL_PLAN.md) somente ao trabalhar nessas etapas.
+- **A carga é síncrona.** 50.000 pedidos são uma requisição HTTP de 3,2 minutos. Funciona no Compose; um balanceador com tempo limite padrão a derruba, e não há retomada — o cliente reenvia tudo. Ingestão assíncrona com protocolo de acompanhamento é o desenho certo e é mudança de contrato.
+- **O teto de requisições é por origem, não por identidade.** Sem autenticação — que o enunciado explicitamente não pede — clientes atrás do mesmo IP dividem a quota. Configurável por `RATE_LIMIT_MAX`.
+- **Windows-1252 com CRLF** tem teste unitário no leitor de CSV, não fixture ponta a ponta com arquivo de ERP real.
+- **Migração e runtime usam a mesma credencial.** Separar DDL de DML fica para quando houver ambiente implantado.
+- **Não há CI**, e a política de exceção da auditoria npm não está definida.
+- `GET /metrics` está desenhado em [ADR-005](docs/decisions/ADR-005-observabilidade.md) e não implementado.
 
-## O que já existe
-
-Contrato normalizado, aritmética decimal exata, as sete regras de conferência, leitura em fluxo de JSON e CSV, os adaptadores de Alfa e Beta, o schema com migração versionada e os repositórios de pedido e conferência. Os diagramas do contrato estão em [docs/diagrams/](docs/diagrams/README.md).
-
-A aplicação ainda expõe apenas `GET /health` e `GET /ready`: os endpoints de negócio são P1-04, e nenhuma rota fictícia foi exposta.
+Não foram implementados por não serem pedidos: autenticação, autorização, controle de acesso por cliente, SLA, métricas e fila.
 
 ## Próxima etapa
 
-**ENV-03:** subir o Compose e validar contra PostgreSQL real. O código de persistência existe e nada dele rodou contra banco — migração não aplicada, transação e advisory lock não exercitados, índices parciais não confirmados em plano. Depois disso, P1-04 traz os casos de uso e as rotas.
+**Parte 2:** Gama (`flat-json`, tudo achatado, centavos, timestamp Unix, situação numérica, quantidade em caixas) e Delta (`split-json`, duas consultas independentes). A decisão do Delta já está tomada e registrada acima.
 
-O estado corrente e as limitações conhecidas ficam em [docs/STATUS.md](docs/STATUS.md).
+Estado corrente e posse das tarefas: [docs/STATUS.md](docs/STATUS.md) e [docs/TASKS.md](docs/TASKS.md). Colaboração entre agentes: [AGENTS.md](AGENTS.md).
