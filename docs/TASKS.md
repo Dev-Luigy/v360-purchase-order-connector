@@ -25,7 +25,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03        |
 | P1-02     | Implementar schema, migrações e repositórios                     | concluída                      | Claude      | Código pronto; validação contra PostgreSQL real é ENV-03                    |
 | FIX-06    | Fechar os achados de REVIEW-05 sobre P1-02                       | concluída                      | Claude      | Oito achados fechados; dois estavam desatualizados                          |
-| FIX-07    | Fechar os achados de código de REVIEW-06                         | em andamento                   | Claude      | Limites compartilhados, readiness por ordem, impressão do cursor            |
+| FIX-07    | Fechar os achados de código de REVIEW-06                         | concluída                      | Claude      | R06-01, 02, 03, 05 e 08 fechados; CI e auditoria ficam para tarefa própria  |
 | P1-03     | Implementar domínio e adaptadores Alfa/Beta                      | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                                |
 | FIX-01    | Estabilizar validação e limites de REVIEW-01                     | concluída                      | Claude      | REVIEW-01; sete achados corrigidos com regressão; libera P1-04              |
 | FIX-02    | Verificação pós-FIX-01: vazamento de origem e notações sem teste | concluída                      | Claude      | Dois defeitos corrigidos; notação por campo fica para decisão               |
@@ -270,8 +270,9 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## FIX-07 — achados de código de REVIEW-06
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/domain/{limits,schemas}.ts`, `src/infrastructure/database/{cursor,schema-readiness}.ts`, `prisma/schema.prisma`, `database/migrations/**`, `Dockerfile`, `tests/*.test.ts`, `README.md`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-07-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `src/domain/{limits,schemas}.ts`, `src/infrastructure/database/{cursor,schema-readiness}.ts`, `prisma/schema.prisma`, `database/migrations/**`, `Dockerfile`, `tests/*.test.ts`, `README.md`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-07-claude.md`.
 - Escopo: R06-01, R06-02, R06-03 e R06-08 de [REVIEW-06](handoffs/REVIEW-06-pos-fix-06-p1-02-codex.md), os três reproduzidos por sonda antes da correção. Mais R06-05, o aviso de OpenSSL no estágio de migração.
 - **Fora de escopo, por exigirem decisão:** R06-04 (política de auditoria npm) e R06-07 (pipeline de CI) são tarefa própria; R06-06 depende de ENV-03.
 - Dependências: FIX-06.
+- Evidência: [handoff FIX-07](handoffs/FIX-07-claude.md); `npm run check` verde com 122 testes; os três achados de código reproduzidos por sonda antes da correção; aviso de OpenSSL confirmado resolvido dentro da imagem de migração.

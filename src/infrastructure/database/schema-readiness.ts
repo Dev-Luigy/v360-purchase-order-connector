@@ -39,18 +39,24 @@ export class SchemaReadiness implements DatabaseHealth {
       throw new Error(describeReadinessFailure(error), { cause: error });
     }
 
-    const linha = rows[0];
-    if (linha === undefined) {
+    // A pergunta é "existe uma tentativa bem-sucedida?", e não "como está a
+    // primeira linha?". O fluxo oficial do Prisma permite marcar uma tentativa
+    // falha como revertida e aplicar de novo, então a mesma migração pode ter
+    // duas linhas. Olhar `rows[0]` fazia a prontidão depender da ordem que o
+    // PostgreSQL devolvesse — mesma base, veredito diferente (REVIEW-06,
+    // R06-02).
+    const aplicada = rows.some(
+      (linha) => linha.finished_at !== null && linha.rolled_back_at === null,
+    );
+    if (aplicada) return;
+
+    // Sem sucesso: as demais linhas servem só para explicar o porquê.
+    if (rows.length === 0) {
       throw new Error(
         `migração ${this.expected} não foi aplicada: execute a etapa de migração antes de servir`,
       );
     }
-    if (linha.rolled_back_at !== null) {
-      throw new Error(
-        `migração ${this.expected} foi revertida: o schema está inconsistente`,
-      );
-    }
-    if (linha.finished_at === null) {
+    if (rows.some((linha) => linha.finished_at === null)) {
       // Aplicação interrompida no meio deixa a linha sem `finished_at`. Pode
       // ser uma migração em curso agora ou uma que morreu; em ambos os casos o
       // schema não é confiável para servir tráfego.
@@ -58,6 +64,9 @@ export class SchemaReadiness implements DatabaseHealth {
         `migração ${this.expected} não terminou: o schema ainda não está estável`,
       );
     }
+    throw new Error(
+      `migração ${this.expected} foi revertida e não reaplicada: o schema está inconsistente`,
+    );
   }
 }
 

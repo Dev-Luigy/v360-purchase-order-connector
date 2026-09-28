@@ -49,7 +49,7 @@ curl http://localhost:3000/ready
 npm run check
 ```
 
-`npm run check` executa tipagem, lint, formatação, testes e build. Os testes usam injeção HTTP do Fastify e um substituto da conexão; não exigem banco e não validam persistência real. `npm run build` gera `dist/`; `npm start` executa o build. O driver PostgreSQL tem limites de tempo para conexão e consulta. `/ready` verifica conectividade, ainda não a existência de tabelas.
+`npm run check` executa geração do cliente Prisma, verificação do formato do schema, tipagem, lint, formatação, testes e build. Os testes não exigem banco: exercitam domínio, adaptadores e as partes puras do acesso a dados, com substitutos para a conexão. **Persistência real continua sem validação** — isso é ENV-03. `npm run build` gera `dist/`; `npm start` executa o build. Os pools têm limites por propósito: o caminho de requisição desiste rápido, o de carga aceita transação longa mas finita ([ADR-012](docs/decisions/ADR-012-notacao-por-campo.md)). `/ready` verifica se a migração esperada foi aplicada, não apenas se o banco responde.
 
 ## Decisões de tecnologia
 
@@ -74,14 +74,14 @@ src/
   infrastructure/
     config/                    leitura e validação do ambiente
     database/                  implementações PostgreSQL
-    integrations/              adaptadores dos clientes, a implementar
+    integrations/              adaptadores Alfa (nested-json) e Beta (paired-csv)
   presentation/http/           rotas e tradução HTTP
   main/                        composição das dependências e inicialização
 database/migrations/           reservado para migrações versionadas
 tests/                         testes automatizados
 ```
 
-SOLID é aplicado às responsabilidades e dependências, não apenas aos diretórios: `CheckReadiness` depende da interface pequena `DatabaseHealth`; `PostgresHealth` implementa esse contrato; `main/server.ts` faz a injeção pelo construtor. O teste substitui o adaptador mantendo o contrato. Novos adaptadores de clientes deverão estender a ingestão sem adicionar condicionais específicos de cliente às regras de conferência. Não há container de injeção ou hierarquia de classes desnecessária.
+SOLID é aplicado às responsabilidades e dependências, não apenas aos diretórios: `CheckReadiness` depende da interface pequena `DatabaseHealth`; `SchemaReadiness` implementa esse contrato; `main/server.ts` faz a injeção pelo construtor. O teste substitui o adaptador mantendo o contrato. Novos adaptadores de clientes deverão estender a ingestão sem adicionar condicionais específicos de cliente às regras de conferência. Não há container de injeção ou hierarquia de classes desnecessária.
 
 ## Contrato e diagramas
 
@@ -91,6 +91,14 @@ O contrato normalizado está em [docs/API.md](docs/API.md) e em `src/domain/` e 
 
 Consulte [o plano de Alfa/Beta e Gama/Delta](docs/TECHNICAL_PLAN.md) somente ao trabalhar nessas etapas.
 
+## O que já existe
+
+Contrato normalizado, aritmética decimal exata, as sete regras de conferência, leitura em fluxo de JSON e CSV, os adaptadores de Alfa e Beta, o schema com migração versionada e os repositórios de pedido e conferência. Os diagramas do contrato estão em [docs/diagrams/](docs/diagrams/README.md).
+
+A aplicação ainda expõe apenas `GET /health` e `GET /ready`: os endpoints de negócio são P1-04, e nenhuma rota fictícia foi exposta.
+
 ## Próxima etapa
 
-Implementar o domínio, as migrações e os adaptadores Alfa/Beta, seguidos dos casos de uso de consulta, conferência e relatório. Os endpoints de negócio serão definidos nessa etapa; nenhuma rota de negócio fictícia foi exposta nesta base.
+**ENV-03:** subir o Compose e validar contra PostgreSQL real. O código de persistência existe e nada dele rodou contra banco — migração não aplicada, transação e advisory lock não exercitados, índices parciais não confirmados em plano. Depois disso, P1-04 traz os casos de uso e as rotas.
+
+O estado corrente e as limitações conhecidas ficam em [docs/STATUS.md](docs/STATUS.md).

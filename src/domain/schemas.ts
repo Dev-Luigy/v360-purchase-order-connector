@@ -1,7 +1,21 @@
 import { z } from 'zod';
 
 import { divergenceCodes, type InvoiceCheckRequest } from './conference.js';
-import { maxDecimalPlaces, maxIntegerDigits } from './decimal.js';
+import {
+  maxClientIdLength,
+  maxDecimalPlaces,
+  maxDescriptionLength,
+  maxDivergenceTextLength,
+  maxExternalLine,
+  maxExternalNumberLength,
+  maxFieldLength,
+  maxIntegerDigits,
+  maxInvoiceLines,
+  maxItemsPerOrder,
+  maxMaterialLength,
+  maxPurchaseUnitLength,
+  maxSupplierNameLength,
+} from './limits.js';
 import type { NormalizedPurchaseOrder } from './purchase-order.js';
 
 /**
@@ -100,14 +114,14 @@ export const purchaseOrderStatusSchema = z.enum([
 
 export const supplierSchema = z.object({
   taxId: taxIdSchema,
-  name: z.string().min(1, 'razão social vazia'),
+  name: z.string().min(1, 'razão social vazia').max(maxSupplierNameLength),
 });
 
 export const normalizedItemSchema = z.object({
-  externalLine: z.int().nonnegative(),
-  material: z.string().min(1, 'material vazio'),
-  description: z.string(),
-  purchaseUnit: z.string().min(1, 'unidade vazia'),
+  externalLine: z.int().nonnegative().max(maxExternalLine),
+  material: z.string().min(1, 'material vazio').max(maxMaterialLength),
+  description: z.string().max(maxDescriptionLength),
+  purchaseUnit: z.string().min(1, 'unidade vazia').max(maxPurchaseUnitLength),
   // Invariantes, não aparências: quantidade negativa e fator zero passavam e
   // só explodiam na conferência (REVIEW-01, achado 2).
   conversionFactor: positiveDecimalSchema,
@@ -118,8 +132,11 @@ export const normalizedItemSchema = z.object({
 });
 
 export const normalizedOrderSchema = z.object({
-  clientId: z.string().min(1, 'cliente vazio'),
-  externalNumber: z.string().min(1, 'número do pedido vazio'),
+  clientId: z.string().min(1, 'cliente vazio').max(maxClientIdLength),
+  externalNumber: z
+    .string()
+    .min(1, 'número do pedido vazio')
+    .max(maxExternalNumberLength),
   supplier: supplierSchema,
   currency: currencySchema,
   status: purchaseOrderStatusSchema,
@@ -129,13 +146,13 @@ export const normalizedOrderSchema = z.object({
    * cliente afirmando que não há itens, e remove (ADR-008). São coisas
    * diferentes e o schema mantém as duas possíveis de propósito.
    */
-  items: z.array(normalizedItemSchema).nullable(),
+  items: z.array(normalizedItemSchema).max(maxItemsPerOrder).nullable(),
 });
 
 /** Nota fiscal como a plataforma envia. Usado na borda HTTP, em P1-04. */
 export const invoiceCheckRequestSchema = z.object({
-  clientId: z.string().min(1),
-  purchaseOrderNumber: z.string().min(1),
+  clientId: z.string().min(1).max(maxClientIdLength),
+  purchaseOrderNumber: z.string().min(1).max(maxExternalNumberLength),
   // O CNPJ chega limpo nesta borda. Máscara é assunto do arquivo do cliente,
   // resolvido pelo adaptador; a API não precisa adivinhar pontuação, e aceitar
   // qualquer string com 14 dígitos dentro era leniência em campo de identidade
@@ -149,15 +166,30 @@ export const invoiceCheckRequestSchema = z.object({
   lines: z
     .array(
       z.object({
-        material: z.string().min(1),
+        material: z.string().min(1).max(maxMaterialLength),
         quantity: decimalTextSchema,
         totalValue: decimalTextSchema,
       }),
     )
-    .min(1, 'nota sem linhas'),
+    .min(1, 'nota sem linhas')
+    .max(maxInvoiceLines, 'nota com linhas demais'),
 });
 
 export const divergenceCodeSchema = z.enum(divergenceCodes);
+
+/**
+ * Divergência antes de persistir. `expected` e `received` copiam texto vindo
+ * da nota, e sem teto uma conferência válida para o contrato falharia só na
+ * gravação, na coluna `VARCHAR(512)` (REVIEW-06, R06-01).
+ */
+export const divergenceSchema = z.object({
+  code: divergenceCodeSchema,
+  field: z.string().min(1).max(maxFieldLength),
+  invoiceLineIndex: z.int().nonnegative().nullable(),
+  purchaseOrderLine: z.int().nullable(),
+  expected: z.string().max(maxDivergenceTextLength).nullable(),
+  received: z.string().max(maxDivergenceTextLength).nullable(),
+});
 
 /** Mensagem curta e com caminho, para virar `RejectedRecord.reason`. */
 export function describeIssues(error: z.ZodError): string {

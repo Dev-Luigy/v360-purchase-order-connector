@@ -1,5 +1,7 @@
 import { Decimal as DecimalJs } from 'decimal.js';
 
+import { maxDecimalPlaces, maxIntegerDigits } from './limits.js';
+
 import type { CurrencyCode, DecimalText } from './primitives.js';
 
 /**
@@ -55,8 +57,6 @@ const decimalText = /^[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
  * exponencial e vira um milhão de caracteres em `toFixed`. Rejeitar só depois,
  * no schema, deixaria um payload curto alocar memória grande (REVIEW-03, 1).
  */
-export const maxIntegerDigits = 24;
-export const maxDecimalPlaces = 12;
 
 export class Decimal {
   private constructor(private readonly value: InstanceType<typeof Exact>) {}

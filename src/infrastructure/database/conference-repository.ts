@@ -9,7 +9,10 @@ import type {
   Divergence,
   DivergenceCode,
 } from '../../domain/conference.js';
-import { invoiceCheckRequestSchema } from '../../domain/schemas.js';
+import {
+  divergenceSchema,
+  invoiceCheckRequestSchema,
+} from '../../domain/schemas.js';
 
 import { decodeCursor, encodeCursor, fingerprintOf } from './cursor.js';
 import type { Prisma, PrismaClient } from './generated/client.js';
@@ -28,6 +31,12 @@ export class PrismaConferenceRepository implements ConferenceRepository {
    * conferência nenhuma: o relatório contaria uma nota reprovada sem motivo.
    */
   async save(record: Omit<ConferenceRecord, 'id'>): Promise<ConferenceRecord> {
+    // Confere antes de gravar: `expected` e `received` carregam texto vindo da
+    // nota, e estourar a coluna abortaria a transação com erro de banco em vez
+    // de rejeição explicável (REVIEW-06, R06-01).
+    for (const divergence of record.divergences) {
+      divergenceSchema.parse(divergence);
+    }
     const created = await this.prisma.conference.create({
       data: {
         purchaseOrderId: record.purchaseOrderId,

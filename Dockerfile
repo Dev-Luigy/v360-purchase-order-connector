@@ -14,6 +14,13 @@ RUN npm run build
 # imagem que serve tráfego não carregar o CLI nem poder aplicar DDL
 # (REVIEW-04, R04-05).
 FROM build AS migrate
+# O CLI do Prisma avisa que não detectou OpenSSL e que "may not work as
+# expected". Não se provou fatal neste host, mas migração de schema não é lugar
+# para "provavelmente funciona" (REVIEW-06, R06-05). O pacote entra só aqui: a
+# imagem que serve tráfego usa o driver `pg` e não tem esse requisito.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl \
+ && rm -rf /var/lib/apt/lists/*
 COPY database ./database
 CMD ["npx", "prisma", "migrate", "deploy"]
 
