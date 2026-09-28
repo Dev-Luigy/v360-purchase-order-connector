@@ -23,11 +23,13 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-05 | Revisar a entrega parcial de P1-02                               | concluída                      | Codex       | Handoff para Claude; somente documentação                                   |
 | REVIEW-06 | Verificar FIX-06 e funcionalidades concluídas de P1-02           | concluída                      | Codex       | Handoff para Claude; somente documentação                                   |
 | REVIEW-07 | Revisão geral de código, segurança e engenharia                  | concluída                      | Codex       | Código completo, Zod e avaliação de bibliotecas; somente documentação       |
+| REVIEW-08 | Verificar as correções de FIX-08                                 | concluída                      | Codex       | Conferência item a item de REVIEW-07; somente documentação                  |
 | P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03        |
 | P1-02     | Implementar schema, migrações e repositórios                     | concluída                      | Claude      | Código pronto; validação contra PostgreSQL real é ENV-03                    |
 | FIX-06    | Fechar os achados de REVIEW-05 sobre P1-02                       | concluída                      | Claude      | Oito achados fechados; dois estavam desatualizados                          |
 | FIX-07    | Fechar os achados de código de REVIEW-06                         | concluída                      | Claude      | R06-01, 02, 03, 05 e 08 fechados; CI e auditoria ficam para tarefa própria  |
 | FIX-08    | Fechar os achados de código de REVIEW-07                         | concluída                      | Claude      | Seis achados de código fechados; CI, integração e P1-04 seguem fora         |
+| FIX-09    | Corrigir o retrato truncado introduzido em FIX-08                | em andamento                   | Claude      | R08-01 a R08-04; regressão passando pelo adaptador                          |
 | P1-03     | Implementar domínio e adaptadores Alfa/Beta                      | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                                |
 | FIX-01    | Estabilizar validação e limites de REVIEW-01                     | concluída                      | Claude      | REVIEW-01; sete achados corrigidos com regressão; libera P1-04              |
 | FIX-02    | Verificação pós-FIX-01: vazamento de origem e notações sem teste | concluída                      | Claude      | Dois defeitos corrigidos; notação por campo fica para decisão               |
@@ -93,6 +95,15 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: revisão estática e dinâmica de todo o código existente, fronteiras de validação com Zod, segurança, arquitetura, testes, dependências e oportunidades justificadas de substituir código próprio por bibliotecas; sem alterar produção.
 - Dependências: FIX-07 concluída; persistência real continua dependente de ENV-03.
 - Evidência: [handoff REVIEW-07](handoffs/REVIEW-07-geral-codex.md); `npm run check` e build runtime verdes, 122 testes, cobertura medida, limites reproduzidos e quatro advisories altas ainda presentes na árvore npm.
+
+## REVIEW-08 — verificação pós-FIX-08
+
+- Responsável: Codex.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `docs/TASKS.md`, `docs/handoffs/REVIEW-08-pos-fix-08-codex.md`.
+- Escopo: conferir cada fechamento declarado em FIX-08 contra REVIEW-07, executar checks e sondas de regressão, sem alterar código de produção.
+- Dependências: FIX-08 concluída; PostgreSQL real continua dependente de ENV-03.
+- Evidência: [handoff REVIEW-08](handoffs/REVIEW-08-pos-fix-08-codex.md); seis correções confirmadas, teto de itens ainda produz snapshot truncado, regra de máscara segue parcial e pendências deliberadas continuam abertas.
 
 ## COL-02 — contexto compartilhado e leitura sob demanda
 
@@ -297,3 +308,12 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - **Fora de escopo, por dependerem de P1-04, de ENV-03 ou de decisão:** R07-04 e R07-09 (agregado da conferência montado pelo caso de uso), R07-05 (parte), R07-10 (CI e política de auditoria), R07-11 (integração com banco), R07-12 (observabilidade e hardening).
 - Dependências: FIX-07.
 - Evidência: [handoff FIX-08](handoffs/FIX-08-claude.md); `npm run check` verde com 132 testes; os seis achados reproduzidos por sonda antes da correção; build dos dois estágios sem aviso de OpenSSL.
+
+## FIX-09 — retrato truncado e máscara do perfil
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `src/domain/limits.ts`, `src/infrastructure/integrations/{paired-csv-adapter,field-parsers}.ts`, `package.json` (script de cobertura), `tests/*.test.ts`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-09-claude.md`.
+- Escopo: R08-01 a R08-04 de [REVIEW-08](handoffs/REVIEW-08-pos-fix-08-codex.md). **R08-01 é regressão que eu introduzi em FIX-08**: o teto de itens rejeitava a linha excedente e emitia o pedido com as primeiras 10.000, o que `replaceSnapshot` gravaria como retrato completo.
+- Escopo adicional, pela mesma causa: qualquer grupo com linha rejeitada emitia retrato parcial, que também apagaria itens conhecidos. A política passa a usar `items: null`, que existe exatamente para isso (ADR-008).
+- Dependências: FIX-08.
