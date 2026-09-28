@@ -32,7 +32,10 @@ export type Problem = z.infer<typeof problemSchema>;
 export const commonProblems = {
   400: problemSchema,
   404: problemSchema,
+  413: problemSchema,
+  415: problemSchema,
   422: problemSchema,
+  429: problemSchema,
   500: problemSchema,
   503: problemSchema,
 } as const;
@@ -105,6 +108,20 @@ export function toProblem(error: unknown): MappedProblem {
       body: { error: 'payload_incompativel', message: error.message },
     };
   }
+  // O framework e os plugins já decidem o status de casos que eles conhecem:
+  // 429 do rate limit, 413 do corpo acima do teto, 415 de tipo não suportado.
+  // Sem honrar isso, tudo virava 500 — o cliente recebia "erro interno" para
+  // uma recusa que ele podia corrigir. Descoberto medindo volume.
+  const doFramework = frameworkStatus(error);
+  if (doFramework !== null) {
+    return {
+      status: doFramework,
+      body: {
+        error: frameworkCode(doFramework),
+        message: error instanceof Error ? error.message : 'requisição recusada',
+      },
+    };
+  }
   if (isConnectionFailure(error)) {
     return {
       status: 503,
@@ -137,6 +154,29 @@ function describeValidation(
   return descritos.length > 0
     ? descritos.join('; ')
     : 'a requisição não corresponde ao contrato';
+}
+
+/** Status que o próprio Fastify ou um plugin já atribuiu ao erro. */
+function frameworkStatus(error: unknown): number | null {
+  if (typeof error !== 'object' || error === null) return null;
+  const status = (error as { statusCode?: unknown }).statusCode;
+  // Só 4xx: um 5xx do framework não deve escapar com a mensagem interna.
+  return typeof status === 'number' && status >= 400 && status < 500
+    ? status
+    : null;
+}
+
+function frameworkCode(status: number): string {
+  switch (status) {
+    case 413:
+      return 'carga_acima_do_limite';
+    case 415:
+      return 'tipo_nao_suportado';
+    case 429:
+      return 'limite_de_requisicoes';
+    default:
+      return 'requisicao_recusada';
+  }
 }
 
 /** Códigos do `pg` para banco fora do ar ou recusando conexão. */

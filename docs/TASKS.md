@@ -38,7 +38,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-04    | Fechar os pontos que dependiam de decisão                        | concluída                      | Claude      | ADR-012: notação por campo, teto do Beta, pool por propósito, lint com tipo   |
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado           |
 | P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                         |
-| P1-05     | Validar desafio e registrar marco parte-1                        | em andamento                   | Claude      | ENV-03 concluída; validar contra o enunciado e marcar parte-1                 |
+| P1-05     | Validar desafio e registrar marco parte-1                        | concluída                      | Claude      | 18/18 exigências verificadas no ar; tag depende de DOC-02                     |
 | P2-01     | Integrar Gama/Delta e documentar mudanças                        | aguardando                     | —           | P1-05                                                                         |
 
 Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e dependências. Uma tarefa só pode ter um responsável de implementação por vez.
@@ -352,7 +352,8 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## P1-05 — validar o desafio e marcar a Parte 1
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `scripts/**` (geradores e medições), `tests/**`, `docs/TASKS.md`, `docs/STATUS.md`, `docs/handoffs/P1-05-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `scripts/{validate-case,volume-check}.mjs`, `tests/{p1-05-volume,contrato-documentado}.test.ts`, `tests/support/build-test-app.ts`, `src/presentation/http/{app,problem}.ts`, `src/infrastructure/config/env.ts`, `src/main/server.ts`, `eslint.config.js`, `docs/API.md`, `docs/TASKS.md`, `docs/STATUS.md`, `docs/handoffs/P1-05-claude.md`.
 - Escopo: conferir o sistema contra cada exigência do enunciado, medindo em vez de supor — persistência, concorrência, precisão decimal, paginação com filtros e **volume**, que é o item que nenhuma tarefa anterior exercitou. Registrar o que falta antes da tag.
 - Dependências: P1-04 e ENV-03. Antecede DOC-02 e a tag `parte-1`.
+- Evidência: [handoff P1-05](handoffs/P1-05-claude.md); 18/18 exigências verificadas contra o serviço no ar, 50.000 pedidos medidos, três defeitos corrigidos com regressão. A tag `parte-1` **não** foi marcada: depende de DOC-02, porque o enunciado trata o README como artefato avaliado.

@@ -1,6 +1,6 @@
 # Estado do projeto
 
-Atualizado por Claude em 2026-09-28, após ENV-03.
+Atualizado por Claude em 2026-09-28, após P1-05.
 
 ## Implementado
 
@@ -28,6 +28,9 @@ Atualizado por Claude em 2026-09-28, após ENV-03.
 - `docker compose up` do zero levanta banco, aplica a migração como etapa própria e só então sobe a API, com `/ready` em 200 — fecha os achados 1 e 2 de [REVIEW-02](handoffs/REVIEW-02-claude.md).
 - Persistência de pedidos **e** do histórico de conferências após reinício do banco provada por `scripts/verify-persistence.mjs`.
 - Sem `DATABASE_URL`, os 16 testes de integração são pulados: `npm run check` continua funcionando em máquina sem Docker.
+- **P1-05 conferiu o serviço contra o enunciado, exigência por exigência.** `node scripts/validate-case.mjs` faz uma asserção por exigência contra o stack no ar: **18/18**. Detalhe em [P1-05](handoffs/P1-05-claude.md).
+- **Volume medido, não suposto**: 50.000 pedidos e 150.000 itens carregados em 189,3s (264 pedidos/s); varredura de 500 páginas em 1,8s com **zero repetidos**; a última página custa 0,54× a primeira, o que prova o cursor contra `OFFSET`; memória plana em ~380MiB enquanto os pedidos iam de 5 mil a 50 mil.
+- Três defeitos encontrados e fechados com regressão: recusa do framework (429, 413) virava 500; o teto de 120 req/min estrangulava a varredura noturna do próprio enunciado; e `docs/API.md` errava **todos** os nomes de parte e o cabeçalho da ingestão, então quem seguisse a documentação não carregava nada.
 - `scripts/activate-node.sh` está apagado no working tree por alteração preexistente, preservada nesta revisão; o README ainda o referencia.
 
 ## Ainda não implementado
@@ -36,7 +39,9 @@ Pipeline de CI e política de auditoria. Gama/Delta somente após o marco da Par
 
 ## Próxima retomada
 
-**P1-05 é o caminho crítico** e está destravada: persistência, concorrência, precisão e paginação — os quatro itens que ela cobra — já têm prova executável em [ENV-03](handoffs/ENV-03-claude.md). Falta fechar o marco `parte-1` e o README como artefato avaliado (DOC-02), que o enunciado cobra explicitamente.
+**DOC-02 é o caminho crítico e o único bloqueio da tag.** O enunciado trata o README como artefato avaliado e cobra nele três defesas que hoje não estão lá: a justificativa de cada regra de conferência, a política de reenvio de pedido alterado e a decisão sobre os dois lados do Delta. Marcar `parte-1` antes seria marcar o marco com o artefato avaliado incompleto. Depois dela, a tag e então P2-01 (Gama e Delta).
+
+Limitações que P1-05 revelou e deixou abertas: a carga de 50.000 pedidos é uma requisição HTTP de 3,2 minutos, que qualquer balanceador com tempo limite padrão derruba sem retomada; o teto de requisições é por origem e não por identidade, porque não há autenticação; e Windows-1252 com CRLF tem teste unitário, não fixture ponta a ponta.
 
 Seguem sem tarefa: pipeline de CI, política de exceção da auditoria npm e separação de credenciais DDL/DML fora do ambiente local. Consultar o quadro antes de reservar arquivos.
 

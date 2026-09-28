@@ -45,8 +45,16 @@ export const httpLimits = {
     headerPairs: 64,
   },
   rateLimit: {
-    /** Por identidade e por minuto. Vira quota real quando houver autenticação. */
-    max: 120,
+    /**
+     * Por origem e por minuto; vira quota por identidade quando houver
+     * autenticação.
+     *
+     * Eram 120/min, número escolhido sem medir. A varredura noturna que o
+     * próprio enunciado descreve — dezenas de milhares de pedidos em páginas de
+     * 100 — precisa de centenas de requisições seguidas, e o teto derrubava o
+     * caso de uso que o sistema existe para servir. Medido em P1-05.
+     */
+    max: 1200,
     timeWindow: '1 minute',
   },
 } as const;
@@ -61,6 +69,8 @@ export interface AppDependencies {
   readonly summarizeConferences: SummarizeConferences;
   readonly profileFormatOf: (clientId: string) => Promise<string | null>;
   readonly logLevel?: string;
+  /** Teto de requisições; ausente usa o padrão de `httpLimits`. */
+  readonly rateLimit?: { readonly max: number; readonly timeWindow: string };
 }
 
 export async function buildApp(
@@ -87,7 +97,7 @@ export async function buildApp(
   app.setSerializerCompiler(serializerCompiler);
 
   await app.register(multipart, { limits: httpLimits.multipart });
-  await app.register(rateLimit, httpLimits.rateLimit);
+  await app.register(rateLimit, dependencies.rateLimit ?? httpLimits.rateLimit);
 
   app.setErrorHandler((error, request, reply) => {
     const problem = toProblem(error);
