@@ -11,10 +11,12 @@ import {
   maxFieldLength,
   maxIntegerDigits,
   maxInvoiceLines,
+  maxPersistedDecimalPlaces,
   maxItemsPerOrder,
   maxMaterialLength,
   maxPurchaseUnitLength,
   maxSupplierNameLength,
+  supportedCurrencies,
 } from './limits.js';
 import type { NormalizedPurchaseOrder } from './purchase-order.js';
 
@@ -43,8 +45,22 @@ export const decimalTextSchema = z.string().regex(
   `decimal fora do contrato: até ${maxIntegerDigits} dígitos inteiros, ${maxDecimalPlaces} decimais, sem expoente`,
 );
 
+/**
+ * Decimal **persistido**: no máximo a escala que a coluna guarda. O contrato
+ * aceitava doze casas para uma coluna de seis, e o adaptador arredondava em
+ * silêncio (REVIEW-07, R07-01).
+ */
+export const persistedDecimalSchema = z
+  .string()
+  .regex(
+    new RegExp(
+      `^-?\\d{1,${maxIntegerDigits}}(?:\\.\\d{1,${maxPersistedDecimalPlaces}})?$`,
+    ),
+    `decimal persistido: até ${maxIntegerDigits} dígitos inteiros e ${maxPersistedDecimalPlaces} decimais`,
+  );
+
 /** Decimal do contrato que não pode ser negativo: quantidade, preço, saldo. */
-export const nonNegativeDecimalSchema = decimalTextSchema.refine(
+export const nonNegativeDecimalSchema = persistedDecimalSchema.refine(
   (value) => !value.startsWith('-'),
   'não pode ser negativo',
 );
@@ -54,7 +70,7 @@ export const nonNegativeDecimalSchema = decimalTextSchema.refine(
  * zero fazia a conferência dividir por zero e lançar, o que viraria erro 500
  * na borda em vez de rejeição na carga (REVIEW-01, achado 2).
  */
-export const positiveDecimalSchema = decimalTextSchema.refine(
+export const positiveDecimalSchema = persistedDecimalSchema.refine(
   (value) => !value.startsWith('-') && /[1-9]/.test(value),
   'precisa ser maior que zero',
 );
@@ -102,9 +118,35 @@ export const taxIdSchema = z
   .string()
   .regex(/^\d{14}$/, 'CNPJ fora de 14 dígitos');
 
+/**
+ * Texto que vai para uma coluna do PostgreSQL.
+ *
+ * `z.string()` aceita `\u0000`, e o PostgreSQL não representa NUL em `text`,
+ * `varchar` nem `jsonb`. O dado atravessava toda a aplicação e abortava só na
+ * gravação (REVIEW-07, R07-03). Só o NUL é recusado: outros caracteres de
+ * controle e qualquer Unicode válido continuam passando, e nada é removido ou
+ * truncado em silêncio.
+ */
+export const persistedText = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .refine(
+      (value) => !value.includes('\u0000'),
+      'texto com caractere NUL, que o PostgreSQL não armazena',
+    );
+
+/**
+ * Moeda que o serviço suporta, com escala conhecida. Não é "três letras
+ * maiúsculas": a escala decide o arredondamento da conferência, e moeda sem
+ * escala conhecida não pode ser conferida (ADR-007, REVIEW-07 R07-08).
+ */
 export const currencySchema = z
   .string()
-  .regex(/^[A-Z]{3}$/, 'moeda fora de ISO 4217');
+  .refine(
+    (value) => Object.hasOwn(supportedCurrencies, value),
+    'moeda não suportada: a escala decimal precisa estar declarada',
+  );
 
 export const purchaseOrderStatusSchema = z.enum([
   'aberto',
@@ -114,14 +156,14 @@ export const purchaseOrderStatusSchema = z.enum([
 
 export const supplierSchema = z.object({
   taxId: taxIdSchema,
-  name: z.string().min(1, 'razão social vazia').max(maxSupplierNameLength),
+  name: persistedText(maxSupplierNameLength).min(1, 'razão social vazia'),
 });
 
 export const normalizedItemSchema = z.object({
   externalLine: z.int().nonnegative().max(maxExternalLine),
-  material: z.string().min(1, 'material vazio').max(maxMaterialLength),
-  description: z.string().max(maxDescriptionLength),
-  purchaseUnit: z.string().min(1, 'unidade vazia').max(maxPurchaseUnitLength),
+  material: persistedText(maxMaterialLength).min(1, 'material vazio'),
+  description: persistedText(maxDescriptionLength),
+  purchaseUnit: persistedText(maxPurchaseUnitLength).min(1, 'unidade vazia'),
   // Invariantes, não aparências: quantidade negativa e fator zero passavam e
   // só explodiam na conferência (REVIEW-01, achado 2).
   conversionFactor: positiveDecimalSchema,
@@ -132,11 +174,11 @@ export const normalizedItemSchema = z.object({
 });
 
 export const normalizedOrderSchema = z.object({
-  clientId: z.string().min(1, 'cliente vazio').max(maxClientIdLength),
-  externalNumber: z
-    .string()
-    .min(1, 'número do pedido vazio')
-    .max(maxExternalNumberLength),
+  clientId: persistedText(maxClientIdLength).min(1, 'cliente vazio'),
+  externalNumber: persistedText(maxExternalNumberLength).min(
+    1,
+    'número do pedido vazio',
+  ),
   supplier: supplierSchema,
   currency: currencySchema,
   status: purchaseOrderStatusSchema,
@@ -151,8 +193,9 @@ export const normalizedOrderSchema = z.object({
 
 /** Nota fiscal como a plataforma envia. Usado na borda HTTP, em P1-04. */
 export const invoiceCheckRequestSchema = z.object({
-  clientId: z.string().min(1).max(maxClientIdLength),
-  purchaseOrderNumber: z.string().min(1).max(maxExternalNumberLength),
+  // A nota vai inteira para uma coluna `jsonb`, que também recusa NUL.
+  clientId: persistedText(maxClientIdLength).min(1),
+  purchaseOrderNumber: persistedText(maxExternalNumberLength).min(1),
   // O CNPJ chega limpo nesta borda. Máscara é assunto do arquivo do cliente,
   // resolvido pelo adaptador; a API não precisa adivinhar pontuação, e aceitar
   // qualquer string com 14 dígitos dentro era leniência em campo de identidade
@@ -166,7 +209,7 @@ export const invoiceCheckRequestSchema = z.object({
   lines: z
     .array(
       z.object({
-        material: z.string().min(1).max(maxMaterialLength),
+        material: persistedText(maxMaterialLength).min(1),
         quantity: decimalTextSchema,
         totalValue: decimalTextSchema,
       }),
@@ -184,11 +227,12 @@ export const divergenceCodeSchema = z.enum(divergenceCodes);
  */
 export const divergenceSchema = z.object({
   code: divergenceCodeSchema,
-  field: z.string().min(1).max(maxFieldLength),
+  field: persistedText(maxFieldLength).min(1),
   invoiceLineIndex: z.int().nonnegative().nullable(),
-  purchaseOrderLine: z.int().nullable(),
-  expected: z.string().max(maxDivergenceTextLength).nullable(),
-  received: z.string().max(maxDivergenceTextLength).nullable(),
+  // Linha de pedido é número de linha do ERP; negativo não existe.
+  purchaseOrderLine: z.int().nonnegative().nullable(),
+  expected: persistedText(maxDivergenceTextLength).nullable(),
+  received: persistedText(maxDivergenceTextLength).nullable(),
 });
 
 /** Mensagem curta e com caminho, para virar `RejectedRecord.reason`. */

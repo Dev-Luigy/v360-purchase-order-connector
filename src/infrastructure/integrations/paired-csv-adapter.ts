@@ -10,6 +10,8 @@ import type {
   NormalizedPurchaseOrderItem,
 } from '../../domain/purchase-order.js';
 
+import { maxItemsPerOrder } from '../../domain/limits.js';
+
 import { streamCsvRecords, type CsvRecord } from './csv-stream.js';
 import { FieldError } from './field-parsers.js';
 import {
@@ -91,6 +93,15 @@ export class PairedCsvAdapter implements SourceAdapter {
     const flush = (): void => {
       if (current === null) return;
       closed.add(current.orderNumber);
+      // O conjunto cresce com todo número de pedido visto nos itens, inclusive
+      // grupos órfãos que nunca entraram no mapa de cabeçalhos: sem teto, ele
+      // escapava do limite que protegia o índice (REVIEW-07, R07-02).
+      if (closed.size > this.maxIndexedHeaders) {
+        throw new FieldError(
+          csvItemsPart,
+          `mais de ${String(this.maxIndexedHeaders)} pedidos distintos no arquivo de itens`,
+        );
+      }
       const header = headers.get(current.orderNumber);
       if (header === undefined) {
         // As duas partes vieram na mesma carga: falta de cabeçalho aqui é
@@ -158,6 +169,15 @@ export class PairedCsvAdapter implements SourceAdapter {
       }
 
       try {
+        // O teto entra **antes** do push. O `.max()` do Zod só roda quando a
+        // lista já existe, então um pedido malicioso acumularia milhões de
+        // itens antes de alguém reclamar (REVIEW-07, R07-02).
+        if (current.items.length >= maxItemsPerOrder) {
+          throw new FieldError(
+            csvItemsPart,
+            `pedido ${current.orderNumber} com mais de ${String(maxItemsPerOrder)} itens`,
+          );
+        }
         current.items.push(readItem(source, profile));
       } catch (cause) {
         current.rejected += 1;

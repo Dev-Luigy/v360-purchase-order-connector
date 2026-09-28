@@ -4,6 +4,12 @@ COPY package*.json ./
 RUN npm ci
 # O schema e a configuração entram antes do build porque `npm run build`
 # dispara `prisma generate`: sem o cliente gerado, o TypeScript não compila.
+# O `prisma generate` do build também avisa que não detectou OpenSSL. FIX-07
+# resolveu isso só no estágio de migração; aqui o aviso continuava
+# (REVIEW-07, R07-10).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl \
+ && rm -rf /var/lib/apt/lists/*
 COPY tsconfig*.json prisma.config.ts ./
 COPY prisma ./prisma
 COPY src ./src

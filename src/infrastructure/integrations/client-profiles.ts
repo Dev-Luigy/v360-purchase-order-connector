@@ -4,9 +4,11 @@ import { deepFreeze } from '../deep-freeze.js';
 
 import type { ClientProfiles } from '../../application/ports/client-profiles.js';
 import type { ClientId, ClientProfile } from '../../domain/client.js';
+import { maxClientIdLength } from '../../domain/limits.js';
 import {
   currencySchema,
   describeIssues,
+  persistedText,
   purchaseOrderStatusSchema,
 } from '../../domain/schemas.js';
 
@@ -144,7 +146,7 @@ const itemFieldMapSchema = z.object({
 
 const profileSchema = z
   .object({
-    clientId: z.string().min(1, 'identificador vazio'),
+    clientId: persistedText(maxClientIdLength).min(1, 'identificador vazio'),
     name: z.string().min(1, 'nome vazio'),
     deliveryFormat: z.enum([
       'nested-json',

@@ -52,7 +52,11 @@ export function readOrderHeader(
   return {
     externalNumber,
     supplier: {
-      taxId: parseTaxId(source.text(map.supplierTaxId), map.supplierTaxId),
+      taxId: parseTaxId(
+        source.text(map.supplierTaxId),
+        map.supplierTaxId,
+        profile.taxIdMasked,
+      ),
       name: source.text(map.supplierName).trim(),
     },
     currency: parseCurrency(

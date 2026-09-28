@@ -1,6 +1,11 @@
 import { Decimal as DecimalJs } from 'decimal.js';
 
-import { maxDecimalPlaces, maxIntegerDigits } from './limits.js';
+import {
+  maxDecimalPlaces,
+  maxIntegerDigits,
+  maxPersistedDecimalPlaces,
+  supportedCurrencies,
+} from './limits.js';
 
 import type { CurrencyCode, DecimalText } from './primitives.js';
 
@@ -194,33 +199,23 @@ export class Decimal {
  * nota. O mapa existe para que uma moeda sem centavo não seja tratada como se
  * tivesse.
  */
-const currencyScales: Readonly<Record<string, number>> = {
-  BRL: 2,
-  USD: 2,
-  EUR: 2,
-  GBP: 2,
-  // Sem centavo. Tratá-las como se tivessem duas casas arredondaria o valor
-  // esperado para uma fração que não existe na moeda (REVIEW-01, achado 7).
-  CLP: 0,
-  ISK: 0,
-  JPY: 0,
-  KRW: 0,
-  PYG: 0,
-  VND: 0,
-  // Três casas.
-  BHD: 3,
-  IQD: 3,
-  JOD: 3,
-  KWD: 3,
-  OMR: 3,
-  TND: 3,
-};
-
-export const defaultCurrencyScale = 2;
-
+/**
+ * Escala da moeda, usada para arredondar o valor esperado de uma linha de nota.
+ *
+ * Moeda desconhecida **lança**, em vez de assumir duas casas: tratar uma moeda
+ * sem centavo como se tivesse arredondaria para uma fração que não existe, e
+ * assumir escala é decidir o resultado da conferência por omissão (REVIEW-01
+ * achado 7, REVIEW-07 R07-08). A allowlist é o contrato.
+ */
 export function currencyScale(currency: CurrencyCode): number {
-  return currencyScales[currency] ?? defaultCurrencyScale;
+  const scale = supportedCurrencies[currency];
+  if (scale === undefined) {
+    throw new RangeError(
+      `moeda ${currency} não tem escala declarada; adicione-a à allowlist antes de usá-la`,
+    );
+  }
+  return scale;
 }
 
 /** Escala do contrato para quantidade, fator e preço unitário (ADR-007). */
-export const quantityScale = 6;
+export const quantityScale = maxPersistedDecimalPlaces;

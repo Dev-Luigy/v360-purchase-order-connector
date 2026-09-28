@@ -132,7 +132,11 @@ test('compara sem depender da escala escrita', () => {
   assert.equal(Decimal.parse('0.9').compare(Decimal.parse('1')), -1);
 });
 
-test('conhece a escala das moedas que o serviço vê, com dois como padrão', () => {
+test('moeda sem escala declarada lança, em vez de assumir centavos', () => {
   assert.equal(currencyScale('BRL'), 2);
-  assert.equal(currencyScale('XYZ'), 2);
+  assert.equal(currencyScale('JPY'), 0);
+  assert.equal(currencyScale('KWD'), 3);
+  // Assumir duas casas para uma moeda desconhecida decide o resultado da
+  // conferência por omissão (REVIEW-07, R07-08).
+  assert.throws(() => currencyScale('XYZ'), /não tem escala declarada/);
 });

@@ -27,7 +27,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | P1-02     | Implementar schema, migrações e repositórios                     | concluída                      | Claude      | Código pronto; validação contra PostgreSQL real é ENV-03                    |
 | FIX-06    | Fechar os achados de REVIEW-05 sobre P1-02                       | concluída                      | Claude      | Oito achados fechados; dois estavam desatualizados                          |
 | FIX-07    | Fechar os achados de código de REVIEW-06                         | concluída                      | Claude      | R06-01, 02, 03, 05 e 08 fechados; CI e auditoria ficam para tarefa própria  |
-| FIX-08    | Fechar os achados de código de REVIEW-07                         | em andamento                   | Claude      | Arredondamento silencioso, NUL, limites antes da alocação                   |
+| FIX-08    | Fechar os achados de código de REVIEW-07                         | concluída                      | Claude      | Seis achados de código fechados; CI, integração e P1-04 seguem fora         |
 | P1-03     | Implementar domínio e adaptadores Alfa/Beta                      | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                                |
 | FIX-01    | Estabilizar validação e limites de REVIEW-01                     | concluída                      | Claude      | REVIEW-01; sete achados corrigidos com regressão; libera P1-04              |
 | FIX-02    | Verificação pós-FIX-01: vazamento de origem e notações sem teste | concluída                      | Claude      | Dois defeitos corrigidos; notação por campo fica para decisão               |
@@ -291,8 +291,9 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## FIX-08 — achados de código de REVIEW-07
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/domain/{limits,schemas,decimal}.ts`, `src/infrastructure/integrations/{field-parsers,csv-stream,paired-csv-adapter,client-profiles}.ts`, `prisma/schema.prisma`, `Dockerfile`, `tests/*.test.ts`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-08-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `src/domain/{limits,schemas,decimal}.ts`, `src/infrastructure/integrations/{field-parsers,csv-stream,paired-csv-adapter,client-profiles}.ts`, `prisma/schema.prisma`, `Dockerfile`, `tests/*.test.ts`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-08-claude.md`.
 - Escopo: R07-01, R07-02, R07-03, R07-06, R07-07 e R07-08 de [REVIEW-07](handoffs/REVIEW-07-geral-codex.md), todos reproduzidos por sonda antes da correção. Mais o aviso de OpenSSL no estágio de build (parte de R07-10).
 - **Fora de escopo, por dependerem de P1-04, de ENV-03 ou de decisão:** R07-04 e R07-09 (agregado da conferência montado pelo caso de uso), R07-05 (parte), R07-10 (CI e política de auditoria), R07-11 (integração com banco), R07-12 (observabilidade e hardening).
 - Dependências: FIX-07.
+- Evidência: [handoff FIX-08](handoffs/FIX-08-claude.md); `npm run check` verde com 132 testes; os seis achados reproduzidos por sonda antes da correção; build dos dois estágios sem aviso de OpenSSL.
