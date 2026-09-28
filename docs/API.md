@@ -43,11 +43,13 @@ Erro sempre na mesma forma:
 
 ```http
 POST /clients/{clientId}/ingestions
-X-Source-Format-Version: 1
+X-Format-Version: 1
 Content-Type: multipart/form-data
 ```
 
-As partes são nomeadas conforme a forma de entrega do cliente: `purchase-orders` para `nested-json`; `cabecalho` e `itens` para `paired-csv`; `purchase-order-lines` para `flat-json`; `orders` e `items` para `split-json`, uma ou as duas — e mandar só `orders` **não apaga** os itens já conhecidos (ADR-008).
+As partes são nomeadas conforme a forma de entrega do cliente. Implementadas: `orders` para `nested-json`; `headers` e `items` para `paired-csv`. Planejadas para a Parte 2: `lines` para `flat-json`; `orders` e `items` para `split-json`, uma ou as duas — e mandar só `orders` **não apaga** os itens já conhecidos (ADR-008).
+
+A allowlist vive em `partsByFormat`, em `src/presentation/http/routes/ingestions.ts`; nome fora dela é recusado com 400. `tests/contrato-documentado.test.ts` obriga esta lista e aquela a concordarem.
 
 O cliente vai no caminho e nunca é deduzido do conteúdo: Delta usa os mesmos nomes de campo do Alfa.
 
