@@ -1,11 +1,5 @@
 #!/usr/bin/env node
-// Verificação executada antes de subir o Compose. O objetivo é não encostar em
-// nada que já esteja rodando na máquina: nem porta de outro serviço, nem banco
-// de outro projeto, nem containers de outro stack com o mesmo nome.
-//
-// Este script só lê estado (`docker version`, `docker ps`, `docker compose ls`).
-// Ele nunca para, remove, reinicia ou recria nada; em caso de conflito apenas
-// descreve o que encontrou e sai com código diferente de zero.
+// Somente inspeciona Docker e portas; nunca altera recursos existentes.
 
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -28,7 +22,6 @@ function readDotEnv(path) {
   }
 }
 
-// Mesma precedência que o Compose usa na substituição de variáveis.
 function setting(key, dotEnv) {
   return process.env[key] ?? dotEnv[key] ?? DEFAULTS[key];
 }

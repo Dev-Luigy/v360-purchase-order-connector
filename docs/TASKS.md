@@ -2,44 +2,44 @@
 
 Estados: disponível, aguardando, em andamento, em revisão, concluída. Responsável `—` significa que ninguém assumiu.
 
-| ID        | Tarefa                                                           | Estado                         | Responsável | Dependência / escopo                                                        |
-| --------- | ---------------------------------------------------------------- | ------------------------------ | ----------- | --------------------------------------------------------------------------- |
-| ENV-01    | Criar base TypeScript/Fastify e Compose                          | concluída                      | Codex       | Arquivos existentes; execução real do Compose pendente em ENV-02            |
-| COL-01    | Organizar colaboração e instalação                               | concluída                      | Codex       | AGENTS.md, CLAUDE.md, docs e link no README                                 |
-| COL-02    | Estruturar contexto compartilhado e leitura sob demanda          | concluída                      | Codex       | Documentação; registro e arquivos abaixo                                    |
-| DOC-01    | Versionar o enunciado e as amostras dos clientes                 | concluída                      | Claude      | Nenhuma; enunciado e fixtures, sem código de negócio                        |
-| DOC-02    | Reestruturar README como artefato avaliado                       | aguardando                     | —           | P1-01; o enunciado cobra as defesas no README (docs/CASE.md)                |
-| DOC-03    | Diagramar objetos e relações do contrato normalizado             | concluída                      | Claude      | P1-01; diagramas em docs/diagrams, sem código de negócio                    |
-| ARCH-04   | Registrar escolha do ORM Prisma 7                                | concluída                      | Codex       | ADR-001, ADR-002 e ADR-003; documentação apenas                             |
-| ARCH-05   | Registrar desenho de observabilidade (Grafana/Prometheus)        | aceita, implementação diferida | Claude      | Pedido do usuário; decisão apenas, sem dependência instalada                |
-| ENV-02    | Instalar ferramentas do sistema                                  | aguardando                     | Usuário     | docs/SETUP.md                                                               |
-| ENV-03    | Validar Compose, conexão e reinício do banco                     | em andamento                   | Claude      | Autorizado pelo usuário; valida P1-02 e P1-04 contra PostgreSQL real        |
-| ENV-04    | Verificar portas e isolar o Compose antes de subir               | concluída                      | Claude      | Pedido do usuário; preflight, nome fixo do projeto e portas por env         |
-| REPO-01   | Inicializar Git, commit base e fluxo de branches                 | concluída                      | Claude      | Commit base autorizado pelo usuário; docs/GIT_WORKFLOW.md                   |
-| REVIEW-01 | Revisar base e plano técnico                                     | concluída                      | Codex       | Limites de P1-03 e HTTP testados; achados no handoff                        |
-| REVIEW-02 | Revisar arquitetura contra o enunciado                           | concluída                      | Claude      | Achados para P1-01, P1-02 e ENV-03; sem editar código                       |
-| REVIEW-03 | Consolidar verificação pós-FIX-02 para a outra IA                | concluída                      | Codex       | Handoff documental; riscos residuais e retomada                             |
-| REVIEW-04 | Preparar plano de fix: arquitetura, segurança, CI/CD e Docker    | concluída                      | Codex       | Revisão documental; não altera código nem arquivos reservados por FIX-04/05 |
-| REVIEW-05 | Revisar a entrega parcial de P1-02                               | concluída                      | Codex       | Handoff para Claude; somente documentação                                   |
-| REVIEW-06 | Verificar FIX-06 e funcionalidades concluídas de P1-02           | concluída                      | Codex       | Handoff para Claude; somente documentação                                   |
-| REVIEW-07 | Revisão geral de código, segurança e engenharia                  | concluída                      | Codex       | Código completo, Zod e avaliação de bibliotecas; somente documentação       |
-| REVIEW-08 | Verificar as correções de FIX-08                                 | concluída                      | Codex       | Conferência item a item de REVIEW-07; somente documentação                  |
-| CLEAN-01  | Enxugar comentários do código estável                            | concluída                      | Codex       | 526 linhas removidas; arquivos ativos de P1-04 preservados                  |
-| P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03        |
-| P1-02     | Implementar schema, migrações e repositórios                     | concluída                      | Claude      | Código pronto; validação contra PostgreSQL real é ENV-03                    |
-| FIX-06    | Fechar os achados de REVIEW-05 sobre P1-02                       | concluída                      | Claude      | Oito achados fechados; dois estavam desatualizados                          |
-| FIX-07    | Fechar os achados de código de REVIEW-06                         | concluída                      | Claude      | R06-01, 02, 03, 05 e 08 fechados; CI e auditoria ficam para tarefa própria  |
-| FIX-08    | Fechar os achados de código de REVIEW-07                         | concluída                      | Claude      | Seis achados de código fechados; CI, integração e P1-04 seguem fora         |
-| FIX-09    | Corrigir o retrato truncado introduzido em FIX-08                | concluída                      | Claude      | R08-01 a R08-04; regressão atravessando o adaptador                         |
-| P1-03     | Implementar domínio e adaptadores Alfa/Beta                      | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                                |
-| FIX-01    | Estabilizar validação e limites de REVIEW-01                     | concluída                      | Claude      | REVIEW-01; sete achados corrigidos com regressão; libera P1-04              |
-| FIX-02    | Verificação pós-FIX-01: vazamento de origem e notações sem teste | concluída                      | Claude      | Dois defeitos corrigidos; notação por campo fica para decisão               |
-| FIX-03    | Fechar riscos residuais de REVIEW-02 e REVIEW-03                 | concluída                      | Claude      | Cinco defeitos fechados; quatro decisões listadas em aberto                 |
-| FIX-04    | Fechar os pontos que dependiam de decisão                        | concluída                      | Claude      | ADR-012: notação por campo, teto do Beta, pool por propósito, lint com tipo |
-| FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado         |
-| P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                       |
-| P1-05     | Validar desafio e registrar marco parte-1                        | aguardando                     | —           | P1-04 concluída; falta ENV-03 para provar persistência e concorrência       |
-| P2-01     | Integrar Gama/Delta e documentar mudanças                        | aguardando                     | —           | P1-05                                                                       |
+| ID        | Tarefa                                                           | Estado                         | Responsável | Dependência / escopo                                                          |
+| --------- | ---------------------------------------------------------------- | ------------------------------ | ----------- | ----------------------------------------------------------------------------- |
+| ENV-01    | Criar base TypeScript/Fastify e Compose                          | concluída                      | Codex       | Arquivos existentes; execução real do Compose pendente em ENV-02              |
+| COL-01    | Organizar colaboração e instalação                               | concluída                      | Codex       | AGENTS.md, CLAUDE.md, docs e link no README                                   |
+| COL-02    | Estruturar contexto compartilhado e leitura sob demanda          | concluída                      | Codex       | Documentação; registro e arquivos abaixo                                      |
+| DOC-01    | Versionar o enunciado e as amostras dos clientes                 | concluída                      | Claude      | Nenhuma; enunciado e fixtures, sem código de negócio                          |
+| DOC-02    | Reestruturar README como artefato avaliado                       | aguardando                     | —           | P1-01; o enunciado cobra as defesas no README (docs/CASE.md)                  |
+| DOC-03    | Diagramar objetos e relações do contrato normalizado             | concluída                      | Claude      | P1-01; diagramas em docs/diagrams, sem código de negócio                      |
+| ARCH-04   | Registrar escolha do ORM Prisma 7                                | concluída                      | Codex       | ADR-001, ADR-002 e ADR-003; documentação apenas                               |
+| ARCH-05   | Registrar desenho de observabilidade (Grafana/Prometheus)        | aceita, implementação diferida | Claude      | Pedido do usuário; decisão apenas, sem dependência instalada                  |
+| ENV-02    | Instalar ferramentas do sistema                                  | concluída                      | Usuário     | Ferramentas instaladas; Docker e Compose verificados em ENV-03                |
+| ENV-03    | Validar Compose, conexão e reinício do banco                     | concluída                      | Claude      | Compose validado, migração aplicada e 16 testes de integração; destrava P1-05 |
+| ENV-04    | Verificar portas e isolar o Compose antes de subir               | concluída                      | Claude      | Pedido do usuário; preflight, nome fixo do projeto e portas por env           |
+| REPO-01   | Inicializar Git, commit base e fluxo de branches                 | concluída                      | Claude      | Commit base autorizado pelo usuário; docs/GIT_WORKFLOW.md                     |
+| REVIEW-01 | Revisar base e plano técnico                                     | concluída                      | Codex       | Limites de P1-03 e HTTP testados; achados no handoff                          |
+| REVIEW-02 | Revisar arquitetura contra o enunciado                           | concluída                      | Claude      | Achados para P1-01, P1-02 e ENV-03; sem editar código                         |
+| REVIEW-03 | Consolidar verificação pós-FIX-02 para a outra IA                | concluída                      | Codex       | Handoff documental; riscos residuais e retomada                               |
+| REVIEW-04 | Preparar plano de fix: arquitetura, segurança, CI/CD e Docker    | concluída                      | Codex       | Revisão documental; não altera código nem arquivos reservados por FIX-04/05   |
+| REVIEW-05 | Revisar a entrega parcial de P1-02                               | concluída                      | Codex       | Handoff para Claude; somente documentação                                     |
+| REVIEW-06 | Verificar FIX-06 e funcionalidades concluídas de P1-02           | concluída                      | Codex       | Handoff para Claude; somente documentação                                     |
+| REVIEW-07 | Revisão geral de código, segurança e engenharia                  | concluída                      | Codex       | Código completo, Zod e avaliação de bibliotecas; somente documentação         |
+| REVIEW-08 | Verificar as correções de FIX-08                                 | concluída                      | Codex       | Conferência item a item de REVIEW-07; somente documentação                    |
+| CLEAN-01  | Enxugar comentários do código estável                            | concluída                      | Codex       | 526 linhas removidas; arquivos ativos de P1-04 preservados                    |
+| P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03          |
+| P1-02     | Implementar schema, migrações e repositórios                     | concluída                      | Claude      | Código pronto; validação contra PostgreSQL real é ENV-03                      |
+| FIX-06    | Fechar os achados de REVIEW-05 sobre P1-02                       | concluída                      | Claude      | Oito achados fechados; dois estavam desatualizados                            |
+| FIX-07    | Fechar os achados de código de REVIEW-06                         | concluída                      | Claude      | R06-01, 02, 03, 05 e 08 fechados; CI e auditoria ficam para tarefa própria    |
+| FIX-08    | Fechar os achados de código de REVIEW-07                         | concluída                      | Claude      | Seis achados de código fechados; CI, integração e P1-04 seguem fora           |
+| FIX-09    | Corrigir o retrato truncado introduzido em FIX-08                | concluída                      | Claude      | R08-01 a R08-04; regressão atravessando o adaptador                           |
+| P1-03     | Implementar domínio e adaptadores Alfa/Beta                      | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                                  |
+| FIX-01    | Estabilizar validação e limites de REVIEW-01                     | concluída                      | Claude      | REVIEW-01; sete achados corrigidos com regressão; libera P1-04                |
+| FIX-02    | Verificação pós-FIX-01: vazamento de origem e notações sem teste | concluída                      | Claude      | Dois defeitos corrigidos; notação por campo fica para decisão                 |
+| FIX-03    | Fechar riscos residuais de REVIEW-02 e REVIEW-03                 | concluída                      | Claude      | Cinco defeitos fechados; quatro decisões listadas em aberto                   |
+| FIX-04    | Fechar os pontos que dependiam de decisão                        | concluída                      | Claude      | ADR-012: notação por campo, teto do Beta, pool por propósito, lint com tipo   |
+| FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado           |
+| P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                         |
+| P1-05     | Validar desafio e registrar marco parte-1                        | disponível                     | —           | ENV-03 concluída; persistência, concorrência e paginação já têm prova         |
+| P2-01     | Integrar Gama/Delta e documentar mudanças                        | aguardando                     | —           | P1-05                                                                         |
 
 Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e dependências. Uma tarefa só pode ter um responsável de implementação por vez.
 
@@ -342,8 +342,9 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## ENV-03 — Compose, banco real e suíte de integração
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `tests/integration/**`, `package.json` (script da suíte), `compose.yaml` e `.env.example` se a validação exigir, `docs/TASKS.md`, `docs/STATUS.md`, `docs/handoffs/ENV-03-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `tests/integration/**`, `package.json` (script da suíte), `compose.yaml` e `.env.example` se a validação exigir, `docs/TASKS.md`, `docs/STATUS.md`, `docs/handoffs/ENV-03-claude.md`.
 - Escopo: subir o Compose, aplicar a migração, escrever a suíte que prova o que nenhum teste unitário alcança — transação, advisory lock em carga concorrente, `CHECK`, `RESTRICT`, paginação por cursor, persistência após reinício do banco — e medir o plano das consultas quentes com `EXPLAIN`.
 - Autorização: o usuário liberou explicitamente subir serviço e mexer no banco, o que o `AGENTS.md` reservava a ele.
 - Dependências: P1-02 e P1-04. Fecha R07-11 e destrava P1-05.
+- Evidência: [handoff ENV-03](handoffs/ENV-03-claude.md); `npm run test:integration` com 16 testes estáveis em quatro execuções; `docker compose up` do zero levanta banco, migração e API, com `/ready` em 200; persistência de pedidos e histórico provada por `scripts/verify-persistence.mjs`; índices confirmados por `EXPLAIN`.
