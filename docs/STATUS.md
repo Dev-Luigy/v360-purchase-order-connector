@@ -1,6 +1,6 @@
 # Estado do projeto
 
-Atualizado por Claude em 2026-09-28, após DOC-02.
+Atualizado por Claude em 2026-09-28, após P2-01.
 
 ## Implementado
 
@@ -28,6 +28,7 @@ Atualizado por Claude em 2026-09-28, após DOC-02.
 - `docker compose up` do zero levanta banco, aplica a migração como etapa própria e só então sobe a API, com `/ready` em 200 — fecha os achados 1 e 2 de [REVIEW-02](handoffs/REVIEW-02-claude.md).
 - Persistência de pedidos **e** do histórico de conferências após reinício do banco provada por `scripts/verify-persistence.mjs`.
 - Sem `DATABASE_URL`, os 16 testes de integração são pulados: `npm run check` continua funcionando em máquina sem Docker.
+- **P2-01 integrou Gama e Delta sem mudar uma coluna** do contrato normalizado. A única migração da Parte 2, `0002_staging_de_itens_orfaos`, não foi para acomodar formato de cliente: fechou a promessa do ADR-008 de reconciliar o item que chega antes do cabeçalho, que estava escrita e não implementada. Detalhe em [P2-01](handoffs/P2-01-claude.md).
 - **P1-05 conferiu o serviço contra o enunciado, exigência por exigência.** `node scripts/validate-case.mjs` faz uma asserção por exigência contra o stack no ar: **18/18**. Detalhe em [P1-05](handoffs/P1-05-claude.md).
 - **Volume medido, não suposto**: 50.000 pedidos e 150.000 itens carregados em 189,3s (264 pedidos/s); varredura de 500 páginas em 1,8s com **zero repetidos**; a última página custa 0,54× a primeira, o que prova o cursor contra `OFFSET`; memória plana em ~380MiB enquanto os pedidos iam de 5 mil a 50 mil.
 - Três defeitos encontrados e fechados com regressão: recusa do framework (429, 413) virava 500; o teto de 120 req/min estrangulava a varredura noturna do próprio enunciado; e `docs/API.md` errava **todos** os nomes de parte e o cabeçalho da ingestão, então quem seguisse a documentação não carregava nada.
@@ -35,11 +36,13 @@ Atualizado por Claude em 2026-09-28, após DOC-02.
 
 ## Ainda não implementado
 
-Pipeline de CI e política de auditoria. Gama/Delta somente após o marco da Parte 1.
+Pipeline de CI e política de exceção da auditoria npm. A espera de itens órfãos não tem expiração nem teto, e a política depende de dado de uso real ([ADR-008](decisions/ADR-008-ingestao.md)).
 
 ## Próxima retomada
 
-**A Parte 1 está fechada.** DOC-02 levou ao README as três defesas que o enunciado cobra — regras de conferência, política de reenvio e decisão do Delta — mais a da paginação por cursor, e a tag `parte-1` foi marcada. O próximo passo é P2-01: Gama (`flat-json`) e Delta (`split-json`).
+**As features do enunciado estão completas para os quatro clientes.** A Parte 1 está marcada na tag `parte-1`; P2-01 integrou Gama e Delta, e `scripts/validate-case.mjs` verifica 27 exigências contra o serviço no ar.
+
+O que falta não é produto: **pipeline de CI** e a **política de exceção da auditoria npm**, adiados pelo usuário desde o início e agora o único item aberto de peso.
 
 Limitações que P1-05 revelou e deixou abertas: a carga de 50.000 pedidos é uma requisição HTTP de 3,2 minutos, que qualquer balanceador com tempo limite padrão derruba sem retomada; o teto de requisições é por origem e não por identidade, porque não há autenticação; e Windows-1252 com CRLF tem teste unitário, não fixture ponta a ponta.
 

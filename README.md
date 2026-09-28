@@ -4,7 +4,7 @@ Cada cliente expõe pedidos de compra em um sistema e formato diferente. Este se
 
 Desafio [Case — Engenheiro SAP Junior](https://docs.google.com/document/d/1nbIIEDPKxx83hPHnd5P6ddwY1ukQUvWurQCrrNgv3f8/edit), transcrito em [docs/CASE.md](docs/CASE.md). Amostras dos quatro clientes em [tests/fixtures/](tests/fixtures/README.md).
 
-**Parte 1 (Alfa e Beta) está completa e validada.** Gama e Delta são a Parte 2.
+**Os quatro clientes estão integrados e validados.** A Parte 1 (Alfa e Beta) está marcada na tag `parte-1`; Gama e Delta entraram na Parte 2.
 
 ## Executar
 
@@ -17,10 +17,10 @@ Sobe PostgreSQL 17, aplica a migração como etapa própria e só então inicia 
 Carregar as amostras e exercitar tudo:
 
 ```sh
-node scripts/validate-case.mjs    # 18 asserções, uma por exigência do enunciado
+node scripts/validate-case.mjs    # 27 asserções, uma por exigência do enunciado
 ```
 
-Desenvolvimento local: `cp .env.example .env && npm ci && npm run db:up && npm run dev`. `npm run check` roda geração do cliente Prisma, tipagem, lint, formatação, 192 testes e build, **sem exigir banco**; `npm run test:integration` roda os 16 testes que exigem PostgreSQL real. O contrato completo das rotas está em [docs/API.md](docs/API.md).
+Desenvolvimento local: `cp .env.example .env && npm ci && npm run db:up && npm run dev`. `npm run check` roda geração do cliente Prisma, tipagem, lint, formatação, 208 testes e build, **sem exigir banco**; `npm run test:integration` roda os 16 testes que exigem PostgreSQL real. O contrato completo das rotas está em [docs/API.md](docs/API.md).
 
 ---
 
@@ -72,13 +72,45 @@ Três consequências que assumo:
 
 ## Delta: os dois lados que não se encontram
 
-_Decisão registrada; implementação é a Parte 2._
-
 O Delta entrega pedidos e itens em duas consultas independentes, sem garantia de retratarem o mesmo instante. Um lado pode conhecer um pedido que o outro ainda não conhece. Os dois casos têm respostas diferentes ([ADR-008](docs/decisions/ADR-008-ingestao.md)):
 
 **Item sem cabeçalho vai para staging, não para pedido incompleto.** O item fica guardado com o conteúdo cru e é reconciliado quando o cabeçalho aparecer. Inventar um pedido a partir do item significaria inventar fornecedor, situação e data — e um pedido sem situação nunca poderia ser conferido, porque a regra 2 depende dela. Descartar o item obrigaria o cliente a reenviar algo que ele já mandou corretamente.
 
 **Cabeçalho sem itens é pedido legítimo.** Ele existe no sistema do cliente; fica persistido com `hasPendingBalance: false`, aparece na consulta e não precisa de sinalização especial — uma conferência contra ele devolve `MATERIAL_NAO_ENCONTRADO` pelas regras que já existem. A assimetria é proposital: o cabeçalho é a identidade do pedido, o item não é.
+
+**A reconciliação é automática, no próximo encontro.** O item em espera é gravado em `ingestion_staging` já normalizado, e quando o cabeçalho chega ele entra no pedido sem que ninguém reenvie a carga. Se a carga trouxer a mesma linha, a versão da carga manda e a que esperava é descartada. Item cujo cabeçalho nunca chega continua esperando, visível, em vez de virar pedido incompleto ou sumir.
+
+## A Parte 2: o que foi adicionar e o que exigiu mudar
+
+O enunciado cobra este relato. A resposta curta é que **o contrato normalizado absorveu os dois clientes novos sem mudar uma coluna**, e a única migração que a Parte 2 exigiu não foi para acomodar dado de cliente — foi para uma capacidade que faltava.
+
+**Só adicionar** (nada existente foi tocado):
+
+| O quê                                | Onde                    |
+| ------------------------------------ | ----------------------- |
+| adaptador de linhas achatadas (Gama) | `flat-json-adapter.ts`  |
+| adaptador de duas consultas (Delta)  | `split-json-adapter.ts` |
+| os dois perfis de cliente            | `client-profiles.ts`    |
+| leitura de array na raiz do JSON     | `json-stream.ts`        |
+
+As notações do Gama — timestamp Unix, centavos, situação numérica, fator de conversão por item — **já eram exprimíveis no perfil**, porque `dateFormat: 'unix-seconds'`, `money: 'cents'` e `conversionFactor` foram desenhados na Parte 1 antecipando isso. Nenhuma regra de conferência mudou.
+
+**Exigiu mexer no que já existia:**
+
+- **A rota tratava toda parte declarada como obrigatória.** O Delta entrega duas consultas independentes e qualquer uma pode vir sozinha, então a allowlist de partes aceitas passou a ser separada da lista de partes exigidas — que para `split-json` é vazia, de propósito.
+- **O lote do adaptador passou a carregar o item já normalizado**, não só o conteúdo cru, porque quem reconcilia depois é o caso de uso, que não conhece o formato do cliente.
+- **O caso de uso ganhou a orquestração da espera.** O adaptador só enxerga os cabeçalhos da carga atual, então um item de pedido que já existe no banco seria mandado para a espera em vez de atualizar o pedido. Quem sabe disso é o caso de uso, que tem o repositório.
+
+**E dois erros meus que só o Gama tornou visíveis:**
+
+- Eu havia convertido a quantidade para unidade de consumo **na entrada**. Estava errado e duplicaria a conversão, porque a conferência já converte o saldo pelo fator. Com fator 1 em Alfa e Beta isso era invisível; o fator 12 do Gama expôs.
+- Uma linha ruim do Gama gerava **duas** recusas, a da linha e outra do grupo, contando o mesmo problema duas vezes no relatório de carga.
+
+**O banco: uma migração, e não pelo motivo que se esperaria.**
+
+`purchase_order` e `purchase_order_item` não mudaram — nenhuma coluna nova, nenhum tipo alterado, nenhum índice acrescentado. Quatro formatos que discordam em estrutura, idioma, formato de data, formato de número, máscara de CNPJ, unidade e vocabulário de situação couberam no mesmo modelo.
+
+A migração `0002_staging_de_itens_orfaos` criou a tabela de espera, e é consequência da decisão do Delta, não do formato dele: o item que chega antes do cabeçalho precisa **sobreviver à carga** para ser reconciliado depois. Antes dela a promessa do ADR-008 não se cumpria — o órfão voltava no relatório e se perdia.
 
 ## Paginação: cursor, e por quê
 
@@ -129,12 +161,12 @@ src/
   infrastructure/
     config/                    leitura e validação do ambiente
     database/                  implementações PostgreSQL
-    integrations/              adaptadores Alfa (nested-json) e Beta (paired-csv)
+    integrations/              um adaptador por forma de entrega, não por cliente
   presentation/http/           rotas e tradução HTTP
   main/                        composição das dependências e inicialização
 ```
 
-As dependências apontam para dentro: o domínio não conhece Prisma nem Fastify, e os casos de uso dependem de interfaces que a infraestrutura implementa. Isso não é organização de pastas — é o que permite os 192 testes rodarem sem banco, substituindo o adaptador e mantendo o contrato. Adaptadores de clientes novos estendem a ingestão sem adicionar condicionais de cliente às regras de conferência.
+As dependências apontam para dentro: o domínio não conhece Prisma nem Fastify, e os casos de uso dependem de interfaces que a infraestrutura implementa. Isso não é organização de pastas — é o que permite os 208 testes rodarem sem banco, substituindo o adaptador e mantendo o contrato. Adaptadores de clientes novos estendem a ingestão sem adicionar condicionais de cliente às regras de conferência.
 
 Os objetos e as portas estão desenhados em [docs/diagrams/](docs/diagrams/README.md), derivados do código.
 
@@ -153,6 +185,6 @@ Não foram implementados por não serem pedidos: autenticação, autorização, 
 
 ## Próxima etapa
 
-**Parte 2:** Gama (`flat-json`, tudo achatado, centavos, timestamp Unix, situação numérica, quantidade em caixas) e Delta (`split-json`, duas consultas independentes). A decisão do Delta já está tomada e registrada acima.
+As features do enunciado estão completas para os quatro clientes. O que falta não é produto: **pipeline de CI** e a **política de exceção da auditoria npm**, que rodariam a suíte de integração contra um banco efêmero a cada mudança.
 
 Estado corrente e posse das tarefas: [docs/STATUS.md](docs/STATUS.md) e [docs/TASKS.md](docs/TASKS.md). Colaboração entre agentes: [AGENTS.md](AGENTS.md).
