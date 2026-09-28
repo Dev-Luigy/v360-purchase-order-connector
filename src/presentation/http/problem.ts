@@ -4,6 +4,7 @@ import {
 } from '@fastify/type-provider-zod';
 import { z } from 'zod';
 
+import { PurchaseOrderNotFoundError } from '../../application/use-cases/check-invoice.js';
 import { UnknownClientError } from '../../application/use-cases/ingest-purchase-orders.js';
 import { CursorError } from '../../infrastructure/database/cursor.js';
 import { FieldError } from '../../infrastructure/integrations/field-parsers.js';
@@ -68,6 +69,14 @@ export function toProblem(error: unknown): MappedProblem {
         error: 'resposta_invalida',
         message: 'a resposta não corresponde ao contrato declarado',
       },
+    };
+  }
+  if (error instanceof PurchaseOrderNotFoundError) {
+    // A nota pode estar certa e o pedido ainda não ter sido carregado: isso é
+    // ausência de recurso, não divergência da nota (ADR-009).
+    return {
+      status: 404,
+      body: { error: 'pedido_nao_encontrado', message: error.message },
     };
   }
   if (error instanceof UnknownClientError) {

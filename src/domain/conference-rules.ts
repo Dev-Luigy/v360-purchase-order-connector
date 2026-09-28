@@ -4,7 +4,7 @@ import type {
   InvoiceCheckRequest,
   InvoiceLine,
 } from './conference.js';
-import { Decimal, currencyScale } from './decimal.js';
+import { Decimal, currencyScale, quantityScale } from './decimal.js';
 import type { PurchaseOrder, PurchaseOrderItem } from './purchase-order.js';
 
 /** Executa todas as regras de ADR-009 sem consumir o saldo do pedido. */
@@ -128,7 +128,10 @@ function checkLines(
       field: 'items[].quantityPending',
       invoiceLineIndex: aggregate.firstIndex,
       purchaseOrderLine: item.externalLine,
-      expected: balance.toText(),
+      // Quantidade sai na escala do contrato, como `docs/API.md` especifica e
+      // como o detalhe do pedido devolve: o mesmo valor com o mesmo texto nos
+      // dois lugares. `received` vem da nota e sai como a nota escreveu.
+      expected: balance.toText(quantityScale),
       received: aggregate.total.toText(),
     });
   }

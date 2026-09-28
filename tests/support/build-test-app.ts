@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
 import { CheckReadiness } from '../../src/application/use-cases/check-readiness.js';
+import { CheckInvoice } from '../../src/application/use-cases/check-invoice.js';
 import { IngestPurchaseOrders } from '../../src/application/use-cases/ingest-purchase-orders.js';
 import {
   GetPurchaseOrder,
@@ -10,11 +11,13 @@ import { buildAdapterRegistry } from '../../src/infrastructure/integrations/adap
 import { InMemoryClientProfiles } from '../../src/infrastructure/integrations/client-profiles.js';
 import { buildApp } from '../../src/presentation/http/app.js';
 
+import { InMemoryConferenceRepository } from './in-memory-conference-repository.js';
 import { InMemoryPurchaseOrderRepository } from './in-memory-repositories.js';
 
 export interface TestApp {
   readonly app: FastifyInstance;
   readonly orders: InMemoryPurchaseOrderRepository;
+  readonly conferences: InMemoryConferenceRepository;
 }
 
 /**
@@ -26,6 +29,7 @@ export async function buildTestApp(
 ): Promise<TestApp> {
   const profiles = new InMemoryClientProfiles();
   const orders = new InMemoryPurchaseOrderRepository();
+  const conferences = new InMemoryConferenceRepository();
   const disponivel = options.databaseAvailable ?? true;
 
   const app = await buildApp({
@@ -40,11 +44,12 @@ export async function buildTestApp(
     ingest: new IngestPurchaseOrders(profiles, buildAdapterRegistry(), orders),
     listOrders: new ListPurchaseOrders(orders),
     getOrder: new GetPurchaseOrder(orders),
+    checkInvoice: new CheckInvoice(orders, conferences),
     profileFormatOf: async (clientId) =>
       (await profiles.find(clientId))?.deliveryFormat ?? null,
   });
 
-  return { app, orders };
+  return { app, orders, conferences };
 }
 
 /**

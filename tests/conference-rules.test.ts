@@ -160,7 +160,7 @@ test('duas linhas do mesmo material somam antes de comparar com o saldo', () => 
   assert.deepEqual(codes(result.divergences), ['QUANTIDADE_ACIMA_DO_SALDO']);
   const divergence = result.divergences[0];
   assert.equal(divergence?.received, '60');
-  assert.equal(divergence?.expected, '40');
+  assert.equal(divergence?.expected, '40.000000');
   assert.equal(
     divergence?.invoiceLineIndex,
     0,
@@ -218,7 +218,7 @@ test('caixa: a nota fala em unidades e o pedido em caixas', () => {
   assert.deepEqual(codes(acima.divergences), ['QUANTIDADE_ACIMA_DO_SALDO']);
   assert.equal(
     acima.divergences[0]?.expected,
-    '120',
+    '120.000000',
     'saldo convertido para unidades',
   );
 });

@@ -7,6 +7,7 @@ import {
 import Fastify, { type FastifyInstance } from 'fastify';
 
 import type { CheckReadiness } from '../../application/use-cases/check-readiness.js';
+import type { CheckInvoice } from '../../application/use-cases/check-invoice.js';
 import type { IngestPurchaseOrders } from '../../application/use-cases/ingest-purchase-orders.js';
 import type {
   GetPurchaseOrder,
@@ -14,6 +15,7 @@ import type {
 } from '../../application/use-cases/query-purchase-orders.js';
 
 import { toProblem } from './problem.js';
+import { registerConferenceRoutes } from './routes/conferences.js';
 import { registerIngestionRoutes } from './routes/ingestions.js';
 import { registerPurchaseOrderRoutes } from './routes/purchase-orders.js';
 
@@ -50,6 +52,7 @@ export interface AppDependencies {
   readonly ingest: IngestPurchaseOrders;
   readonly listOrders: ListPurchaseOrders;
   readonly getOrder: GetPurchaseOrder;
+  readonly checkInvoice: CheckInvoice;
   readonly profileFormatOf: (clientId: string) => Promise<string | null>;
   readonly logLevel?: string;
 }
@@ -113,6 +116,7 @@ export async function buildApp(
     dependencies.listOrders,
     dependencies.getOrder,
   );
+  registerConferenceRoutes(app, dependencies.checkInvoice);
 
   return app;
 }

@@ -266,6 +266,29 @@ export const divergenceSchema = z.object({
   received: persistedText(maxDivergenceTextLength).nullable(),
 });
 
+/** Conferência como sai na resposta e como volta do histórico. */
+export const conferenceRecordSchema = z.object({
+  id: z.string().min(1),
+  purchaseOrderId: z.string().min(1),
+  purchaseOrderIngestionVersion: z.int().positive(),
+  clientId: persistedText(maxClientIdLength).min(1),
+  checkedAt: isoInstantSchema,
+  outcome: z.enum(['aprovada', 'reprovada']),
+  invoice: invoiceCheckRequestSchema,
+  divergences: z.array(divergenceSchema),
+});
+
+export const conferenceSummarySchema = z.object({
+  checked: z.int().nonnegative(),
+  approved: z.int().nonnegative(),
+  rejected: z.int().nonnegative(),
+  /**
+   * Ocorrências por código. A soma **não** fecha com `rejected`: uma nota
+   * reprovada pode ter várias divergências (ADR-009).
+   */
+  divergencesByCode: z.record(divergenceCodeSchema, z.int().nonnegative()),
+});
+
 /** Mensagem curta e com caminho, para virar `RejectedRecord.reason`. */
 export function describeIssues(error: z.ZodError): string {
   return error.issues
