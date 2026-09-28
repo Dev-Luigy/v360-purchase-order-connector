@@ -24,6 +24,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-06 | Verificar FIX-06 e funcionalidades concluídas de P1-02           | concluída                      | Codex       | Handoff para Claude; somente documentação                                     |
 | REVIEW-07 | Revisão geral de código, segurança e engenharia                  | concluída                      | Codex       | Código completo, Zod e avaliação de bibliotecas; somente documentação         |
 | REVIEW-08 | Verificar as correções de FIX-08                                 | concluída                      | Codex       | Conferência item a item de REVIEW-07; somente documentação                    |
+| REVIEW-09 | Verificar o projeto após P2-01                                   | concluída                      | Codex       | Oito achados de código/teste e deriva documental; código preservado           |
 | CLEAN-01  | Enxugar comentários do código estável                            | concluída                      | Codex       | 526 linhas removidas; arquivos ativos de P1-04 preservados                    |
 | P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03          |
 | P1-02     | Implementar schema, migrações e repositórios                     | concluída                      | Claude      | Código pronto; validação contra PostgreSQL real é ENV-03                      |
@@ -39,6 +40,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado           |
 | P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                         |
 | P1-05     | Validar desafio e registrar marco parte-1                        | concluída                      | Claude      | 18/18 exigências verificadas no ar; tag depende de DOC-02                     |
+| FIX-10    | Fechar os nove achados de REVIEW-09                              | em andamento                   | Claude      | REVIEW-09; nove achados reproduzidos, nenhum falso positivo                   |
 | P2-01     | Integrar Gama/Delta e documentar mudanças                        | concluída                      | Claude      | Os quatro clientes integrados; 27/27 exigências no ar                         |
 
 Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e dependências. Uma tarefa só pode ter um responsável de implementação por vez.
@@ -105,6 +107,15 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: conferir cada fechamento declarado em FIX-08 contra REVIEW-07, executar checks e sondas de regressão, sem alterar código de produção.
 - Dependências: FIX-08 concluída; PostgreSQL real continua dependente de ENV-03.
 - Evidência: [handoff REVIEW-08](handoffs/REVIEW-08-pos-fix-08-codex.md); seis correções confirmadas, teto de itens ainda produz snapshot truncado, regra de máscara segue parcial e pendências deliberadas continuam abertas.
+
+## REVIEW-09 — verificação pós-P2-01
+
+- Responsável: Codex.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `docs/TASKS.md` e `docs/handoffs/REVIEW-09-pos-p2-01-codex.md`.
+- Escopo: revisar o estado do repositório, P2-01, arquitetura, contratos, segurança, persistência, testes, documentação e alterações não commitadas; executar checks sem modificar código de produção.
+- Dependências: P2-01 concluída; reservas de implementação liberadas.
+- Evidência: [handoff REVIEW-09](handoffs/REVIEW-09-pos-p2-01-codex.md); checks verdes, cinco falhas reproduzidas por sonda e quatro lacunas adicionais documentadas.
 
 ## CLEAN-01 — limpeza de comentários
 
@@ -204,6 +215,14 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Evidência: [handoff ARCH-05](handoffs/ARCH-05-claude.md); `npm run check` verde; nada validado contra Grafana ou Prometheus reais, que não existem nesta máquina.
 - Escopo: registrar como a aplicação se conecta a Grafana e Prometheus, o consentimento de quem executa e a convenção de nomes e labels. Nenhuma dependência instalada, nenhum endpoint criado.
 - Dependências: nenhuma para o registro. A implementação depende de P1-01 e P1-03, porque os labels saem do contrato e dos adaptadores.
+
+## FIX-10 — os nove achados de REVIEW-09
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `src/application/ports/{purchase-order-repository,staging-repository}.ts`, `src/application/use-cases/ingest-purchase-orders.ts`, `src/domain/{ingestion,staging}.ts`, `src/infrastructure/database/{purchase-order-repository,staging-repository,in-memory-staging,pool,prisma-client}.ts`, `src/infrastructure/integrations/{flat-json-adapter,split-json-adapter}.ts`, `src/infrastructure/integrations/README.md`, `src/main/server.ts`, `tests/**`, `README.md`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-10-claude.md`.
+- Escopo: os nove achados de [REVIEW-09](handoffs/REVIEW-09-pos-p2-01-codex.md), todos reproduzidos com sonda antes de aceitar e **nenhum** falso positivo. Três são comentários meus afirmando o que o código não faz.
+- Dependências: P2-01 concluída.
 
 ## P2-01 — Gama e Delta
 
