@@ -36,7 +36,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-03    | Fechar riscos residuais de REVIEW-02 e REVIEW-03                 | concluída                      | Claude      | Cinco defeitos fechados; quatro decisões listadas em aberto                 |
 | FIX-04    | Fechar os pontos que dependiam de decisão                        | concluída                      | Claude      | ADR-012: notação por campo, teto do Beta, pool por propósito, lint com tipo |
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado         |
-| P1-04     | Integrar API, conferência e relatório paginado                   | aguardando                     | —           | P1-02 e P1-03 concluídas; combinar responsabilidade por arquivo             |
+| P1-04     | Integrar API, conferência e relatório paginado                   | em andamento                   | Claude      | P1-02 e P1-03; ADR-013; uma rota por vez, na ordem das dependências         |
 | P1-05     | Validar desafio e registrar marco parte-1                        | aguardando                     | —           | P1-04; persistência, concorrência, precisão e paginação                     |
 | P2-01     | Integrar Gama/Delta e documentar mudanças                        | aguardando                     | —           | P1-05                                                                       |
 
@@ -318,3 +318,12 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo adicional, pela mesma causa: qualquer grupo com linha rejeitada emitia retrato parcial, que também apagaria itens conhecidos. A política passa a usar `items: null`, que existe exatamente para isso (ADR-008).
 - Dependências: FIX-08.
 - Evidência: [handoff FIX-09](handoffs/FIX-09-claude.md); `npm run check` verde com 138 testes; sonda de 10.001 itens agora devolve zero pedidos e uma rejeição.
+
+## P1-04 — casos de uso e rotas de negócio
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `src/application/use-cases/**`, `src/presentation/http/**`, `src/main/server.ts`, `src/infrastructure/integrations/{field-parsers,client-profiles}.ts` e `src/domain/client.ts` (política de checksum), `package.json`, `docs/decisions/ADR-013-*.md` e o índice, `docs/API.md`, `tests/**`, `docs/TASKS.md`, `docs/handoffs/P1-04-claude.md`.
+- Escopo: as quatro entregas do enunciado, **uma rota por vez** — caso de uso, rota e teste antes da próxima —, por escolha do usuário. Ordem pela dependência real: ingestão, consulta, conferência, relatório. Conferir exige pedido carregado, que exige ingestão.
+- Decisões do usuário nesta tarefa: manter o invólucro do `Decimal`; adotar `cpf-cnpj-validator` com o checksum como política por perfil; instalar provider Zod, multipart, rate-limit e fast-check.
+- Dependências: P1-02 e P1-03. A validação contra PostgreSQL real continua sendo ENV-03.
