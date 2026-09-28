@@ -21,9 +21,11 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-03 | Consolidar verificação pós-FIX-02 para a outra IA                | concluída                      | Codex       | Handoff documental; riscos residuais e retomada                             |
 | REVIEW-04 | Preparar plano de fix: arquitetura, segurança, CI/CD e Docker    | concluída                      | Codex       | Revisão documental; não altera código nem arquivos reservados por FIX-04/05 |
 | REVIEW-05 | Revisar a entrega parcial de P1-02                               | concluída                      | Codex       | Handoff para Claude; somente documentação                                   |
+| REVIEW-06 | Verificar FIX-06 e funcionalidades concluídas de P1-02           | concluída                      | Codex       | Handoff para Claude; somente documentação                                   |
 | P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03        |
 | P1-02     | Implementar schema, migrações e repositórios                     | concluída                      | Claude      | Código pronto; validação contra PostgreSQL real é ENV-03                    |
 | FIX-06    | Fechar os achados de REVIEW-05 sobre P1-02                       | concluída                      | Claude      | Oito achados fechados; dois estavam desatualizados                          |
+| FIX-07    | Fechar os achados de código de REVIEW-06                         | em andamento                   | Claude      | Limites compartilhados, readiness por ordem, impressão do cursor            |
 | P1-03     | Implementar domínio e adaptadores Alfa/Beta                      | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                                |
 | FIX-01    | Estabilizar validação e limites de REVIEW-01                     | concluída                      | Claude      | REVIEW-01; sete achados corrigidos com regressão; libera P1-04              |
 | FIX-02    | Verificação pós-FIX-01: vazamento de origem e notações sem teste | concluída                      | Claude      | Dois defeitos corrigidos; notação por campo fica para decisão               |
@@ -71,6 +73,15 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: revisar schema, migração, dependências, Docker e os repositórios deixados pelo Claude; produzir handoff sem modificar os arquivos de P1-02.
 - Dependências: P1-02 permanece formalmente em andamento e seus arquivos continuam pertencendo ao Claude.
 - Evidência: [handoff REVIEW-05](handoffs/REVIEW-05-p1-02-codex.md); Prisma validou, mas `npm run check`, `prisma format --check` e o build real do estágio Docker falharam pelos achados documentados; audit registrou quatro vulnerabilidades altas na árvore do Prisma.
+
+## REVIEW-06 — verificação pós-FIX-06 e P1-02
+
+- Responsável: Codex.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `docs/TASKS.md`, `docs/handoffs/REVIEW-06-pos-fix-06-p1-02-codex.md`.
+- Escopo: conferir no código cada fechamento de REVIEW-05, revisar schema, migração, repositórios, Docker, segurança, documentação e testes; executar validações locais sem subir PostgreSQL nem editar código de produção.
+- Dependências: FIX-06 e P1-02 concluídas como código; execução contra PostgreSQL real continua pertencendo a ENV-03 e requer autorização do usuário.
+- Evidência: [handoff REVIEW-06](handoffs/REVIEW-06-pos-fix-06-p1-02-codex.md); `npm run check` e builds Docker verdes; 114 testes passaram; três falhas novas reproduzidas e quatro advisories altas ainda presentes na árvore npm.
 
 ## COL-02 — contexto compartilhado e leitura sob demanda
 
@@ -251,7 +262,16 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Responsável: Claude.
 - Estado: concluída.
 - Arquivos alterados (reservas liberadas): `prisma/schema.prisma`, `database/migrations/**`, `src/infrastructure/database/**`, `Dockerfile`, `package.json`, `tests/*.test.ts`, `docs/TASKS.md`, `docs/handoffs/FIX-06-claude.md`.
-- Escopo: os oito achados de [REVIEW-05](handoffs/REVIEW-05-codex.md) que verifiquei e procedem. Dois estavam desatualizados — o Codex revisou o commit `7f2aba3` mais arquivos não commitados, antes de `24f656d` fechar o Dockerfile, o lint e os testes.
+- Escopo: os oito achados de [REVIEW-05](handoffs/REVIEW-05-p1-02-codex.md) que verifiquei e procedem. Dois estavam desatualizados — o Codex revisou o commit `7f2aba3` mais arquivos não commitados, antes de `24f656d` fechar o Dockerfile, o lint e os testes.
 - Decisão de método: a migração `0001` é **reescrita no lugar**, não sucedida por uma `0002`. Nenhum banco a aplicou ainda, então corrigir a primeira é mais barato e não deixa dívida de schema. Depois de ENV-03 isso deixa de ser possível.
 - Dependências: P1-02. `package.json` volta a ficar reservado.
 - Evidência: [handoff FIX-06](handoffs/FIX-06-claude.md); `npm run check` verde com 114 testes; imagem de runtime inspecionada sem executar container — `mysql2`, CLI do Prisma e `deepmerge-ts` saíram, 833MB para 733MB. `package.json` liberado.
+
+## FIX-07 — achados de código de REVIEW-06
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `src/domain/{limits,schemas}.ts`, `src/infrastructure/database/{cursor,schema-readiness}.ts`, `prisma/schema.prisma`, `database/migrations/**`, `Dockerfile`, `tests/*.test.ts`, `README.md`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-07-claude.md`.
+- Escopo: R06-01, R06-02, R06-03 e R06-08 de [REVIEW-06](handoffs/REVIEW-06-pos-fix-06-p1-02-codex.md), os três reproduzidos por sonda antes da correção. Mais R06-05, o aviso de OpenSSL no estágio de migração.
+- **Fora de escopo, por exigirem decisão:** R06-04 (política de auditoria npm) e R06-07 (pipeline de CI) são tarefa própria; R06-06 depende de ENV-03.
+- Dependências: FIX-06.
