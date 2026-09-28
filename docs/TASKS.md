@@ -40,7 +40,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado           |
 | P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                         |
 | P1-05     | Validar desafio e registrar marco parte-1                        | concluída                      | Claude      | 18/18 exigências verificadas no ar; tag depende de DOC-02                     |
-| FIX-10    | Fechar os nove achados de REVIEW-09                              | em andamento                   | Claude      | REVIEW-09; nove achados reproduzidos, nenhum falso positivo                   |
+| FIX-10    | Fechar os nove achados de REVIEW-09                              | concluída                      | Claude      | Nove fechados com regressão, mais três de REVIEW-07 que seguiam abertos       |
 | P2-01     | Integrar Gama/Delta e documentar mudanças                        | concluída                      | Claude      | Os quatro clientes integrados; 27/27 exigências no ar                         |
 
 Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e dependências. Uma tarefa só pode ter um responsável de implementação por vez.
@@ -219,10 +219,11 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## FIX-10 — os nove achados de REVIEW-09
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/application/ports/{purchase-order-repository,staging-repository}.ts`, `src/application/use-cases/ingest-purchase-orders.ts`, `src/domain/{ingestion,staging}.ts`, `src/infrastructure/database/{purchase-order-repository,staging-repository,in-memory-staging,pool,prisma-client}.ts`, `src/infrastructure/integrations/{flat-json-adapter,split-json-adapter}.ts`, `src/infrastructure/integrations/README.md`, `src/main/server.ts`, `tests/**`, `README.md`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-10-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `src/application/ports/{purchase-order-repository,staging-repository}.ts`, `src/application/use-cases/ingest-purchase-orders.ts`, `src/domain/{ingestion,staging}.ts`, `src/infrastructure/database/{purchase-order-repository,staging-repository,in-memory-staging,pool,prisma-client}.ts`, `src/infrastructure/integrations/{flat-json-adapter,split-json-adapter}.ts`, `src/infrastructure/integrations/README.md`, `src/main/server.ts`, `tests/**`, `README.md`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-10-claude.md`.
 - Escopo: os nove achados de [REVIEW-09](handoffs/REVIEW-09-pos-p2-01-codex.md), todos reproduzidos com sonda antes de aceitar e **nenhum** falso positivo. Três são comentários meus afirmando o que o código não faz.
 - Dependências: P2-01 concluída.
+- Evidência: [handoff FIX-10](handoffs/FIX-10-claude.md); os nove fechados com regressão, mais R07-04, R07-05 e R07-09, que estavam marcados como critério de P1-04 e não tinham sido fechados. 218 testes, 24 de integração, 27/27 no ar. Migração `0003` acrescentou os `CHECK` que faltavam na conferência.
 
 ## P2-01 — Gama e Delta
 
