@@ -16,15 +16,9 @@ import {
   type FieldSource,
 } from './record-mapping.js';
 
-/** A carga do Alfa tem uma parte só, e ela se chama assim. */
 export const nestedJsonPart = 'orders';
 
-/**
- * Forma `nested-json`: um JSON com os itens aninhados dentro do pedido, que é
- * como o Alfa entrega. Não conhece o Alfa — só a forma; os rótulos vêm do
- * perfil, então outro cliente com a mesma forma entra sem código novo
- * (ADR-008).
- */
+/** Adaptador por forma; nomes de campos pertencem ao perfil. */
 export class NestedJsonAdapter implements SourceAdapter {
   readonly deliveryFormat = 'nested-json' as const;
 
@@ -82,8 +76,7 @@ function toNormalizedOrder(
   const header = readOrderHeader(jsonFieldSource(raw), profile);
   const itemsPath = profile.fields.itemsArray as string;
   const rawItems = readPath(raw, itemsPath);
-  // Nesta forma os itens vêm dentro do pedido. Ausência é payload malformado,
-  // e não "esta carga não trouxe os itens" — esse caso é do `split-json`.
+  // Nesta forma, ausência de itens é payload malformado, não carga parcial.
   if (!isJsonArray(rawItems)) {
     throw new FieldError(itemsPath, 'itens ausentes ou não são uma lista');
   }
@@ -94,11 +87,6 @@ function toNormalizedOrder(
   });
 }
 
-/**
- * Confere a saída do adaptador contra o schema do contrato antes de ela seguir
- * para o repositório. Defeito de mapeamento vira rejeição com o caminho do
- * campo, em vez de linha torta persistida (ADR-011).
- */
 export function validateNormalizedOrder(
   order: NormalizedPurchaseOrder,
 ): NormalizedPurchaseOrder {
@@ -129,8 +117,6 @@ export function assertPayloadMatchesProfile(
       `carga do cliente ${payload.clientId} com o perfil de ${profile.clientId}`,
     );
   }
-  // Versão de formato diferente da declarada é mudança no ERP do cliente:
-  // precisa de perfil novo, não de tentativa de leitura (ADR-008).
   if (payload.formatVersion !== profile.formatVersion) {
     throw new FieldError(
       'formatVersion',
@@ -158,7 +144,6 @@ export function reasonOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
-/** Referência do registro na origem, para o relatório de carga (ADR-008). */
 function referenceOf(
   raw: JsonValue,
   profile: ClientProfile,
@@ -208,14 +193,8 @@ function readPath(value: JsonValue, path: string): JsonValue | undefined {
   return current;
 }
 
-/**
- * Número já chega como texto, por `numberAsString` (ADR-011): `45.9` é a
- * string `'45.9'`, não o double mais próximo. Objeto e lista não viram texto.
- */
 function textOf(value: JsonValue | undefined): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value === 'string') return value === '' ? null : value;
-  // Booleano, objeto e lista não viram texto. `true` chegava a virar nome de
-  // fornecedor e código de material (REVIEW-01, achado 7).
   return null;
 }

@@ -7,12 +7,10 @@ import type {
 } from '../../domain/purchase-order.js';
 import type { Page, PageRequest } from './pagination.js';
 
-/** Filtros do requisito 1, combináveis entre si e com a paginação. */
 export interface PurchaseOrderFilters {
   readonly clientId: ClientId | null;
   readonly supplierTaxId: TaxId | null;
   readonly status: PurchaseOrderStatus | null;
-  /** Apenas pedidos com algum item com saldo a receber. */
   readonly onlyPending: boolean;
 }
 
@@ -32,7 +30,6 @@ export interface PurchaseOrderRepository {
     clientId: ClientId,
     externalNumber: string,
   ): Promise<PurchaseOrder | null>;
-  /** Listagem sem itens: o detalhe por item é o endpoint de detalhe. */
   list(
     filters: PurchaseOrderFilters,
     page: PageRequest,

@@ -4,22 +4,7 @@ import type { DatabaseHealth } from '../../application/ports/database-health.js'
 
 import { requiredMigration } from './migrations.js';
 
-/**
- * Prontidão que olha o schema, e não só a conexão.
- *
- * `SELECT 1` prova que o banco responde, não que ele tem as tabelas certas.
- * Com banco vazio, o Compose marcava o container como saudável, o avaliador
- * recebia 200 e todo endpoint de negócio respondia 500 (REVIEW-02, achado 2).
- *
- * Conferimos a migração **nomeada** que este artefato exige, e não apenas se
- * existe alguma aplicada: migração que ainda não rodou não deixa rastro na
- * tabela de controle, então contar linhas deixaria um banco desatualizado
- * passar por pronto (REVIEW-05, achado 2).
- *
- * Migração é etapa de implantação, executada por um papel com DDL; a API só
- * confere e recusa tráfego enquanto o schema não estiver pronto. Ela nunca
- * cria nem altera schema no start (REVIEW-04, R04-05).
- */
+/** Prontidão exige a migração esperada; a API nunca aplica DDL no start. */
 export class SchemaReadiness implements DatabaseHealth {
   constructor(
     private readonly pool: Pool,
@@ -39,27 +24,18 @@ export class SchemaReadiness implements DatabaseHealth {
       throw new Error(describeReadinessFailure(error), { cause: error });
     }
 
-    // A pergunta é "existe uma tentativa bem-sucedida?", e não "como está a
-    // primeira linha?". O fluxo oficial do Prisma permite marcar uma tentativa
-    // falha como revertida e aplicar de novo, então a mesma migração pode ter
-    // duas linhas. Olhar `rows[0]` fazia a prontidão depender da ordem que o
-    // PostgreSQL devolvesse — mesma base, veredito diferente (REVIEW-06,
-    // R06-02).
+    // Uma migração reaplicada pode ter tentativas falhas e uma bem-sucedida.
     const aplicada = rows.some(
       (linha) => linha.finished_at !== null && linha.rolled_back_at === null,
     );
     if (aplicada) return;
 
-    // Sem sucesso: as demais linhas servem só para explicar o porquê.
     if (rows.length === 0) {
       throw new Error(
         `migração ${this.expected} não foi aplicada: execute a etapa de migração antes de servir`,
       );
     }
     if (rows.some((linha) => linha.finished_at === null)) {
-      // Aplicação interrompida no meio deixa a linha sem `finished_at`. Pode
-      // ser uma migração em curso agora ou uma que morreu; em ambos os casos o
-      // schema não é confiável para servir tráfego.
       throw new Error(
         `migração ${this.expected} não terminou: o schema ainda não está estável`,
       );
@@ -75,11 +51,6 @@ interface MigrationRow {
   readonly rolled_back_at: Date | null;
 }
 
-/**
- * Quando a tabela de controle não existe, o Postgres devolve `42P01`. É o caso
- * do banco recém-criado pelo Compose, e a mensagem precisa dizer isso em vez
- * de vazar erro de SQL.
- */
 export function describeReadinessFailure(error: unknown): string {
   if (
     typeof error === 'object' &&

@@ -12,6 +12,7 @@ import {
   maxIntegerDigits,
   maxInvoiceLines,
   maxPersistedDecimalPlaces,
+  maxReportedRecords,
   maxItemsPerOrder,
   maxMaterialLength,
   maxPurchaseUnitLength,
@@ -216,6 +217,36 @@ export const invoiceCheckRequestSchema = z.object({
     )
     .min(1, 'nota sem linhas')
     .max(maxInvoiceLines, 'nota com linhas demais'),
+});
+
+/** Registro que a carga não aceitou, como sai na resposta. */
+export const rejectedRecordSchema = z.object({
+  reference: persistedText(maxFieldLength).min(1),
+  reason: persistedText(maxDivergenceTextLength).min(1),
+});
+
+export const stagedRecordSchema = z.object({
+  reference: persistedText(maxFieldLength).min(1),
+  reason: z.enum(['cabecalho-ausente', 'itens-ausentes']),
+  raw: z.string(),
+});
+
+/**
+ * Resultado de uma carga. As listas são amostra e os totais vêm separados: uma
+ * carga com dez mil rejeições não pode virar resposta sem teto (REVIEW-04).
+ */
+export const ingestionReportSchema = z.object({
+  ingestionId: z.uuid(),
+  clientId: persistedText(maxClientIdLength).min(1),
+  formatVersion: z.string().min(1),
+  startedAt: isoInstantSchema,
+  finishedAt: isoInstantSchema,
+  ordersAccepted: z.int().nonnegative(),
+  itemsAccepted: z.int().nonnegative(),
+  rejected: z.array(rejectedRecordSchema).max(maxReportedRecords),
+  rejectedTotal: z.int().nonnegative(),
+  staged: z.array(stagedRecordSchema).max(maxReportedRecords),
+  stagedTotal: z.int().nonnegative(),
 });
 
 export const divergenceCodeSchema = z.enum(divergenceCodes);

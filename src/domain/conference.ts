@@ -11,7 +11,6 @@ export interface InvoiceLine {
   readonly totalValue: DecimalText;
 }
 
-/** Nota que a plataforma envia para conferir contra um pedido. */
 export interface InvoiceCheckRequest {
   readonly clientId: ClientId;
   readonly purchaseOrderNumber: string;
@@ -19,10 +18,7 @@ export interface InvoiceCheckRequest {
   readonly lines: readonly InvoiceLine[];
 }
 
-/**
- * Taxonomia fechada de divergências. Fechada de propósito: a plataforma precisa
- * mostrar o motivo ao usuário sem interpretar texto livre (ADR-009).
- */
+/** Taxonomia fechada para consumidores não dependerem de texto livre. */
 export const divergenceCodes = [
   'FORNECEDOR_DIVERGENTE',
   'PEDIDO_NAO_ABERTO',
@@ -37,11 +33,9 @@ export type DivergenceCode = (typeof divergenceCodes)[number];
 
 export interface Divergence {
   readonly code: DivergenceCode;
-  /** Campo do contrato normalizado a que a divergência se refere. */
   readonly field: string;
   /** Índice da linha da nota, começando em 0. `null` quando a divergência é do cabeçalho. */
   readonly invoiceLineIndex: number | null;
-  /** Linha do pedido, quando identificada. */
   readonly purchaseOrderLine: number | null;
   readonly expected: string | null;
   readonly received: string | null;

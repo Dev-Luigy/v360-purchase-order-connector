@@ -23,6 +23,14 @@ export interface StagedRecord {
   readonly raw: string;
 }
 
+/**
+ * Resultado de uma carga.
+ *
+ * As listas são **amostra**, não o conjunto: uma carga com dez mil rejeições
+ * viraria uma resposta JSON sem teto, e o enunciado fala em dezenas de
+ * milhares de registros (REVIEW-04, R04-02). Os totais vêm separados, e o
+ * quanto ficou de fora é `total - lista.length`.
+ */
 export interface IngestionReport {
   readonly ingestionId: string;
   readonly clientId: ClientId;
@@ -31,6 +39,10 @@ export interface IngestionReport {
   readonly finishedAt: IsoInstant;
   readonly ordersAccepted: number;
   readonly itemsAccepted: number;
+  /** Amostra das rejeições, limitada por `maxReportedRecords`. */
   readonly rejected: readonly RejectedRecord[];
+  readonly rejectedTotal: number;
+  /** Amostra do que ficou em staging, limitada do mesmo jeito. */
   readonly staged: readonly StagedRecord[];
+  readonly stagedTotal: number;
 }

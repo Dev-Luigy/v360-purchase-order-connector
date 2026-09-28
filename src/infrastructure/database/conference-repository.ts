@@ -22,18 +22,9 @@ import { assertPageLimit } from './purchase-order-repository.js';
 export class PrismaConferenceRepository implements ConferenceRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
-  /**
-   * Grava o retrato do que foi comparado: a nota recebida, a versão de
-   * ingestão do pedido e as divergências estruturadas. Sem esse retrato, uma
-   * reingestão mudaria o sentido do histórico retroativamente (ADR-009).
-   *
-   * Em uma transação porque conferência sem as divergências dela é pior que
-   * conferência nenhuma: o relatório contaria uma nota reprovada sem motivo.
-   */
+  /** Persiste nota, versão do pedido e divergências como um único retrato. */
   async save(record: Omit<ConferenceRecord, 'id'>): Promise<ConferenceRecord> {
-    // Confere antes de gravar: `expected` e `received` carregam texto vindo da
-    // nota, e estourar a coluna abortaria a transação com erro de banco em vez
-    // de rejeição explicável (REVIEW-06, R06-01).
+    // Valida textos variáveis antes de atingir os limites das colunas.
     for (const divergence of record.divergences) {
       divergenceSchema.parse(divergence);
     }
@@ -46,9 +37,7 @@ export class PrismaConferenceRepository implements ConferenceRepository {
         outcome: record.outcome,
         invoice: record.invoice as unknown as Prisma.InputJsonValue,
         divergences: {
-          // A posição vem do array que o domínio produziu: as regras de
-          // ADR-009 avaliam em ordem, e ler de volta por UUID não reproduz
-          // isso (REVIEW-05, achado 9).
+          // UUID não preserva a ordem das regras do domínio.
           create: record.divergences.map((divergence, position) => ({
             position,
             code: divergence.code,
@@ -109,14 +98,7 @@ export class PrismaConferenceRepository implements ConferenceRepository {
     };
   }
 
-  /**
-   * Relatório do requisito 3.
-   *
-   * Conta **nota** e conta **ocorrência** separadamente, e a soma por código
-   * não fecha com o total de reprovadas: uma nota pode ter várias divergências
-   * (ADR-009). A cardinalidade do agrupamento é limitada pela taxonomia
-   * fechada, então não há risco de resposta sem teto.
-   */
+  /** Conta notas por resultado e ocorrências por código separadamente. */
   async summarize(filters: ConferenceFilters): Promise<ConferenceSummary> {
     const where = whereOf(filters);
 
@@ -152,8 +134,7 @@ function whereOf(filters: ConferenceFilters): Prisma.ConferenceWhereInput {
   return {
     ...(filters.clientId === null ? {} : { clientId: filters.clientId }),
     ...(filters.outcome === null ? {} : { outcome: filters.outcome }),
-    // Nota que tem ao menos uma divergência daquele código; o filtro é sobre a
-    // nota, não sobre a linha, porque a lista devolve notas.
+    // A lista devolve notas que tenham ao menos uma ocorrência do código.
     ...(filters.divergenceCode === null
       ? {}
       : { divergences: { some: { code: filters.divergenceCode } } }),
@@ -173,9 +154,7 @@ type ConferenceRow = Prisma.ConferenceGetPayload<{
 }>;
 
 function toConferenceRecord(row: ConferenceRow): ConferenceRecord {
-  // A nota foi gravada por nós, mas é lida de volta como JSON solto: conferir
-  // contra o schema garante que o histórico devolvido ainda cumpre o contrato,
-  // em vez de propagar uma linha corrompida como se fosse boa.
+  // JSON persistido volta sem tipo e precisa ser validado na leitura.
   const invoice = invoiceCheckRequestSchema.parse(row.invoice);
   return {
     id: row.id,

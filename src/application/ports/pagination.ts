@@ -1,7 +1,6 @@
-/** Tamanho de página quando a plataforma não pede nenhum. */
 export const defaultPageLimit = 50;
 
-/** Teto: pedido acima disto é erro de requisição, não recorte silencioso (ADR-010). */
+/** Valores acima do teto devem ser recusados, não recortados. */
 export const maxPageLimit = 100;
 
 export interface PageRequest {
@@ -16,9 +15,7 @@ export interface PageRequest {
 
 export interface PageInfo {
   readonly limit: number;
-  /** Onde esta página começou. */
   readonly cursor: string | null;
-  /** Como pedir a próxima. `null` quando não há mais. */
   readonly nextCursor: string | null;
   readonly hasMore: boolean;
 }
