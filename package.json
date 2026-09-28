@@ -26,7 +26,8 @@
     "prebuild": "npm run generate",
     "pretest": "npm run generate",
     "schema:check": "prisma format --check",
-    "coverage": "node --import tsx --test --experimental-test-coverage \"tests/**/*.test.ts\""
+    "coverage": "node --import tsx --test --experimental-test-coverage \"tests/**/*.test.ts\"",
+    "test:integration": "node --env-file=.env --import tsx --test --test-concurrency=1 \"tests/integration/**/*.test.ts\""
   },
   "dependencies": {
     "@fastify/multipart": "10.1.2",

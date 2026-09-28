@@ -1,17 +1,5 @@
-/**
- * Renderiza os `.puml` deste diretorio pelo servidor publico do PlantUML.
- *
- * Nao ha PlantUML, Java nem Graphviz nesta maquina, e instalar e do usuario
- * (AGENTS.md). Entao a renderizacao acontece em https://plantuml.com/: o script
- * comprime a fonte, monta a URL no formato do servidor e grava o SVG ao lado.
- *
- * Isso **envia a fonte do diagrama para um servidor publico**. Vale para o
- * contrato normalizado, que nao tem segredo nem dado real de cliente; nao vale
- * para diagrama que descreva dado de cliente.
- *
- *   node scripts/render-diagrams.mjs         # grava os SVG
- *   node scripts/render-diagrams.mjs --urls  # so imprime as URLs, nao acessa a rede
- */
+// Envia a fonte ao servidor público do PlantUML. Não use com dados sensíveis.
+// `--urls` apenas imprime URLs e não acessa a rede.
 
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { deflateRawSync } from 'node:zlib';
@@ -26,7 +14,7 @@ const here = join(
   'diagrams',
 );
 
-/** Alfabeto de 6 bits do PlantUML: nao e base64 padrao, a ordem e outra. */
+// O alfabeto do PlantUML difere do base64 padrão.
 function encode6bit(value) {
   if (value < 10) return String.fromCharCode(48 + value);
   let b = value - 10;
@@ -39,7 +27,6 @@ function encode6bit(value) {
   throw new Error(`valor de 6 bits invalido: ${value}`);
 }
 
-/** Deflate cru + o base64 do PlantUML, que e o que a URL do servidor espera. */
 function encodePlantUml(source) {
   const deflated = deflateRawSync(Buffer.from(source, 'utf-8'), { level: 9 });
   let encoded = '';
