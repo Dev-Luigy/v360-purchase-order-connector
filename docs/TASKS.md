@@ -38,7 +38,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-04    | Fechar os pontos que dependiam de decisão                        | concluída                      | Claude      | ADR-012: notação por campo, teto do Beta, pool por propósito, lint com tipo   |
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado           |
 | P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                         |
-| P1-05     | Validar desafio e registrar marco parte-1                        | disponível                     | —           | ENV-03 concluída; persistência, concorrência e paginação já têm prova         |
+| P1-05     | Validar desafio e registrar marco parte-1                        | em andamento                   | Claude      | ENV-03 concluída; validar contra o enunciado e marcar parte-1                 |
 | P2-01     | Integrar Gama/Delta e documentar mudanças                        | aguardando                     | —           | P1-05                                                                         |
 
 Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e dependências. Uma tarefa só pode ter um responsável de implementação por vez.
@@ -348,3 +348,11 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Autorização: o usuário liberou explicitamente subir serviço e mexer no banco, o que o `AGENTS.md` reservava a ele.
 - Dependências: P1-02 e P1-04. Fecha R07-11 e destrava P1-05.
 - Evidência: [handoff ENV-03](handoffs/ENV-03-claude.md); `npm run test:integration` com 16 testes estáveis em quatro execuções; `docker compose up` do zero levanta banco, migração e API, com `/ready` em 200; persistência de pedidos e histórico provada por `scripts/verify-persistence.mjs`; índices confirmados por `EXPLAIN`.
+
+## P1-05 — validar o desafio e marcar a Parte 1
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `scripts/**` (geradores e medições), `tests/**`, `docs/TASKS.md`, `docs/STATUS.md`, `docs/handoffs/P1-05-claude.md`.
+- Escopo: conferir o sistema contra cada exigência do enunciado, medindo em vez de supor — persistência, concorrência, precisão decimal, paginação com filtros e **volume**, que é o item que nenhuma tarefa anterior exercitou. Registrar o que falta antes da tag.
+- Dependências: P1-04 e ENV-03. Antecede DOC-02 e a tag `parte-1`.
