@@ -1006,26 +1006,54 @@ describe('REVIEW-12: o que a espera como acumulador expôs', () => {
     return { tamanhos, total };
   };
 
-  it('R12-01: item-only respeita o teto de itens por pedido', async () => {
-    // O teto é do agregado; validar item a item não confere cardinalidade, e
-    // o caminho sem cabeçalho não o consultava.
-    const noLimite = await ler({
-      items: Array.from({ length: maxItemsPerOrder }, (_, i) => item(i + 1)),
-    });
-    assert.equal(noLimite.total.staged, maxItemsPerOrder);
-    assert.equal(noLimite.total.rejected, 0);
-
-    const acima = await ler({
-      items: Array.from({ length: maxItemsPerOrder + 1 }, (_, i) =>
-        item(i + 1),
-      ),
-    });
-    assert.equal(
-      acima.total.staged,
-      maxItemsPerOrder,
-      'passou do teto sem cabeçalho',
+  it('R12-01/R13-03: pedido acima do teto é recusado sem mudar o retrato', async () => {
+    // O teste anterior afirmava `staged === maxItemsPerOrder` e uma recusa —
+    // ou seja, codificava o defeito: a mensagem dizia "pedido inteiro
+    // recusado" e dez mil itens eram gravados assim mesmo (REVIEW-13, R13-03).
+    //
+    // O teto é do agregado e vive no caso de uso, que enxerga a soma entre
+    // lotes e desfaz o que já escreveu.
+    const repositorio = new InMemoryPurchaseOrderRepository();
+    const uso = new IngestPurchaseOrders(
+      new InMemoryClientProfiles(),
+      buildAdapterRegistry(),
+      repositorio,
     );
-    assert.equal(acima.total.rejected, 1);
+    const carga = (partes: Record<string, unknown>) => {
+      const mapa = new Map<string, () => AsyncIterable<Uint8Array>>();
+      for (const [nome, conteudo] of Object.entries(partes)) {
+        mapa.set(nome, () => bytes(JSON.stringify({ [nome]: conteudo })));
+      }
+      return uso.execute({
+        clientId: 'delta',
+        formatVersion: '1',
+        parts: mapa,
+      });
+    };
+
+    await carga({
+      orders: [cabecalhoDe('DL-TETO')],
+      items: [item(1, 'DL-TETO')],
+    });
+    const antes = await repositorio.findByExternalNumber('delta', 'DL-TETO');
+    assert.equal(antes?.items.length, 1);
+
+    const excesso = Array.from({ length: maxItemsPerOrder + 1 }, (_, i) =>
+      item(i + 100, 'DL-TETO'),
+    );
+    const relatorio = await carga({ items: excesso });
+
+    assert.equal(relatorio.itemsAccepted, 0, 'gravou parte do que recusou');
+    assert.ok(relatorio.rejectedTotal > 0, 'não reportou a recusa');
+    assert.equal(relatorio.stagedTotal, 0, 'deixou linhas escondidas');
+
+    const depois = await repositorio.findByExternalNumber('delta', 'DL-TETO');
+    assert.equal(
+      depois?.items.length,
+      1,
+      'o retrato anterior mudou apesar da recusa',
+    );
+    assert.equal(depois?.ingestionVersion, antes?.ingestionVersion);
   });
 
   it('R12-04: lote final misturando pedidos, recusas e espera respeita o teto', async () => {

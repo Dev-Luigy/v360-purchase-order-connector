@@ -7,9 +7,14 @@ import type { ClientId, DeliveryFormat } from '../../domain/client.js';
 import type {
   IngestionReport,
   RejectedRecord,
+  StagedItem,
   StagedRecord,
 } from '../../domain/ingestion.js';
-import { maxReportedRecords, maxStagedOrders } from '../../domain/limits.js';
+import {
+  maxItemsPerOrder,
+  maxReportedRecords,
+  maxStagedOrders,
+} from '../../domain/limits.js';
 
 /**
  * Carga de pedidos de um cliente.
@@ -49,9 +54,11 @@ export class IngestPurchaseOrders {
 
     const rejected = new Sample<RejectedRecord>();
     const staged = new Sample<StagedRecord>();
-    // Quantos itens esperam por pedido. Só os números ficam em memória; os
+    // Quais linhas desta carga esperam por pedido, e quais pedidos foram
+    // recusados por passar do teto. Só números de linha ficam em memória; os
     // itens estão na tabela de espera, que é o acumulador.
-    const esperandoPorPedido = new Map<string, number>();
+    const linhasPorPedido = new Map<string, Set<number>>();
+    const recusados = new Set<string>();
     let ordersAccepted = 0;
     let itemsAccepted = 0;
 
@@ -86,44 +93,67 @@ export class IngestPurchaseOrders {
       // (REVIEW-11). A tabela de espera é o acumulador, então nada além dos
       // números de pedido fica em memória.
       if (batch.staged.length > 0) {
-        // O teto é conferido **antes** de escrever: conferir depois encerrava
-        // a requisição mas deixava no banco justamente as linhas que
-        // excederam o limite (REVIEW-12, R12-03).
-        const novos = new Set(
-          batch.staged
-            .map((item) => item.externalNumber)
-            .filter((numero) => !esperandoPorPedido.has(numero)),
-        );
-        if (esperandoPorPedido.size + novos.size > maxStagedOrders) {
-          throw new RangeError(
-            `carga com mais de ${String(maxStagedOrders)} pedidos em espera; ` +
-              'divida o arquivo',
-          );
+        // O teto de itens por pedido é do **agregado**, e só aqui se conhece
+        // a soma entre lotes: o adaptador vê um lote por vez. Um pedido que
+        // passa do teto é recusado e o que ele já tinha escrito é desfeito —
+        // antes, a carga dizia "pedido inteiro recusado" e gravava os
+        // primeiros dez mil assim mesmo (REVIEW-13, R13-03).
+        const aceitos: StagedItem[] = [];
+        for (const item of batch.staged) {
+          const numero = item.externalNumber;
+          if (recusados.has(numero)) continue;
+
+          const linhas = linhasPorPedido.get(numero) ?? new Set<number>();
+          if (
+            !linhas.has(item.item.externalLine) &&
+            linhas.size >= maxItemsPerOrder
+          ) {
+            recusados.add(numero);
+            linhasPorPedido.delete(numero);
+            await this.orders.purgeStaged(
+              payload.clientId,
+              ingestionId,
+              numero,
+            );
+            rejected.add({
+              reference: numero,
+              reason:
+                `mais de ${String(maxItemsPerOrder)} itens sem cabeçalho; ` +
+                'o pedido inteiro foi recusado e o que já esperava foi descartado',
+            });
+            continue;
+          }
+          linhas.add(item.item.externalLine);
+          linhasPorPedido.set(numero, linhas);
+          aceitos.push(item);
         }
 
-        await this.orders.stageLooseItems(
-          payload.clientId,
-          ingestionId,
-          batch.staged,
-        );
-        for (const item of batch.staged) {
-          const atual = esperandoPorPedido.get(item.externalNumber) ?? 0;
-          esperandoPorPedido.set(item.externalNumber, atual + 1);
+        if (aceitos.length > 0) {
+          // O teto de pedidos distintos é conferido **antes** de escrever
+          // (REVIEW-12, R12-03).
+          if (linhasPorPedido.size > maxStagedOrders) {
+            throw new RangeError(
+              `carga com mais de ${String(maxStagedOrders)} pedidos em espera; ` +
+                'divida o arquivo',
+            );
+          }
+          await this.orders.stageLooseItems(
+            payload.clientId,
+            ingestionId,
+            aceitos,
+          );
         }
       }
     }
 
     // Uma transação por pedido, com todas as linhas que esperavam por ele.
-    for (const [externalNumber, total] of esperandoPorPedido) {
+    for (const externalNumber of linhasPorPedido.keys()) {
       try {
-        const aplicados = await this.orders.consolidateStaged(
+        itemsAccepted += await this.orders.consolidateStaged(
           payload.clientId,
           ingestionId,
           externalNumber,
         );
-        itemsAccepted += aplicados;
-        // O que não foi aplicado continua esperando pelo cabeçalho.
-        staged.count(total - aplicados);
       } catch (cause) {
         rejected.add({
           reference: `itens do pedido ${externalNumber}`,
@@ -131,11 +161,18 @@ export class IngestPurchaseOrders {
         });
       }
     }
-    // A amostra sai do estado que de fato sobrou. Montá-la antes da
-    // consolidação e filtrar depois podia devolver lista vazia com total
-    // positivo: os cem primeiros candidatos podiam ter sido todos aplicados,
-    // escondendo justamente o que ficou (REVIEW-12, R12-05).
-    if (staged.total > 0) {
+
+    // O que ficou esperando sai do **estado**, não de subtração entre
+    // contagens de granularidades diferentes: uma linha reenviada dentro da
+    // mesma carga substitui a anterior, e subtrair fabricava espera que não
+    // existia (REVIEW-13, R13-02). Uma consolidação que falhou também deixa
+    // linhas de volta, e elas precisam aparecer (R13-04).
+    const esperando = await this.orders.countStaged(
+      payload.clientId,
+      ingestionId,
+    );
+    staged.count(esperando);
+    if (esperando > 0) {
       for (const registro of await this.orders.sampleStaged(
         payload.clientId,
         ingestionId,

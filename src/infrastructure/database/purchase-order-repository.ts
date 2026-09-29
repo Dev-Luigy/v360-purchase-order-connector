@@ -60,7 +60,16 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
         snapshot.clientId,
         snapshot.externalNumber,
       );
-      const completo = mergeWaitingItems(snapshot, esperando);
+
+      // Com `items: null`, a base da mesclagem são os itens **gravados**, não
+      // o retrato recebido — que não traz item nenhum. Mesclar sobre ele fazia
+      // a espera **substituir** o que já existia em vez de somar, e o item
+      // anterior desaparecia (REVIEW-13, R13-04).
+      const base =
+        snapshot.items === null && esperando.length > 0
+          ? { ...snapshot, items: await currentItems(tx, snapshot) }
+          : snapshot;
+      const completo = conferirAgregado(mergeWaitingItems(base, esperando));
       const order = await persistSnapshot(tx, completo);
       return {
         order,
@@ -154,6 +163,22 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
         }),
       );
       return esperando.length;
+    });
+  }
+
+  async purgeStaged(
+    clientId: ClientId,
+    ingestionId: string,
+    externalNumber: string,
+  ): Promise<void> {
+    await this.prisma.ingestionStaging.deleteMany({
+      where: { clientId, ingestionId, externalNumber },
+    });
+  }
+
+  countStaged(clientId: ClientId, ingestionId: string): Promise<number> {
+    return this.prisma.ingestionStaging.count({
+      where: { clientId, ingestionId },
     });
   }
 
@@ -361,7 +386,9 @@ async function takeWaitingItems(
       externalNumber,
       ...(ingestionId === undefined ? {} : { ingestionId }),
     },
-    orderBy: { externalLine: 'asc' },
+    // A mais recente por último: com a carga na identidade, duas podem ter a
+    // mesma linha esperando, e "prevalece a última aceita" decide (ADR-008).
+    orderBy: [{ externalLine: 'asc' }, { stagedAt: 'asc' }],
   });
   if (rows.length === 0) return [];
   await tx.ingestionStaging.deleteMany({
@@ -369,15 +396,17 @@ async function takeWaitingItems(
   });
   // O que sai daqui entra num pedido de verdade: uma linha gravada por uma
   // versão anterior do contrato não atravessa sem conferência.
-  return rows.map((row) => {
+  const porLinha = new Map<number, NormalizedPurchaseOrderItem>();
+  for (const row of rows) {
     const parsed = normalizedItemSchema.safeParse(row.item);
     if (!parsed.success) {
       throw new Error(
         `item em espera do pedido ${externalNumber} não passou no contrato: ${describeIssues(parsed.error)}`,
       );
     }
-    return parsed.data;
-  });
+    porLinha.set(parsed.data.externalLine, parsed.data);
+  }
+  return [...porLinha.values()];
 }
 
 /** Reenviar a mesma linha do mesmo pedido substitui a anterior (ADR-008). */
@@ -390,8 +419,11 @@ async function stageItem(
   const item = staged.item as unknown as Prisma.InputJsonValue;
   await tx.ingestionStaging.upsert({
     where: {
-      clientId_externalNumber_externalLine: {
+      // A carga faz parte da chave: duas podem ter a mesma linha do mesmo
+      // pedido esperando ao mesmo tempo, cada uma dona da sua.
+      clientId_ingestionId_externalNumber_externalLine: {
         clientId,
+        ingestionId,
         externalNumber: staged.externalNumber,
         externalLine: staged.item.externalLine,
       },
@@ -407,6 +439,25 @@ async function stageItem(
     },
     update: { ingestionId, item, raw: staged.raw, stagedAt: new Date() },
   });
+}
+
+/** Itens já gravados do pedido, no formato do contrato. */
+async function currentItems(
+  tx: Transaction,
+  snapshot: NormalizedPurchaseOrder,
+): Promise<readonly NormalizedPurchaseOrderItem[]> {
+  const encontrado = await tx.purchaseOrder.findUnique({
+    where: {
+      clientId_externalNumber: {
+        clientId: snapshot.clientId,
+        externalNumber: snapshot.externalNumber,
+      },
+    },
+    select: { id: true },
+  });
+  if (encontrado === null) return [];
+  const atual = await findFull(tx, encontrado.id);
+  return atual === null ? [] : semPersistencia(atual);
 }
 
 /**

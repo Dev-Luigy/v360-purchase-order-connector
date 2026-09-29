@@ -44,7 +44,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado           |
 | P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                         |
 | P1-05     | Validar desafio e registrar marco parte-1                        | concluída                      | Claude      | 18/18 exigências verificadas no ar; tag depende de DOC-02                     |
-| FIX-14    | Fechar REVIEW-13 e provar pela aplicação real                    | em andamento                   | Claude      | REVIEW-13; R13-04 é perda de dado, confirmada por HTTP                        |
+| FIX-14    | Fechar REVIEW-13 e provar pela aplicação real                    | concluída                      | Claude      | Carga na identidade física; 10/10 cenários pelas rotas HTTP                   |
 | FIX-13    | Fechar os seis achados de REVIEW-12                              | concluída                      | Claude      | Identidade de carga na espera; emissão de lote centralizada                   |
 | FIX-12    | Fechar os três achados de REVIEW-11                              | concluída                      | Claude      | Guardar e decidir separados; invariante de lote; gerador fail-closed          |
 | FIX-11    | Fechar os sete achados de REVIEW-10                              | concluída                      | Claude      | Sete fechados com regressão; validador agora é repetível                      |
@@ -263,12 +263,13 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## FIX-14 — REVIEW-13, com aceitação pela aplicação real
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/application/ports/purchase-order-repository.ts`, `src/application/use-cases/ingest-purchase-orders.ts`, `src/infrastructure/database/purchase-order-repository.ts`, `src/infrastructure/integrations/split-json-adapter.ts`, `prisma/schema.prisma` (só a identidade da espera), `database/migrations/0005_*/**`, `src/infrastructure/database/migrations.ts`, `scripts/validate-fix-14-http.mjs`, `tests/**`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-14-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `src/application/ports/purchase-order-repository.ts`, `src/application/use-cases/ingest-purchase-orders.ts`, `src/infrastructure/database/purchase-order-repository.ts`, `src/infrastructure/integrations/split-json-adapter.ts`, `prisma/schema.prisma` (só a identidade da espera), `database/migrations/0005_*/**`, `src/infrastructure/database/migrations.ts`, `scripts/validate-fix-14-http.mjs`, `tests/**`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-14-claude.md`.
 - Escopo: os quatro achados de [REVIEW-13](handoffs/REVIEW-13-pos-fix-13-http-real-codex.md), confirmados por sonda HTTP contra a aplicação no ar. **R13-04 é perda de dado**: o relatório esconde linhas em espera e a reconciliação seguinte substitui o retrato anterior por elas.
 - Causa comum: em FIX-13 eu acrescentei `ingestionId` como coluna, mas a identidade física da linha continuou `(cliente, pedido, linha)` — um campo que o `upsert` sobrescreve não isola nada. E a contagem do relatório saía de subtração entre granularidades diferentes em vez do estado.
 - Aceitação: o fix só é declarado concluído com `scripts/validate-fix-14-http.mjs` passando pelas rotas HTTP reais, conforme a instrução registrada no REVIEW-13.
 - Dependências: FIX-13 concluída.
+- Evidência: [handoff FIX-14](handoffs/FIX-14-claude.md); a migração `0005` põe a carga na identidade física da espera, e `npm run validate:http` prova 10 cenários pelas rotas da aplicação em execução — sem `app.inject`, sem repositório em memória.
 
 ## FIX-13 — os seis achados de REVIEW-12
 

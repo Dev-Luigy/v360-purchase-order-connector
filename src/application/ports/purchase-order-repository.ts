@@ -67,6 +67,30 @@ export interface PurchaseOrderRepository {
   ): Promise<void>;
 
   /**
+   * Descarta as linhas que esta carga deixou esperando por um pedido.
+   *
+   * Um pedido recusado por passar do teto precisa desfazer o que já tinha
+   * escrito em lotes anteriores: sem isso, a carga dizia "pedido inteiro
+   * recusado" e mesmo assim gravava os primeiros dez mil itens
+   * (REVIEW-13, R13-03).
+   */
+  purgeStaged(
+    clientId: ClientId,
+    ingestionId: string,
+    externalNumber: string,
+  ): Promise<void>;
+
+  /**
+   * Quantas linhas desta carga continuam esperando.
+   *
+   * O relatório sai daqui, do estado, e não de `entradas − aplicados`:
+   * subtrair contagens de granularidades diferentes fabricava espera que não
+   * existia, porque uma linha reenviada dentro da mesma carga substitui a
+   * anterior em vez de somar (REVIEW-13, R13-02).
+   */
+  countStaged(clientId: ClientId, ingestionId: string): Promise<number>;
+
+  /**
    * Fecha um pedido cujos itens estavam esperando.
    *
    * Se o pedido existe, os itens **desta carga** que esperavam por ele entram
