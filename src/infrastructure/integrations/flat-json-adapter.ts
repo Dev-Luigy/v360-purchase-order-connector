@@ -12,7 +12,7 @@ import type {
 } from '../../domain/purchase-order.js';
 
 import { FieldError } from './field-parsers.js';
-import { streamRootArray } from './json-stream.js';
+import { scanJsonStructure, streamRootArray } from './json-stream.js';
 import {
   assertPayloadMatchesProfile,
   jsonFieldSource,
@@ -56,6 +56,10 @@ export class FlatJsonAdapter implements SourceAdapter {
     private readonly batchSize = 200,
     private readonly maxDistinctOrders = 100_000,
   ) {}
+
+  async checkStructure(payload: SourcePayload): Promise<void> {
+    await scanJsonStructure(openPart(payload, flatJsonPart));
+  }
 
   async *read(
     payload: SourcePayload,

@@ -9,7 +9,11 @@ import { describeIssues, normalizedOrderSchema } from '../../domain/schemas.js';
 import type { NormalizedPurchaseOrder } from '../../domain/purchase-order.js';
 
 import { FieldError } from './field-parsers.js';
-import { streamArrayAtKey, type JsonValue } from './json-stream.js';
+import {
+  scanJsonStructure,
+  streamArrayAtKey,
+  type JsonValue,
+} from './json-stream.js';
 import {
   readItem,
   readOrderHeader,
@@ -23,6 +27,10 @@ export class NestedJsonAdapter implements SourceAdapter {
   readonly deliveryFormat = 'nested-json' as const;
 
   constructor(private readonly batchSize = 200) {}
+
+  async checkStructure(payload: SourcePayload): Promise<void> {
+    await scanJsonStructure(openPart(payload, nestedJsonPart));
+  }
 
   async *read(
     payload: SourcePayload,

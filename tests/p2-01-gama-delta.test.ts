@@ -1160,6 +1160,7 @@ describe('REVIEW-12: teto de pedidos em espera', () => {
     const excesso = maxStagedOrders + 1;
     const adaptador: SourceAdapter = {
       deliveryFormat: 'split-json',
+      checkStructure: () => Promise.resolve(),
       async *read() {
         yield {
           orders: [],
@@ -1214,5 +1215,77 @@ describe('REVIEW-12: teto de pedidos em espera', () => {
       0,
       'o lote que excedeu o teto foi escrito antes da recusa',
     );
+  });
+});
+
+describe('REVIEW-16: atomicidade do documento', () => {
+  it('R16-01: o documento inteiro é conferido antes de gravar', async () => {
+    // O prefixo de um JSON truncado era gravado, e a resposta dizia que o
+    // payload era incompatível — sem recibo do que entrou. A conferência
+    // estrutural roda antes de qualquer escrita e custa 1% da carga.
+    const repositorio = new InMemoryPurchaseOrderRepository();
+    const uso = new IngestPurchaseOrders(
+      new InMemoryClientProfiles(),
+      buildAdapterRegistry(),
+      repositorio,
+    );
+
+    const pedidos = Array.from({ length: 260 }, (_, i) => ({
+      po_number: `TRUNCA-${String(i).padStart(5, '0')}`,
+      created_at: '2026-08-05',
+      status: 'open',
+      currency: 'BRL',
+      vendor: { tax_id: '23456789000101', name: 'Metalúrgica São Jorge' },
+      items: [
+        {
+          line: 10,
+          material: 'M',
+          description: 'D',
+          uom: 'UN',
+          quantity_ordered: 10,
+          quantity_received: 0,
+          unit_price: 1.5,
+        },
+      ],
+    }));
+    const texto = JSON.stringify({ purchase_orders: pedidos });
+    // Corta depois de um lote inteiro, que é onde o defeito aparecia.
+    const corte = texto.indexOf('"TRUNCA-00200"');
+
+    await assert.rejects(
+      () =>
+        uso.execute({
+          clientId: 'alfa',
+          formatVersion: '1',
+          parts: new Map([['orders', () => bytes(texto.slice(0, corte + 40))]]),
+        }),
+      /malformada/,
+    );
+
+    assert.equal(
+      await repositorio.findByExternalNumber('alfa', 'TRUNCA-00000'),
+      null,
+      'a carga interrompida gravou o prefixo',
+    );
+  });
+
+  it('R16-01: documento completo continua entrando normalmente', async () => {
+    // A conferência não pode recusar o que é válido — é o caminho comum, e
+    // um teste que só afirma a recusa deixaria passar uma verificação que
+    // recusa tudo.
+    const repositorio = new InMemoryPurchaseOrderRepository();
+    const uso = new IngestPurchaseOrders(
+      new InMemoryClientProfiles(),
+      buildAdapterRegistry(),
+      repositorio,
+    );
+    const texto = await fixture('alfa/purchase-orders.json');
+    const relatorio = await uso.execute({
+      clientId: 'alfa',
+      formatVersion: '1',
+      parts: new Map([['orders', () => bytes(texto)]]),
+    });
+    assert.equal(relatorio.ordersAccepted, 1);
+    assert.equal(relatorio.itemsAccepted, 2);
   });
 });

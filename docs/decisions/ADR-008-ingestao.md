@@ -49,3 +49,25 @@ Quatro escolhas da implementação, todas defensáveis e nenhuma dedutível do t
 E um limite que a implementação revelou: **o adaptador só enxerga os cabeçalhos da carga atual**, então o que ele chama de órfão pode ser item de pedido que já existe no banco — o caso de mandar só a consulta de itens do Delta, que é uso normal. A decisão ficou com o caso de uso, que tem o repositório: item cujo pedido já existe é aplicado, item de pedido desconhecido espera.
 
 Segue em aberto: não há expiração nem teto para a espera. Um cliente que mande itens de pedidos que nunca existirão acumula linhas indefinidamente. Falta decidir a política — descarte por idade, teto por cliente, ou visibilidade operacional — e nenhuma delas se decide sem dado de uso real.
+
+## Atualização — FIX-17, 2026-09-29
+
+**Documento estruturalmente quebrado não muda nada.** O payload é conferido
+inteiro antes de a carga gravar qualquer coisa; se ele não termina, a resposta
+é `422` e nem pedido nem espera são tocados.
+
+Isso **não** contradiz a aceitação parcial acima: ela vale para **registro
+inválido**, que continua sendo recusado individualmente e sempre volta no
+relatório com referência e motivo. Um documento truncado é outra coisa — falha
+de transporte —, e aceitar o prefixo dele deixava pedidos gravados com a
+resposta dizendo que o payload era incompatível, **sem recibo do que entrou**
+([REVIEW-16](../handoffs/REVIEW-16-validacao-integral-pos-fix-16-codex.md),
+R16-01).
+
+A escolha entre "recusar tudo" e "aceitar o prefixo com relatório" foi decidida
+**medindo**: a conferência estrutural percorre o arquivo já em disco sem
+materializar valor nenhum, e custou **0,6s contra 83s** de uma carga de 20.000
+pedidos — 1%. A 1% não há motivo para deixar meia carga aplicada sem recibo.
+
+O streaming e o limite de memória continuam intactos: é uma segunda leitura do
+spool, não uma transação sobre a carga inteira.

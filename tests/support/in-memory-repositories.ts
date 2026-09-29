@@ -22,6 +22,7 @@ import {
   type StagedItem,
   type StagedRecord,
 } from '../../src/domain/ingestion.js';
+import { maxReportedRecords } from '../../src/domain/limits.js';
 import {
   normalizedItemSchema,
   normalizedOrderSchema,
@@ -198,7 +199,9 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
     const key = `${clientId}:${externalNumber}`;
     const fila = this.waiting.get(key) ?? [];
     const meus = fila.filter((linha) => linha.ingestionId === ingestionId);
-    if (meus.length === 0) return Promise.resolve({ applied: 0, waiting: 0 });
+    if (meus.length === 0) {
+      return Promise.resolve({ applied: 0, waiting: 0, sample: [] });
+    }
 
     const existing = this.byKey.get(key);
     if (existing === undefined) {
@@ -212,7 +215,16 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
             : linha,
         ),
       );
-      return Promise.resolve({ applied: 0, waiting: meus.length });
+      return Promise.resolve({
+        applied: 0,
+        waiting: meus.length,
+        // A amostra sai do mesmo fechamento, como no real (R16-02).
+        sample: meus.slice(0, maxReportedRecords).map((linha) => ({
+          reference: externalNumber,
+          reason: 'cabecalho-ausente' as const,
+          raw: linha.raw,
+        })),
+      });
     }
 
     const porLinha = new Map(
@@ -234,7 +246,7 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
       fila.filter((linha) => linha.ingestionId !== ingestionId),
     );
     this.gravar(completo);
-    return Promise.resolve({ applied: meus.length, waiting: 0 });
+    return Promise.resolve({ applied: meus.length, waiting: 0, sample: [] });
   }
 
   discardIngestion(clientId: ClientId, ingestionId: string): Promise<void> {

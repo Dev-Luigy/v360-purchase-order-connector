@@ -66,6 +66,16 @@ export class IngestPurchaseOrders {
     let ordersAccepted = 0;
     let itemsAccepted = 0;
 
+    // O documento inteiro é conferido **antes** de gravar qualquer coisa: um
+    // truncamento deixava o prefixo no banco com a resposta dizendo que o
+    // payload era incompatível, sem recibo do que entrou (REVIEW-16, R16-01).
+    // Custa 1% da carga, medido.
+    try {
+      await adapter.checkStructure(payload, profile);
+    } catch (cause) {
+      throw new PayloadError(cause);
+    }
+
     try {
       for await (const batch of comErroDePayload(
         adapter.read(payload, profile),
@@ -182,31 +192,16 @@ export class IngestPurchaseOrders {
           externalNumber,
         );
         itemsAccepted += destino.applied;
+        // Contagem e amostra vêm do mesmo fechamento que publicou as linhas.
+        // Recontar depois de soltar os locks deixava outra requisição consumir
+        // uma linha no intervalo, e ela sumia deste relatório (R16-02).
+        staged.count(destino.waiting);
+        for (const registro of destino.sample) staged.keep(registro);
       } catch (cause) {
         rejected.add({
           reference: `itens do pedido ${externalNumber}`,
           reason: cause instanceof Error ? cause.message : String(cause),
         });
-      }
-    }
-
-    // O que ficou esperando sai do **estado**, não de subtração entre
-    // contagens de granularidades diferentes: uma linha reenviada dentro da
-    // mesma carga substitui a anterior, e subtrair fabricava espera que não
-    // existia (REVIEW-13, R13-02). Uma consolidação que falhou também deixa
-    // linhas de volta, e elas precisam aparecer (R13-04).
-    const esperando = await this.orders.countStaged(
-      payload.clientId,
-      ingestionId,
-    );
-    staged.count(esperando);
-    if (esperando > 0) {
-      for (const registro of await this.orders.sampleStaged(
-        payload.clientId,
-        ingestionId,
-        maxReportedRecords,
-      )) {
-        staged.keep(registro);
       }
     }
 

@@ -12,7 +12,11 @@ import type {
 
 import { maxItemsPerOrder } from '../../domain/limits.js';
 
-import { streamCsvRecords, type CsvRecord } from './csv-stream.js';
+import {
+  scanCsvStructure,
+  streamCsvRecords,
+  type CsvRecord,
+} from './csv-stream.js';
 import { FieldError } from './field-parsers.js';
 import {
   assertPayloadMatchesProfile,
@@ -43,6 +47,18 @@ export class PairedCsvAdapter implements SourceAdapter {
     /** Teto do índice de cabeçalhos mantido em memória. */
     private readonly maxIndexedHeaders = 100_000,
   ) {}
+
+  async checkStructure(
+    payload: SourcePayload,
+    profile: ClientProfile,
+  ): Promise<void> {
+    const encoding = profile.csv?.encoding ?? 'utf-8';
+    for (const parte of [csvHeadersPart, csvItemsPart]) {
+      if (payload.parts.has(parte)) {
+        await scanCsvStructure(openPart(payload, parte), encoding);
+      }
+    }
+  }
 
   async *read(
     payload: SourcePayload,

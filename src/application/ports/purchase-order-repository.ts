@@ -21,6 +21,14 @@ export interface StagedOutcome {
   readonly applied: number;
   /** Ficaram esperando pelo cabeçalho, já visíveis para outras cargas. */
   readonly waiting: number;
+  /**
+   * Amostra do que ficou esperando, tirada **dentro** do mesmo fechamento.
+   *
+   * Recontar depois de soltar os locks deixava outra requisição consumir uma
+   * linha entre o fechamento e a contagem, e ela sumia do relatório da carga
+   * que a recebeu (REVIEW-16, R16-02).
+   */
+  readonly sample: readonly StagedRecord[];
 }
 
 export interface SnapshotResult {

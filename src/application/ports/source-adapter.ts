@@ -22,6 +22,19 @@ export interface AdapterBatch {
 /** Traduz uma forma de entrega em lotes do contrato normalizado. */
 export interface SourceAdapter {
   readonly deliveryFormat: DeliveryFormat;
+
+  /**
+   * Confere que o payload **termina**, antes de gravar qualquer coisa.
+   *
+   * Um documento truncado é falha de transporte, não registro inválido: sem
+   * esta passagem, o prefixo era gravado e a resposta dizia que o payload era
+   * incompatível, sem recibo do que entrou (REVIEW-16, R16-01).
+   *
+   * É uma leitura sobre o arquivo já em disco, que não materializa valor
+   * nenhum — custa 1% da carga.
+   */
+  checkStructure(payload: SourcePayload, profile: ClientProfile): Promise<void>;
+
   read(
     payload: SourcePayload,
     profile: ClientProfile,
