@@ -1,6 +1,6 @@
 # Estado do projeto
 
-Atualizado por Codex em 2026-09-29, após REVIEW-17.
+Atualizado por Codex em 2026-09-29, após REVIEW-18.
 
 ## Implementado
 
@@ -28,7 +28,7 @@ Atualizado por Codex em 2026-09-29, após REVIEW-17.
 - Persistência de pedidos **e** do histórico de conferências após reinício do banco provada por `scripts/verify-persistence.mjs`.
 - Sem `DATABASE_URL`, os testes de integração são pulados: `npm run check` continua funcionando em máquina sem Docker.
 - **P2-01 integrou Gama e Delta sem mudar uma coluna** do contrato normalizado. A única migração da Parte 2, `0002_staging_de_itens_orfaos`, não foi para acomodar formato de cliente: fechou a promessa do ADR-008 de reconciliar o item que chega antes do cabeçalho, que estava escrita e não implementada. Detalhe em [P2-01](handoffs/P2-01-claude.md).
-- **A aceitação oficial passa pela aplicação de verdade.** Após FIX-17, `npm run validate:http` roda **16 cenários** por `fetch` contra a porta 3000, afirmando status HTTP, corpo do relatório e estado pelas rotas de consulta. As duas regressões R16-01 e R16-02 passaram também em sondas independentes de 200 e 2.000 registros ([REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md)).
+- **A aceitação oficial passa pela aplicação de verdade.** Após FIX-18, `npm run validate:http` roda **17 cenários** por `fetch` contra a porta 3000, afirmando status HTTP, corpo do relatório e estado pelas rotas de consulta; inclui as regressões de fechamento sem staging invisível ([REVIEW-18](handoffs/REVIEW-18-validacao-integral-codex.md)).
 - **O validador do enunciado é repetível.** Ele dependia de banco recém-limpo e caía para 26/27 na segunda execução: afirmava contagens globais. Agora afirma sobre o conjunto que **ele mesmo** cria e compara o histórico contra uma linha de base. Verificado rodando três vezes seguidas e logo depois de outros scripts, sempre 30/30 (REVIEW-10, R10-05).
 - **A varredura é um retrato com fim próprio.** O cursor passou à versão 2 e carrega o teto fixado na primeira página: sem ele, uma varredura sob escrita contínua perseguia o que entrava e não tinha condição de término ([ADR-010](decisions/ADR-010-paginacao.md), atualização de FIX-15). Provado com o escritor ainda ativo depois do fim da varredura.
 - **A espera de uma carga em andamento é invisível para outra.** A migração `0007` deu ciclo de vida à linha: ela nasce não publicada e só vira visível quando a carga termina de ler. Sem isso, um cabeçalho concorrente consumia o prefixo de uma carga que depois recusaria o pedido inteiro.
@@ -41,11 +41,13 @@ Atualizado por Codex em 2026-09-29, após REVIEW-17.
 
 Pipeline de CI e política de exceção da auditoria npm. A imagem final exclui os pacotes vulneráveis conhecidos, mas `npm audit --omit=dev --audit-level=high` ainda falha com quatro avisos altos trazidos pelo grafo de ferramentas do Prisma; isso precisa de política verificável, não de supressão informal.
 
-FIX-17 fechou R16-01 e R16-02: a conferência estrutural antes da gravação deixa zero pedido após JSON Alfa truncado, e a carga dona contabiliza 2.000/2.000 mesmo quando um cabeçalho concorrente recupera a primeira linha. REVIEW-17 encontrou uma nova lacuna: quando fechar o pedido falha por exceder o limite agregado, uma linha fica não publicada no banco enquanto o relatório responde `stagedTotal=0`. O registro completo está em [REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md); correção pendente para FIX-18.
+FIX-17 fechou R16-01 e R16-02. REVIEW-17 encontrou R17-01 no caminho em que o fechamento falhava por exceder o limite agregado; FIX-18 passou a descartar essas linhas e mantém o invariante de zero staging não publicado ao fim de uma carga. REVIEW-18 confirmou a correção na integração PostgreSQL e pela rota HTTP ([REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md), [FIX-18](handoffs/FIX-18-claude.md), [REVIEW-18](handoffs/REVIEW-18-validacao-integral-codex.md)).
+
+**Atualização REVIEW-18:** FIX-18 e CLEAN-02 foram verificados. A integração isolada passou 33/33, incluindo recusa acima de 10.000 itens sem linha não publicada; as rotas passaram 17/17, inclusive esse cenário e o rollback do snapshot anterior. `npm run validate:sweep` percorreu 20.000 pedidos com escrita concorrente sem repetição; os quatro formatos passaram com 20.000 pedidos e 60.000 itens cada. Reiniciar o PostgreSQL descartável preservou os dados; `docker compose config --quiet` e `docker compose build` passaram. Detalhes, limites medidos e escopo dos dados em [REVIEW-18](handoffs/REVIEW-18-validacao-integral-codex.md). A auditoria continua pendente: quatro avisos altos no grafo de ferramentas do Prisma, removidos da imagem final pelo Dockerfile, mas sem política de exceção aprovada.
 
 ## Próxima retomada
 
-**As exigências funcionais do enunciado passam para os quatro clientes**: `scripts/validate-case.mjs` ficou em **30/30** e `npm run validate:http` em **16/16**. A Parte 1 está marcada na tag `parte-1`; P2-01 integrou Gama e Delta. Segue pendente o relato consistente de linhas em espera quando o fechamento do pedido falha ([REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md)).
+**As exigências funcionais do enunciado passam para os quatro clientes**: `scripts/validate-case.mjs` ficou em **30/30** e `npm run validate:http` em **17/17**. A Parte 1 está marcada na tag `parte-1`; P2-01 integrou Gama e Delta. R17-01 foi fechado por FIX-18 e confirmado nesta revisão ([REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md), [FIX-18](handoffs/FIX-18-claude.md), [REVIEW-18](handoffs/REVIEW-18-validacao-integral-codex.md)).
 
 O que falta não é produto: **pipeline de CI** e a **política de exceção da auditoria npm**, adiados pelo usuário desde o início e agora o único item aberto de peso.
 

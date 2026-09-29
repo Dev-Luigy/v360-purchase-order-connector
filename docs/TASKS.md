@@ -34,7 +34,8 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-15 | Validar FIX-15 do zero contra todo o enunciado                   | concluída                      | Codex       | Aceitação passa; falha fatal vaza staging e publicação perde contabilidade                 |
 | REVIEW-16 | Validar FIX-16 integralmente do zero                             | concluída                      | Codex       | Duas falhas residuais reproduzidas; ver handoff                                            |
 | REVIEW-17 | Verificar FIX-17 e repetir regressões de REVIEW-16               | concluída                      | Codex       | R16-01/02 fechados; falha nova de relatório registrada para FIX-18                         |
-| FIX-18    | Fechar R17-01: espera invisível após falha ao fechar pedido      | em andamento                   | Claude      | Invariante: carga terminada não deixa linha não publicada                                  |
+| REVIEW-18 | Revalidar FIX-18, limpeza e matriz completa de testes            | concluída                      | Codex       | Integração isolada; limites, falhas, volume e persistência aprovados                       |
+| FIX-18    | Fechar R17-01: espera invisível após falha ao fechar pedido      | concluída                      | Claude      | Invariante: carga terminada não deixa linha não publicada                                  |
 | CLEAN-01  | Enxugar comentários do código estável                            | concluída                      | Codex       | 526 linhas removidas; arquivos ativos de P1-04 preservados                                 |
 | P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03                       |
 | P1-02     | Implementar schema, migrações e repositórios                     | concluída                      | Claude      | Código pronto; validação contra PostgreSQL real é ENV-03                                   |
@@ -206,6 +207,15 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: conferir FIX-17 e repetir `npm run check`, integração PostgreSQL, 30 requisitos, cenários HTTP e reproduções independentes de R16-01/R16-02. Reexecutar varredura concorrente e volume se a versão compilada ou o ambiente tiver mudado. Preservar dados existentes e deixar claro o estado final.
 - Dependências: FIX-17 concluída; PostgreSQL/Compose disponível.
 - Evidência: [handoff REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md); check e cobertura passaram, 31/31 integrações, 30/30 requisitos, 16/16 rotas, sweep e quatro volumes passaram; R16-01/02 foram reproduzidos como fechados e R17-01 foi reproduzido no PostgreSQL.
+
+## REVIEW-18 — validação independente pós-FIX-18/CLEAN-02
+
+- Responsável: Codex.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `docs/TASKS.md`, `docs/STATUS.md` e `docs/handoffs/REVIEW-18-validacao-integral-codex.md`.
+- Escopo: rever FIX-18 e CLEAN-02; executar checks, cobertura, integração, aceitação HTTP, varredura concorrente, volumes, persistência e configuração/build Docker sem truncar o banco persistente.
+- Dependências: FIX-18 e CLEAN-02 concluídas.
+- Evidência: [handoff REVIEW-18](handoffs/REVIEW-18-validacao-integral-codex.md); 247 testes sem falhas (16 testes PostgreSQL pulados no `check`), 33/33 integração, 30/30 enunciado, 17/17 HTTP, sweep de 20 mil, quatro volumes de 20 mil, persistência após reinício e build/config Compose aprovados. A auditoria npm continua com quatro vulnerabilidades altas no grafo de ferramentas do Prisma.
 
 ## FIX-18 — espera sem aparecer no relatório após falha
 
