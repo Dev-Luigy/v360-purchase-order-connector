@@ -16,7 +16,11 @@ import type {
 
 import { FieldError } from './field-parsers.js';
 import { describeIssues, normalizedItemSchema } from '../../domain/schemas.js';
-import { streamArrayAtKey, type JsonValue } from './json-stream.js';
+import {
+  scanJsonStructure,
+  streamArrayAtKey,
+  type JsonValue,
+} from './json-stream.js';
 import {
   assertPayloadMatchesProfile,
   jsonFieldSource,
@@ -57,6 +61,15 @@ export class SplitJsonAdapter implements SourceAdapter {
     private readonly batchSize = 200,
     private readonly maxIndexedHeaders = 100_000,
   ) {}
+
+  async checkStructure(payload: SourcePayload): Promise<void> {
+    // Qualquer uma das duas partes pode vir sozinha.
+    for (const parte of [splitJsonOrdersPart, splitJsonItemsPart]) {
+      if (payload.parts.has(parte)) {
+        await scanJsonStructure(openPart(payload, parte));
+      }
+    }
+  }
 
   async *read(
     payload: SourcePayload,

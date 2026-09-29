@@ -579,6 +579,95 @@ await exige('payload malformado responde 422 e não deixa resíduo', async () =>
   confere(sobrou.status === 404, 'a carga interrompida gravou pedido');
 });
 
+await exige('documento truncado não grava pedido nenhum', async () => {
+  // R16-01: o prefixo era gravado e a resposta dizia que o payload era
+  // incompatível, sem recibo do que entrou. O cenário anterior usava Delta
+  // item-only, onde nenhum pedido seria criado de qualquer forma — provava
+  // a limpeza da espera, não a atomicidade do retrato.
+  const prefixo = numeroDe('TRUNCA');
+  const pedidoAlfa = (i) => ({
+    po_number: `${prefixo}-${String(i).padStart(5, '0')}`,
+    created_at: '2026-08-05',
+    status: 'open',
+    currency: 'BRL',
+    vendor: { tax_id: '23456789000101', name: 'Metalúrgica São Jorge' },
+    items: [
+      {
+        line: 10,
+        material: 'M',
+        description: 'D',
+        uom: 'UN',
+        quantity_ordered: 10,
+        quantity_received: 0,
+        unit_price: 1.5,
+      },
+    ],
+  });
+
+  // Corta **depois** de um lote inteiro do adaptador, que é onde o defeito
+  // aparecia: com menos que isso nada tinha sido gravado ainda.
+  const texto = JSON.stringify({
+    purchase_orders: Array.from({ length: 260 }, (_, i) => pedidoAlfa(i)),
+  });
+  const corte = texto.indexOf(`"${prefixo}-00200"`);
+  const corpo = new FormData();
+  corpo.append(
+    'orders',
+    new Blob([texto.slice(0, corte + 40)], { type: 'application/json' }),
+    'orders.json',
+  );
+  const resposta = await fetch(`${base}/clients/alfa/ingestions`, {
+    method: 'POST',
+    headers: { 'x-format-version': '1' },
+    body: corpo,
+  });
+  confere(resposta.status === 422, `respondeu ${String(resposta.status)}`);
+
+  // Nenhum dos pedidos do prefixo pode ter ficado.
+  const { data } = await (
+    await fetch(
+      `${base}/purchase-orders?clientId=alfa` +
+        `&externalNumber=${encodeURIComponent(`${prefixo}-00000`)}`,
+    )
+  ).json();
+  confere(
+    data.length === 0,
+    'a carga que respondeu 422 gravou pedido assim mesmo',
+  );
+});
+
+await exige('o relatório da carga conta o que ela mesma recebeu', async () => {
+  // R16-02: o relatório era recalculado depois de soltar todos os locks, e
+  // um cabeçalho concorrente consumia uma linha no intervalo — ela sumia da
+  // contabilidade da carga que a recebeu.
+  const alvo = numeroDe('CONTABIL');
+  const quantos = 400;
+  const itens = [
+    // O alvo **primeiro**: ele é publicado cedo e fica exposto enquanto a
+    // carga ainda fecha os demais.
+    item(alvo, 10),
+    ...Array.from({ length: quantos }, (_, i) =>
+      item(`${alvo}-OUTRO-${String(i)}`, 10),
+    ),
+  ];
+
+  const carga = carregar({ items: itens });
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const cabecalhoNoMeio = await carregar({ orders: [cabecalho(alvo)] });
+  const relatorio = (await carga).corpo;
+
+  const contabilizado =
+    relatorio.itemsAccepted + relatorio.rejectedTotal + relatorio.stagedTotal;
+  confere(
+    contabilizado === quantos + 1,
+    `contabilizou ${String(contabilizado)} de ${String(quantos + 1)} registros`,
+  );
+  confere(
+    cabecalhoNoMeio.status === 200,
+    `cabeçalho concorrente: HTTP ${String(cabecalhoNoMeio.status)}`,
+  );
+});
+
 // ------------------------------------------------------------- veredito
 
 const largura = Math.max(...resultados.map((r) => r.cenario.length));

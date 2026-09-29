@@ -47,7 +47,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado           |
 | P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                         |
 | P1-05     | Validar desafio e registrar marco parte-1                        | concluída                      | Claude      | 18/18 exigências verificadas no ar; tag depende de DOC-02                     |
-| FIX-17    | Fechar R16-01 e R16-02                                           | em andamento                   | Claude      | REVIEW-16; 422 deixando 200 pedidos gravados, e relatório recalculado tarde   |
+| FIX-17    | Fechar R16-01 e R16-02                                           | concluída                      | Claude      | Conferência estrutural antes de gravar; relatório do próprio fechamento       |
 | FIX-16    | Fechar R15-01, R15-02 e R15-03                                   | concluída                      | Claude      | Fechamento por pedido sob o lock; compensação e varredura de abandono         |
 | FIX-15    | Fechar R14-01, R14-02 e R14-03                                   | concluída                      | Claude      | Ciclo de vida da espera e teto no cursor; 13/13 pelas rotas                   |
 | FINAL-01  | Fechar o enunciado inteiro e entregar a versão final             | concluída                      | Claude      | Seis lacunas fechadas; o dobro em memória não paginava de verdade             |
@@ -297,13 +297,14 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## FIX-17 — atomicidade do documento e relatório da própria carga
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/application/ports/{purchase-order-repository,source-adapter}.ts`, `src/application/use-cases/ingest-purchase-orders.ts`, `src/infrastructure/database/purchase-order-repository.ts`, `src/infrastructure/integrations/{json-stream,csv-stream,nested-json-adapter,paired-csv-adapter,flat-json-adapter,split-json-adapter}.ts`, `docs/decisions/ADR-008-ingestao.md`, `scripts/validate-fix-14-http.mjs`, `tests/**`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-17-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `src/application/ports/{purchase-order-repository,source-adapter}.ts`, `src/application/use-cases/ingest-purchase-orders.ts`, `src/infrastructure/database/purchase-order-repository.ts`, `src/infrastructure/integrations/{json-stream,csv-stream,nested-json-adapter,paired-csv-adapter,flat-json-adapter,split-json-adapter}.ts`, `docs/decisions/ADR-008-ingestao.md`, `scripts/validate-fix-14-http.mjs`, `tests/**`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-17-claude.md`.
 - Escopo: os dois achados de [REVIEW-16](handoffs/REVIEW-16-validacao-integral-pos-fix-16-codex.md), reproduzidos antes de aceitar.
   - **R16-01**: JSON truncado depois de um lote responde **422 sem recibo** e deixa 200 pedidos gravados. O `catch` de FIX-16 limpa a espera e não os retratos.
   - **R16-02**: `finalizeStaged` já devolve `{ waiting }` sob o lock, e o caso de uso ignora — recalcula o relatório com `countStaged`/`sampleStaged` depois de soltar todos os locks. A janela diminuiu, não fechou.
 - Decisão de R16-01, tomada por medição: **erro estrutural não muda nada**. A passagem estrutural sobre o payload já em disco custou 0,6s contra 83s da carga de 20.000 pedidos — 1%. Aceitação parcial continua valendo para registro inválido, que sempre devolve recibo; documento truncado é falha de transporte.
 - Dependências: FIX-16 concluída.
+- Evidência: [handoff FIX-17](handoffs/FIX-17-claude.md); `checkStructure` confere o documento antes de gravar, e o relatório passou a sair do mesmo fechamento que publica as linhas. 16/16 pelas rotas.
 
 ## FIX-16 — o ciclo de vida da ingestão, de verdade
 

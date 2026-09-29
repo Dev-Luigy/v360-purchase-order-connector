@@ -147,3 +147,17 @@ function toRecord(record: Record<string, string>, line: number): CsvRecord {
     },
   };
 }
+
+/**
+ * Percorre o CSV inteiro só para saber se ele se decodifica.
+ *
+ * Diferente do JSON, um CSV truncado não é malformado — a última linha
+ * incompleta é um registro ruim, e isso a aceitação parcial já trata. O que
+ * falha em fluxo aqui é o encoding declarado não bater com o conteúdo.
+ */
+export async function scanCsvStructure(
+  chunks: AsyncIterable<Uint8Array>,
+  encoding: CsvEncoding,
+): Promise<void> {
+  for await (const _ of decode(chunks, encoding)) void _;
+}

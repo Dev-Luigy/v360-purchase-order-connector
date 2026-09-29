@@ -1,5 +1,6 @@
 import type { Page, PageRequest } from '../../application/ports/pagination.js';
 import { maxPageLimit } from '../../application/ports/pagination.js';
+import { maxReportedRecords } from '../../domain/limits.js';
 import type {
   PurchaseOrderFilters,
   PurchaseOrderRepository,
@@ -131,7 +132,23 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
           where: { clientId, ingestionId, externalNumber },
           data: { publicada: true },
         });
-        return { applied: 0, waiting: count };
+        // A amostra sai daqui, do mesmo fechamento que publicou: recontar
+        // depois deixava outra carga consumir a linha no intervalo.
+        const linhas = await tx.ingestionStaging.findMany({
+          where: { clientId, ingestionId, externalNumber },
+          orderBy: { externalLine: 'asc' },
+          take: maxReportedRecords,
+          select: { raw: true },
+        });
+        return {
+          applied: 0,
+          waiting: count,
+          sample: linhas.map((linha) => ({
+            reference: externalNumber,
+            reason: 'cabecalho-ausente' as const,
+            raw: linha.raw,
+          })),
+        };
       }
 
       const esperando = await takeWaitingItems(
@@ -140,7 +157,9 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
         externalNumber,
         ingestionId,
       );
-      if (esperando.length === 0) return { applied: 0, waiting: 0 };
+      if (esperando.length === 0) {
+        return { applied: 0, waiting: 0, sample: [] };
+      }
 
       const existente = await findFull(tx, encontrado.id);
       if (existente === null) {
@@ -168,7 +187,7 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
           items: [...porLinha.values()],
         }),
       );
-      return { applied: esperando.length, waiting: 0 };
+      return { applied: esperando.length, waiting: 0, sample: [] };
     });
   }
 
