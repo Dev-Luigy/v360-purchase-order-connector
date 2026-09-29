@@ -32,6 +32,8 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-14 | Verificar FIX-14 e FINAL-01 pela aplicação real                  | concluída                      | Codex       | Falha de staging reproduzida; sweep finito passa, sem teto de snapshot        |
 | REVIEW-15 | Validar FIX-15 do zero contra todo o enunciado                   | concluída                      | Codex       | Aceitação passa; falha fatal vaza staging e publicação perde contabilidade    |
 | REVIEW-16 | Validar FIX-16 integralmente do zero                             | concluída                      | Codex       | Duas falhas residuais reproduzidas; ver handoff                               |
+| REVIEW-17 | Verificar FIX-17 e repetir regressões de REVIEW-16               | concluída                      | Codex       | R16-01/02 fechados; falha nova de relatório registrada para FIX-18            |
+| FIX-18    | Fechar R17-01: espera invisível após falha ao fechar pedido      | em andamento                   | Claude      | Invariante: carga terminada não deixa linha não publicada                     |
 | CLEAN-01  | Enxugar comentários do código estável                            | concluída                      | Codex       | 526 linhas removidas; arquivos ativos de P1-04 preservados                    |
 | P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03          |
 | P1-02     | Implementar schema, migrações e repositórios                     | concluída                      | Claude      | Código pronto; validação contra PostgreSQL real é ENV-03                      |
@@ -194,6 +196,24 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: recriar banco e aplicação do zero; executar checks, integração, cobertura, requisitos, rotas, falhas, concorrência, limites, volume nos quatro formatos, persistência, Docker e segurança; reproduzir independentemente R15-01, R15-02 e R15-03; entregar o banco sem dados de negócio.
 - Dependências: FIX-16 concluída; autorização explícita do usuário para apagar o banco e executar a matriz completa.
 - Evidência: [handoff REVIEW-16](handoffs/REVIEW-16-validacao-integral-pos-fix-16-codex.md); matriz oficial verde e banco entregue vazio, mas payload Alfa truncado persistiu 200 pedidos e uma corrida deixou a carga dona contabilizar 1.999/2.000 registros.
+
+## REVIEW-17 — validação pós-FIX-17
+
+- Responsável: Codex.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `docs/TASKS.md`, `docs/STATUS.md` e `docs/handoffs/REVIEW-17-validacao-pos-fix-17-codex.md`.
+- Escopo: conferir FIX-17 e repetir `npm run check`, integração PostgreSQL, 30 requisitos, cenários HTTP e reproduções independentes de R16-01/R16-02. Reexecutar varredura concorrente e volume se a versão compilada ou o ambiente tiver mudado. Preservar dados existentes e deixar claro o estado final.
+- Dependências: FIX-17 concluída; PostgreSQL/Compose disponível.
+- Evidência: [handoff REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md); check e cobertura passaram, 31/31 integrações, 30/30 requisitos, 16/16 rotas, sweep e quatro volumes passaram; R16-01/02 foram reproduzidos como fechados e R17-01 foi reproduzido no PostgreSQL.
+
+## FIX-18 — espera sem aparecer no relatório após falha
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `src/application/ports/purchase-order-repository.ts`, `src/application/use-cases/ingest-purchase-orders.ts`, `src/infrastructure/database/purchase-order-repository.ts`, `scripts/validate-fix-14-http.mjs`, `tests/**`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-18-claude.md`.
+- Escopo: [R17-01](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md), reproduzido por HTTP: fechar o pedido falha por exceder o agregado, o relatório diz `stagedTotal=0` e fica **1 linha não publicada** no banco. É consequência de FIX-17 ter tirado a recontagem posterior ao fechamento sem cobrir o caminho de falha.
+- Decisão: o invariante passa a ser **carga terminada não deixa linha não publicada**. Linha invisível não é "esperando cabeçalho" — ninguém a reconcilia —, então relatá-la seria mentir de outro jeito. Ela é descartada, e o pedido volta como recusa, que é o que o relatório já dizia.
+- Dependências: FIX-17 concluída.
 
 ## CLEAN-01 — limpeza de comentários
 
