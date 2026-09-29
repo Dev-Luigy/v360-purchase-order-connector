@@ -197,17 +197,18 @@ await exige(
 );
 
 await exige('Req 1', 'filtro por cliente de origem', async () => {
-  const doBeta = await todasAsPaginas('/purchase-orders?clientId=beta');
-  const numeros = new Set(doBeta.map((p) => p.externalNumber));
+  // Pelo recorte, não percorrendo o cliente inteiro: com cem mil pedidos no
+  // banco, varrer tudo são milhares de requisições e o próprio teto do
+  // serviço recusa a validação.
   for (const esperado of ['20260088412', '20260088413']) {
-    confere(
-      numeros.has(esperado),
-      `${esperado} não veio no filtro por cliente`,
-    );
+    const achado = await pedidoDe('beta', esperado);
+    confere(achado !== null, `${esperado} não veio no filtro por cliente`);
+    confere(achado.clientId === 'beta', 'o filtro devolveu outro cliente');
   }
-  // O que importa é não vazar: a contagem depende de cargas anteriores.
+  // E o filtro não pode vazar: uma página basta para ver isso.
+  const { corpo } = await pegar('/purchase-orders?clientId=beta&limit=100');
   confere(
-    doBeta.every((p) => p.clientId === 'beta'),
+    corpo.data.every((p) => p.clientId === 'beta'),
     'vazou pedido de outro cliente',
   );
 });
@@ -239,24 +240,31 @@ await exige('Req 1', 'filtro por situação do pedido', async () => {
 });
 
 await exige('Req 1', 'apenas os que ainda têm algo a receber', async () => {
-  // Asserção sobre **os pedidos desta execução**, não sobre a contagem global
-  // do banco: o script precisa valer também com dado de outra origem presente
-  // (REVIEW-10, R10-05).
-  const pendentes = await todasAsPaginas('/purchase-orders?pending=true');
-  const numeros = new Set(
-    pendentes.map((p) => `${p.clientId}:${p.externalNumber}`),
-  );
+  // Um a um, pelo recorte: percorrer todos os pendentes eram milhares de
+  // requisições com o banco cheio, e o próprio teto do serviço recusava a
+  // validação (REVIEW-10, R10-05, e o mesmo problema com volume real).
   for (const esperado of comSaldoDestaExecucao) {
-    confere(
-      numeros.has(esperado),
-      `${esperado} deveria ter saldo e não apareceu`,
+    const [cliente, numero] = esperado.split(':');
+    const { corpo } = await pegar(
+      `/purchase-orders?clientId=${cliente}&externalNumber=${numero}&pending=true`,
     );
+    confere(corpo.data.length === 1, `${esperado} deveria ter saldo`);
+    confere(corpo.data[0].hasPendingBalance, `${esperado} sem saldo marcado`);
   }
   for (const vazio of semSaldoDestaExecucao) {
-    confere(!numeros.has(vazio), `${vazio} não tem saldo e apareceu no filtro`);
+    const [cliente, numero] = vazio.split(':');
+    const { corpo } = await pegar(
+      `/purchase-orders?clientId=${cliente}&externalNumber=${numero}&pending=true`,
+    );
+    confere(
+      corpo.data.length === 0,
+      `${vazio} não tem saldo e apareceu no filtro`,
+    );
   }
+  // E o filtro não devolve pedido sem saldo: uma página basta.
+  const { corpo } = await pegar('/purchase-orders?pending=true&limit=100');
   confere(
-    pendentes.every((p) => p.hasPendingBalance),
+    corpo.data.every((p) => p.hasPendingBalance),
     'veio pedido sem saldo',
   );
 });
