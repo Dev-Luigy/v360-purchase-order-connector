@@ -81,10 +81,10 @@ Um registro inválido não rejeita a carga: o resto entra e o rejeitado volta aq
 ## Consulta de pedidos
 
 ```http
-GET /purchase-orders?clientId=alfa&supplierTaxId=23456789000101&status=aberto&pending=true&limit=50&cursor=
+GET /purchase-orders?clientId=alfa&externalNumber=4500001234&supplierTaxId=23456789000101&status=aberto&pending=true&limit=50&cursor=
 ```
 
-Todos os filtros são combináveis e convivem com a paginação. `pending=true` devolve só pedidos com algum item com saldo.
+Todos os filtros são combináveis e convivem com a paginação. `pending=true` devolve só pedidos com algum item com saldo. `externalNumber` é o número do pedido no sistema do cliente — o mesmo que a conferência usa para identificá-lo — e pode vir sem `clientId`, porque o enunciado avisa que o mesmo número existe em clientes diferentes e procurar onde ele está é uso legítimo.
 
 ```json
 {

@@ -175,3 +175,137 @@ test('pedido inexistente é 404, não lista vazia', async (t) => {
     'pedido_nao_encontrado',
   );
 });
+
+/** Pedido normalizado mínimo, para estes testes não repetirem a montagem. */
+function pedido(over: Record<string, unknown> = {}) {
+  return {
+    clientId: 'alfa',
+    externalNumber: '4500001234',
+    supplier: { taxId: '23456789000101', name: 'Metalúrgica São Jorge S.A.' },
+    currency: 'BRL',
+    status: 'aberto' as const,
+    issuedOn: '2026-08-05',
+    items: [
+      {
+        externalLine: 10,
+        material: 'MAT-1001',
+        description: 'Chapa de aço 2mm',
+        purchaseUnit: 'UN',
+        conversionFactor: '1.000000',
+        quantityOrdered: '100.000000',
+        quantityReceived: '60.000000',
+        unitPrice: '45.900000',
+        lineCreatedOn: null,
+      },
+    ],
+    ...over,
+  };
+}
+
+test('filtro por número do pedido acha sem varrer a consulta', async (t) => {
+  // A plataforma conhece o número — é por ele que identifica o pedido na
+  // conferência. Sem este filtro, encontrá-lo exigia percorrer tudo.
+  const { app, orders } = await buildTestApp();
+  t.after(() => app.close());
+
+  await orders.replaceSnapshot(pedido({ externalNumber: 'BUSCA-1' }));
+  await orders.replaceSnapshot(pedido({ externalNumber: 'BUSCA-2' }));
+  // O enunciado avisa: o mesmo número existe em clientes diferentes.
+  await orders.replaceSnapshot(
+    pedido({ clientId: 'beta', externalNumber: 'BUSCA-1' }),
+  );
+
+  const porNumero = await app.inject({
+    method: 'GET',
+    url: '/purchase-orders?externalNumber=BUSCA-1',
+  });
+  assert.equal(porNumero.statusCode, 200);
+  const achados = porNumero.json() as { data: { clientId: string }[] };
+  assert.equal(achados.data.length, 2, 'não achou o número nos dois clientes');
+
+  const comCliente = await app.inject({
+    method: 'GET',
+    url: '/purchase-orders?clientId=alfa&externalNumber=BUSCA-1',
+  });
+  assert.equal(
+    (comCliente.json() as { data: unknown[] }).data.length,
+    1,
+    'cliente e número juntos não recortaram',
+  );
+});
+
+test('o cursor carrega o filtro por número, como os outros', async (t) => {
+  // Todo filtro precisa entrar na impressão digital do cursor. Um que ficasse
+  // de fora deixaria um cursor de outra consulta ser aceito em silêncio, e o
+  // resultado seria uma página de outro conjunto sem ninguém perceber.
+  const { app, orders } = await buildTestApp();
+  t.after(() => app.close());
+
+  for (const numero of ['CUR-1', 'CUR-2', 'CUR-3']) {
+    await orders.replaceSnapshot(pedido({ externalNumber: numero }));
+  }
+
+  const primeira = await app.inject({
+    method: 'GET',
+    url: '/purchase-orders?limit=1',
+  });
+  const cursor = (primeira.json() as { page: { nextCursor: string } }).page
+    .nextCursor;
+
+  const comFiltroNovo = await app.inject({
+    method: 'GET',
+    url: `/purchase-orders?externalNumber=CUR-2&limit=1&cursor=${encodeURIComponent(cursor)}`,
+  });
+  assert.equal(
+    comFiltroNovo.statusCode,
+    400,
+    'aceitou um cursor de uma consulta sem o filtro por número',
+  );
+});
+
+test('a varredura por cursor na borda HTTP percorre tudo sem repetir', async (t) => {
+  // O dobro em memória devolvia `nextCursor: null` sempre, então este
+  // percurso era impossível de testar aqui — e `hasMore: true` convivia com
+  // `nextCursor: null`, um envelope que o repositório real nunca produz.
+  const { app, orders } = await buildTestApp();
+  t.after(() => app.close());
+
+  const numeros = Array.from({ length: 7 }, (_, i) => `PAG-${String(i)}`);
+  for (const externalNumber of numeros) {
+    await orders.replaceSnapshot(pedido({ externalNumber }));
+  }
+
+  const vistos = new Set<string>();
+  let cursor: string | null = null;
+  let paginas = 0;
+  for (;;) {
+    const url: string =
+      '/purchase-orders?clientId=alfa&limit=2' +
+      (cursor === null ? '' : `&cursor=${encodeURIComponent(cursor)}`);
+    const resposta = await app.inject({ method: 'GET', url });
+    assert.equal(resposta.statusCode, 200);
+    const pagina = resposta.json() as {
+      data: { externalNumber: string }[];
+      page: { nextCursor: string | null; hasMore: boolean };
+    };
+
+    for (const p of pagina.data) {
+      assert.ok(!vistos.has(p.externalNumber), `${p.externalNumber} repetiu`);
+      vistos.add(p.externalNumber);
+    }
+    // O envelope precisa ser coerente: dizer que há mais sem dizer como pedir
+    // deixaria a plataforma sem saída.
+    assert.equal(
+      pagina.page.hasMore,
+      pagina.page.nextCursor !== null,
+      'hasMore e nextCursor discordam',
+    );
+
+    paginas += 1;
+    cursor = pagina.page.nextCursor;
+    if (cursor === null) break;
+  }
+
+  assert.equal(vistos.size, numeros.length, 'a varredura pulou pedidos');
+  assert.equal(paginas, 4, `esperava 4 páginas de 2, veio ${String(paginas)}`);
+});

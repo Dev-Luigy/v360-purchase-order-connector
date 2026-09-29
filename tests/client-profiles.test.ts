@@ -23,8 +23,8 @@ test('os perfis configurados são válidos', () => {
   }
   assert.deepEqual(
     configuredProfiles.map((profile) => profile.clientId),
-    ['alfa', 'beta', 'gama', 'delta'],
-    'os quatro clientes do enunciado',
+    ['alfa', 'beta', 'beta-erp', 'gama', 'delta'],
+    'os quatro do enunciado, mais a variante de encoding do Beta',
   );
 });
 
@@ -34,7 +34,7 @@ test('a porta devolve o perfil por cliente e nada para desconhecido', async () =
   assert.equal((await profiles.find('gama'))?.deliveryFormat, 'flat-json');
   assert.equal((await profiles.find('delta'))?.deliveryFormat, 'split-json');
   assert.equal(await profiles.find('omega'), null);
-  assert.equal((await profiles.list()).length, 4);
+  assert.equal((await profiles.list()).length, 5);
 });
 
 test('identificador repetido é recusado na construção', () => {

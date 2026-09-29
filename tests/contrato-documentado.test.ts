@@ -117,3 +117,36 @@ describe('a composição usa os pools que declara', () => {
     }
   });
 });
+
+const schema = await readFile(
+  new URL('../prisma/schema.prisma', import.meta.url),
+  'utf-8',
+);
+
+/**
+ * A varredura noturna por cursor ordena por `id` e pede `id > cursor`. Isso só
+ * não pula pedido porque o identificador é **monotônico**: uma linha inserida
+ * durante a varredura recebe um id maior que a posição atual e vai para o fim,
+ * em vez de cair antes dela e nunca ser vista.
+ *
+ * Trocar `uuid(7)` por `uuid(4)` quebraria isso em silêncio — a suíte inteira
+ * continuaria verde, porque nenhum teste unitário insere durante uma
+ * varredura. `scripts/validate-sweep-under-load.mjs` prova o comportamento;
+ * esta trava aponta a causa.
+ */
+describe('a paginação depende de identificador monotônico', () => {
+  it('todas as tabelas usam uuid(7), não uuid(4)', () => {
+    const versoes = [...schema.matchAll(/@default\(uuid\((\d)\)\)/g)].map(
+      (achado) => achado[1],
+    );
+    assert.ok(versoes.length > 0, 'nenhum id com uuid() no schema');
+    for (const versao of versoes) {
+      assert.equal(
+        versao,
+        '7',
+        'uuid não monotônico: a varredura por cursor passaria a pular pedidos ' +
+          'inseridos durante ela, sem nenhum teste ficar vermelho',
+      );
+    }
+  });
+});

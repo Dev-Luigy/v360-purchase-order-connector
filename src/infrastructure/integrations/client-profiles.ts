@@ -113,6 +113,27 @@ export const betaProfile: ClientProfile = deepFreeze({
   },
 });
 
+/**
+ * Beta Alimentos, exportação do ERP legado.
+ *
+ * O enunciado registra que o encoding e o fim de linha do CSV do Beta **não
+ * são especificados**, e que exportação de ERP brasileiro costuma vir em
+ * Windows-1252 com CRLF. O fim de linha o leitor tolera sem configuração; o
+ * encoding é declarado, porque adivinhá-lo produz acento corrompido em
+ * silêncio, e falhar alto é melhor que gravar "Ã“leo" no banco.
+ *
+ * Este perfil existe para provar as duas coisas de uma vez: que o leitor
+ * tolera a variante, e a afirmação do ADR-008 de que **cliente novo em forma
+ * conhecida entra só com perfil, sem código novo**. Não há uma linha de código
+ * abaixo — só rótulos.
+ */
+export const betaErpProfile: ClientProfile = deepFreeze({
+  ...betaProfile,
+  clientId: 'beta-erp',
+  name: 'Beta Alimentos (exportação do ERP legado)',
+  csv: { delimiter: ';', encoding: 'windows-1252' },
+});
+
 export const gamaProfile: ClientProfile = deepFreeze({
   clientId: 'gama',
   name: 'Gama Logística',
@@ -206,10 +227,15 @@ export const deltaProfile: ClientProfile = deepFreeze({
   },
 });
 
-/** Os quatro clientes do enunciado. */
+/**
+ * Os quatro clientes do enunciado, mais a variante de encoding do Beta — que
+ * é perfil, não cliente novo, e está aqui para provar que a variante que o
+ * enunciado levanta é tolerada ponta a ponta.
+ */
 export const configuredProfiles: readonly ClientProfile[] = [
   alfaProfile,
   betaProfile,
+  betaErpProfile,
   gamaProfile,
   deltaProfile,
 ];

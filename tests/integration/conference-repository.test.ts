@@ -7,7 +7,14 @@ import { PrismaConferenceRepository } from '../../src/infrastructure/database/co
 import type { DatabaseConnection } from '../../src/infrastructure/database/prisma-client.js';
 import { PrismaPurchaseOrderRepository } from '../../src/infrastructure/database/purchase-order-repository.js';
 
-import { connect, gravar, limpar, pedido, semBanco } from './support.js';
+import {
+  connect,
+  exigirBancoExclusivo,
+  gravar,
+  limpar,
+  pedido,
+  semBanco,
+} from './support.js';
 
 /** Histórico de conferências contra PostgreSQL real. */
 
@@ -15,9 +22,10 @@ let database: DatabaseConnection;
 let orders: PrismaPurchaseOrderRepository;
 let conferences: PrismaConferenceRepository;
 
-before(() => {
+before(async () => {
   if (semBanco) return;
   database = connect();
+  await exigirBancoExclusivo(database);
   orders = new PrismaPurchaseOrderRepository(database.prisma);
   conferences = new PrismaConferenceRepository(database.prisma);
 });

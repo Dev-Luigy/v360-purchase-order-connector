@@ -17,7 +17,7 @@ Sobe PostgreSQL 17, aplica a migração como etapa própria e só então inicia 
 Carregar as amostras e exercitar tudo:
 
 ```sh
-node scripts/validate-case.mjs    # 27 asserções, uma por exigência do enunciado
+node scripts/validate-case.mjs    # 30 asserções, uma por exigência do enunciado
 ```
 
 Desenvolvimento local: `cp .env.example .env && npm ci && npm run db:up && npm run dev`. `npm run check` roda geração do cliente Prisma, tipagem, lint, formatação, a suíte completa e o build, **sem exigir banco**; `npm run test:integration` roda o que exige PostgreSQL real. O contrato completo das rotas está em [docs/API.md](docs/API.md).
@@ -142,13 +142,15 @@ As demais escolhas: [TypeScript e Node](docs/decisions/ADR-002-typescript-nodejs
 
 | O quê                       | Como                                                                      |
 | --------------------------- | ------------------------------------------------------------------------- |
-| cada exigência do enunciado | `scripts/validate-case.mjs` — uma asserção por exigência, **27/27** no ar |
+| cada exigência do enunciado | `scripts/validate-case.mjs` — uma asserção por exigência, **30/30** no ar |
 | domínio, adaptadores, rotas | `npm run check` — a suíte completa, sem exigir banco                      |
 | transação, locks, índices   | `npm run test:integration` — contra PostgreSQL real                       |
 | persistência após queda     | `scripts/verify-persistence.mjs` — reinicia o banco e reconta             |
-| volume                      | `scripts/volume-check.mjs` — 50.000 pedidos, 150.000 itens                |
+| volume, nos quatro formatos | `npm run validate:volume -- 20000 3 <cliente>`                            |
+| varredura sob carga         | `npm run validate:sweep` — o cenário que o requisito 1 descreve           |
+| a aplicação, pelas rotas    | `npm run validate:http` — 10 cenários por `fetch`, sem `app.inject`       |
 
-Contagens de teste e cobertura ficam em [docs/STATUS.md](docs/STATUS.md), **geradas por `npm run evidence`** e não digitadas: escritas à mão elas derivaram três vezes, mesmo depois de eu concentrá-las num documento só. O 27/27 acima é exceção porque está atado à lista fixa de exigências do enunciado, não ao código.
+Contagens de teste e cobertura ficam em [docs/STATUS.md](docs/STATUS.md), **geradas por `npm run evidence`** e não digitadas: escritas à mão elas derivaram três vezes, mesmo depois de eu concentrá-las num documento só. O 30/30 acima é exceção porque está atado à lista fixa de exigências do enunciado, não ao código.
 
 ## Organização
 

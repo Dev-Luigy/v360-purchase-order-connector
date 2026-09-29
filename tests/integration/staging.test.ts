@@ -9,7 +9,14 @@ import type { NormalizedPurchaseOrderItem } from '../../src/domain/purchase-orde
 
 import { maxItemsPerOrder } from '../../src/domain/limits.js';
 
-import { connect, gravar, limpar, pedido, semBanco } from './support.js';
+import {
+  connect,
+  exigirBancoExclusivo,
+  gravar,
+  limpar,
+  pedido,
+  semBanco,
+} from './support.js';
 
 /**
  * A espera de itens órfãos, contra PostgreSQL de verdade.
@@ -23,8 +30,9 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
   let database: DatabaseConnection;
   let orders: PrismaPurchaseOrderRepository;
 
-  before(() => {
+  before(async () => {
     database = connect();
+    await exigirBancoExclusivo(database);
     orders = new PrismaPurchaseOrderRepository(database.prisma);
   });
 

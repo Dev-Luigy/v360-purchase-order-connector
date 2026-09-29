@@ -80,6 +80,7 @@ model PurchaseOrder {
   @@index([clientId, id])
   @@index([clientId, status, id])
   @@index([supplierTaxId, id])
+  @@index([externalNumber, id])
   @@map("purchase_order")
 }
 

@@ -4,7 +4,14 @@ import test, { after, before, beforeEach } from 'node:test';
 import { PrismaPurchaseOrderRepository } from '../../src/infrastructure/database/purchase-order-repository.js';
 import type { DatabaseConnection } from '../../src/infrastructure/database/prisma-client.js';
 
-import { connect, gravar, limpar, pedido, semBanco } from './support.js';
+import {
+  connect,
+  exigirBancoExclusivo,
+  gravar,
+  limpar,
+  pedido,
+  semBanco,
+} from './support.js';
 
 /** Plano da consulta, em texto, para as asserções de índice. */
 async function explicar(sql: string): Promise<string> {
@@ -22,9 +29,10 @@ async function explicar(sql: string): Promise<string> {
 let database: DatabaseConnection;
 let orders: PrismaPurchaseOrderRepository;
 
-before(() => {
+before(async () => {
   if (semBanco) return;
   database = connect();
+  await exigirBancoExclusivo(database);
   orders = new PrismaPurchaseOrderRepository(database.prisma);
 });
 
@@ -267,6 +275,7 @@ test(
 
     const filtros = {
       clientId: 'alfa',
+      externalNumber: null,
       supplierTaxId: null,
       status: null,
       onlyPending: true,
@@ -297,6 +306,7 @@ test(
     const primeira = await orders.list(
       {
         clientId: 'alfa',
+        externalNumber: null,
         supplierTaxId: null,
         status: null,
         onlyPending: true,
@@ -310,6 +320,7 @@ test(
         orders.list(
           {
             clientId: 'alfa',
+            externalNumber: null,
             supplierTaxId: null,
             status: null,
             onlyPending: false,

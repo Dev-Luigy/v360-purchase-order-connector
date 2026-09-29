@@ -11,6 +11,10 @@
  *
  *   npm run evidence            # check + cobertura, sem banco
  *   npm run evidence -- --full  # inclui a suíte de integração
+ *
+ * O modo `--full` precisa do banco no ar e da **API parada**: a suíte de
+ * integração dá `TRUNCATE` e exige acesso exclusivo. `docker compose stop api`
+ * antes, `docker compose up -d api` depois.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -100,7 +104,7 @@ if (chamadoDireto()) {
 
     let integracao;
     if (completo) {
-      console.log('rodando a suíte de integração…');
+      console.log('rodando a suíte de integração (exige a API parada)…');
       const daIntegracao = suite(
         'npm run test:integration',
         rodar('npm run test:integration', ['run', 'test:integration']),

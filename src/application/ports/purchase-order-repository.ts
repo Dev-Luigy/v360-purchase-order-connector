@@ -25,6 +25,14 @@ export interface SnapshotResult {
 
 export interface PurchaseOrderFilters {
   readonly clientId: ClientId | null;
+  /**
+   * Número do pedido no sistema do cliente.
+   *
+   * A plataforma conhece esse número — é por ele que ela identifica o pedido
+   * na conferência —, e sem este filtro a única forma de achar um pedido
+   * conhecido era varrer a consulta inteira.
+   */
+  readonly externalNumber: string | null;
   readonly supplierTaxId: TaxId | null;
   readonly status: PurchaseOrderStatus | null;
   readonly onlyPending: boolean;
