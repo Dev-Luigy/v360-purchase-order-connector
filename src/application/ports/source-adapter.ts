@@ -27,11 +27,11 @@ export interface SourceAdapter {
    * Confere que o payload **termina**, antes de gravar qualquer coisa.
    *
    * Um documento truncado é falha de transporte, não registro inválido: sem
-   * esta passagem, o prefixo era gravado e a resposta dizia que o payload era
-   * incompatível, sem recibo do que entrou (REVIEW-16, R16-01).
+   * esta passagem, o prefixo é gravado enquanto a resposta diz que o payload é
+   * incompatível, sem recibo do que entrou.
    *
-   * É uma leitura sobre o arquivo já em disco, que não materializa valor
-   * nenhum — custa 1% da carga.
+   * É uma leitura sobre o arquivo já em disco, que não materializa valor nenhum
+   * — custa 1% da carga.
    */
   checkStructure(payload: SourcePayload, profile: ClientProfile): Promise<void>;
 

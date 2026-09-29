@@ -41,8 +41,7 @@ export class IngestPurchaseOrders {
   async execute(payload: SourcePayload): Promise<IngestionReport> {
     const startedAt = this.now();
     // O identificador da carga nasce aqui, não no retorno: as linhas que ela
-    // grava na espera precisam dele para que outra carga não as consuma
-    // (REVIEW-12, R12-02).
+    // grava na espera precisam dele para que outra carga não as consuma.
     const ingestionId = randomUUID();
     const profile = await this.profiles.find(payload.clientId);
     if (profile === null) {
@@ -66,10 +65,10 @@ export class IngestPurchaseOrders {
     let ordersAccepted = 0;
     let itemsAccepted = 0;
 
-    // O documento inteiro é conferido **antes** de gravar qualquer coisa: um
-    // truncamento deixava o prefixo no banco com a resposta dizendo que o
-    // payload era incompatível, sem recibo do que entrou (REVIEW-16, R16-01).
-    // Custa 1% da carga, medido.
+    // O documento inteiro é conferido **antes** de gravar qualquer coisa: sem
+    // isso, um truncamento deixa o prefixo no banco enquanto a resposta diz que
+    // o payload é incompatível, sem recibo do que entrou. Custa 1% da carga,
+    // medido.
     try {
       await adapter.checkStructure(payload, profile);
     } catch (cause) {
@@ -85,12 +84,12 @@ export class IngestPurchaseOrders {
         for (const snapshot of batch.orders) {
           try {
             // Itens que esperavam por este pedido entram dentro da mesma
-            // transação da gravação (R09-01).
+            // transação da gravação.
             const resultado = await this.orders.replaceSnapshot(snapshot);
             ordersAccepted += 1;
-            // Só o que esta carga trouxe, mais o que foi recuperado da espera.
-            // Somar `order.items.length` contava também os preservados, e uma
-            // carga só de cabeçalhos relatava itens que não vieram (R10-02).
+            // Só o que esta carga trouxe, mais o que foi recuperado da espera:
+            // `order.items.length` incluiria os preservados, e uma carga só de
+            // cabeçalhos relataria itens que não vieram.
             itemsAccepted += resultado.fromLoad + resultado.recovered;
           } catch (cause) {
             rejected.add({
@@ -101,20 +100,20 @@ export class IngestPurchaseOrders {
         }
 
         // O adaptador só enxerga os cabeçalhos **desta** carga, então o que ele
-        // chama de órfão pode ser item de pedido que já existe no banco — o caso
-        // de mandar só a consulta de itens do Delta.
+        // chama de órfão pode ser item de pedido que já existe no banco — o
+        // caso de mandar só a consulta de itens do Delta.
         //
         // Os itens são **gravados na espera** agora e consolidados uma vez por
-        // pedido depois de ler tudo. Decidir lote a lote abria uma transação por
-        // lote para o mesmo pedido, porque as linhas dele atravessam lotes
-        // (REVIEW-11). A tabela de espera é o acumulador, então nada além dos
-        // números de pedido fica em memória.
+        // pedido depois de ler tudo. Decidir lote a lote abriria uma transação
+        // por lote para o mesmo pedido, porque as linhas dele atravessam lotes.
+        // A tabela de espera é o acumulador, então nada além dos números de
+        // pedido fica em memória.
         if (batch.staged.length > 0) {
           // O teto de itens por pedido é do **agregado**, e só aqui se conhece
           // a soma entre lotes: o adaptador vê um lote por vez. Um pedido que
-          // passa do teto é recusado e o que ele já tinha escrito é desfeito —
-          // antes, a carga dizia "pedido inteiro recusado" e gravava os
-          // primeiros dez mil assim mesmo (REVIEW-13, R13-03).
+          // passa do teto é recusado e o que ele já tinha escrito é desfeito,
+          // senão a carga diz "pedido inteiro recusado" e grava os primeiros
+          // dez mil assim mesmo.
           const aceitos: StagedItem[] = [];
           for (const item of batch.staged) {
             const numero = item.externalNumber;
@@ -145,19 +144,16 @@ export class IngestPurchaseOrders {
             aceitos.push(item);
           }
 
-          // Um pedido pode ter estourado **no meio deste lote**, e os itens
-          // dele percorridos antes disso continuavam em `aceitos`: a purga
-          // apagava o que os lotes anteriores gravaram e logo em seguida estes
-          // eram regravados. O meu teste não pegava porque 10.001 itens
-          // consecutivos com lote 200 põem o estouro numa fronteira, e ali
-          // `aceitos` está vazio (REVIEW-14, R14-01).
+          // Um pedido pode estourar **no meio deste lote**, e os itens dele
+          // percorridos antes disso ficam em `aceitos`: sem esta segunda
+          // passagem, a purga apaga o que os lotes anteriores gravaram e estes
+          // são regravados logo em seguida.
           const paraGravar = aceitos.filter(
             (item) => !recusados.has(item.externalNumber),
           );
 
           if (paraGravar.length > 0) {
-            // O teto de pedidos distintos é conferido **antes** de escrever
-            // (REVIEW-12, R12-03).
+            // O teto de pedidos distintos é conferido **antes** de escrever.
             if (linhasPorPedido.size > maxStagedOrders) {
               throw new RangeError(
                 `carga com mais de ${String(maxStagedOrders)} pedidos em espera; ` +
@@ -173,17 +169,17 @@ export class IngestPurchaseOrders {
         }
       }
     } catch (cause) {
-      // A leitura falhou no meio. As linhas já gravadas nascem invisíveis e
-      // não teriam caminho de recuperação: payload inválido comum viraria
-      // crescimento permanente da espera (REVIEW-15, R15-01).
+      // A leitura falhou no meio. As linhas já gravadas nascem invisíveis e não
+      // teriam caminho de recuperação: payload inválido comum viraria
+      // crescimento permanente da espera.
       await this.orders.discardIngestion(payload.clientId, ingestionId);
       throw cause;
     }
 
-    // Cada pedido é fechado sob o lock dele: ou os itens desta carga entram,
-    // ou são publicados ali mesmo. Publicar tudo antes e consolidar depois
-    // deixava outra requisição consumir uma linha que ainda pertencia a este
-    // relatório (REVIEW-15, R15-02).
+    // Cada pedido é fechado sob o lock dele: ou os itens desta carga entram, ou
+    // são publicados ali mesmo. Publicar tudo antes e consolidar depois
+    // deixaria outra requisição consumir uma linha que ainda pertence a este
+    // relatório.
     for (const externalNumber of linhasPorPedido.keys()) {
       try {
         const destino = await this.orders.finalizeStaged(
@@ -192,15 +188,15 @@ export class IngestPurchaseOrders {
           externalNumber,
         );
         itemsAccepted += destino.applied;
-        // Contagem e amostra vêm do mesmo fechamento que publicou as linhas.
-        // Recontar depois de soltar os locks deixava outra requisição consumir
-        // uma linha no intervalo, e ela sumia deste relatório (R16-02).
+        // Contagem e amostra vêm do mesmo fechamento que publicou as linhas:
+        // recontar depois de soltar os locks deixa outra requisição consumir
+        // uma linha no intervalo, e ela some deste relatório.
         staged.count(destino.waiting);
         for (const registro of destino.sample) staged.keep(registro);
       } catch (cause) {
         // Fechar falhou: a linha ficaria invisível no banco, sem ninguém para
         // reconciliá-la e sem aparecer no relatório. É descartada aqui, e a
-        // recusa explica o evento **uma vez** (REVIEW-17, R17-01).
+        // recusa explica o evento **uma vez**.
         await this.orders
           .purgeStaged(payload.clientId, ingestionId, externalNumber)
           .catch(() => undefined);
@@ -214,15 +210,15 @@ export class IngestPurchaseOrders {
     }
 
     // Invariante: carga terminada não deixa linha não publicada. Fechar um
-    // pedido pode falhar, e a linha ficava invisível no banco com o relatório
-    // dizendo que nada esperava — mentira dos dois lados (REVIEW-17, R17-01).
+    // pedido pode falhar, e sem isto a linha fica invisível no banco enquanto o
+    // relatório diz que nada esperava — mentira dos dois lados.
     const invisiveis = await this.orders.discardUnpublished(
       payload.clientId,
       ingestionId,
     );
     // Rede de segurança: normalmente é zero, porque o `catch` acima já
-    // descartou. Se sobrar algo, é sinal de caminho não previsto, e o
-    // relatório precisa dizer em vez de deixar a linha invisível no banco.
+    // descartou. Se sobrar algo, é sinal de caminho não previsto, e o relatório
+    // precisa dizer em vez de deixar a linha invisível no banco.
     if (invisiveis > 0) {
       rejected.add({
         reference: `${String(invisiveis)} item(ns) sem pedido fechado`,
@@ -293,9 +289,9 @@ export class UnknownClientError extends Error {
 /**
  * Erro do leitor de payload, para a borda responder 422 em vez de 500.
  *
- * O parser em fluxo lança `Error` comum, e `toProblem` o tratava como defeito
- * interno: JSON truncado — payload inválido corriqueiro — virava
- * `erro_interno` (REVIEW-15, R15-01).
+ * O parser em fluxo lança `Error` comum, que `toProblem` trataria como defeito
+ * interno: JSON truncado — payload inválido corriqueiro — viraria
+ * `erro_interno`.
  */
 export class PayloadError extends Error {
   constructor(cause: unknown) {
@@ -308,8 +304,8 @@ export class PayloadError extends Error {
 
 /**
  * Reclassifica o que vier **do leitor**. Erro do corpo do laço não passa por
- * aqui: quando ele lança, o `for await` chama `return()` no iterador, e o
- * `try` abaixo vê um encerramento, não uma exceção.
+ * aqui: quando ele lança, o `for await` chama `return()` no iterador, e o `try`
+ * abaixo vê um encerramento, não uma exceção.
  */
 async function* comErroDePayload(
   batches: AsyncIterable<AdapterBatch>,

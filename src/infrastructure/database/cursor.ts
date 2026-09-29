@@ -19,9 +19,9 @@ export class CursorError extends Error {
  *
  * Com só o limite inferior, uma varredura sob escrita contínua persegue o que
  * entra e não tem condição própria de término — e o enunciado descreve
- * exatamente esse cenário, varrer de madrugada enquanto novas cargas chegam
- * (REVIEW-14, R14-02). O teto é fixado na primeira página; o que entrar depois
- * fica para a varredura seguinte, que é o comportamento de um retrato.
+ * exatamente esse cenário, varrer de madrugada enquanto novas cargas chegam O
+ * teto é fixado na primeira página; o que entrar depois fica para a varredura
+ * seguinte, que é o comportamento de um retrato.
  *
  * Cursor da versão anterior é recusado, não reinterpretado.
  */
@@ -45,8 +45,8 @@ export interface CursorPosition {
 export type FilterValue = string | number | boolean | null;
 
 /**
- * Impressão digital dos filtros, estável para o mesmo conjunto de valores.
- * As chaves são ordenadas porque a ordem de escrita do objeto não é contrato.
+ * Impressão digital dos filtros, estável para o mesmo conjunto de valores. As
+ * chaves são ordenadas porque a ordem de escrita do objeto não é contrato.
  */
 export function fingerprintOf(
   filters: Readonly<Record<string, FilterValue>>,

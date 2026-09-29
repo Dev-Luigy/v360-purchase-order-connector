@@ -54,19 +54,18 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKeyFor(snapshot)}))`;
 
-      // Os itens que esperavam por este pedido entram aqui dentro. Eram
-      // consumidos numa transação própria, e uma falha na gravação abaixo os
-      // perdia para sempre (REVIEW-09, R09-01).
+      // Os itens que esperavam por este pedido entram aqui dentro: consumidos
+      // numa transação própria, uma falha na gravação abaixo os perderia.
       const esperando = await takeWaitingItems(
         tx,
         snapshot.clientId,
         snapshot.externalNumber,
       );
 
-      // Com `items: null`, a base da mesclagem são os itens **gravados**, não
-      // o retrato recebido — que não traz item nenhum. Mesclar sobre ele fazia
-      // a espera **substituir** o que já existia em vez de somar, e o item
-      // anterior desaparecia (REVIEW-13, R13-04).
+      // Com `items: null`, a base da mesclagem são os itens **gravados**, não o
+      // retrato recebido — que não traz item nenhum. Mesclar sobre ele faria a
+      // espera **substituir** o que já existia em vez de somar, apagando o item
+      // anterior.
       const base =
         snapshot.items === null && esperando.length > 0
           ? { ...snapshot, items: await currentItems(tx, snapshot) }
@@ -75,12 +74,12 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
       const order = await persistSnapshot(tx, completo);
       return {
         order,
-        // `items: null` não traz item nenhum, por mais que o pedido salvo
-        // tenha itens preservados de antes (REVIEW-10, R10-02).
+        // `items: null` não traz item nenhum, por mais que o pedido salvo tenha
+        // itens preservados de antes.
         fromLoad: snapshot.items?.length ?? 0,
         // Os itens de fato consumidos da espera, depois da deduplicação por
-        // linha. Sair da cardinalidade final contava como recuperado o que já
-        // estava gravado antes (REVIEW-14, R14-03).
+        // linha: sair da cardinalidade final contaria como recuperado o que já
+        // estava gravado antes.
         recovered: esperando.length,
       };
     });
@@ -90,10 +89,10 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
    * Guarda itens sem cabeçalho. Não decide nada: a decisão é de
    * `consolidateStaged`, que roda uma vez por pedido no fim da carga.
    *
-   * Separar as duas é o que permite escoar o staging em lotes — necessário
-   * para não reter a carga em memória — e ainda assim ter uma transação por
-   * pedido. Enquanto elas eram a mesma operação, um pedido cujas linhas
-   * atravessavam dois lotes abria duas transações (REVIEW-11).
+   * Separar as duas é o que permite escoar o staging em lotes — necessário para
+   * não reter a carga em memória — e ainda assim ter uma transação por pedido.
+   * Fundidas numa operação só, um pedido cujas linhas atravessam dois lotes
+   * abriria duas transações.
    */
   async stageLooseItems(
     clientId: ClientId,
@@ -125,15 +124,14 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
       if (encontrado === null) {
         // Sem cabeçalho: as linhas desta carga viram visíveis **aqui**, na
         // mesma transação em que a carga as contabiliza como esperando.
-        // Publicar tudo antes e consolidar depois deixava outra requisição
-        // consumir uma linha que ainda pertencia a este relatório
-        // (REVIEW-15, R15-02).
+        // Publicar tudo antes e consolidar depois deixaria outra requisição
+        // consumir uma linha que ainda pertence a este relatório.
         const { count } = await tx.ingestionStaging.updateMany({
           where: { clientId, ingestionId, externalNumber },
           data: { publicada: true },
         });
         // A amostra sai daqui, do mesmo fechamento que publicou: recontar
-        // depois deixava outra carga consumir a linha no intervalo.
+        // depois deixa outra carga consumir a linha no intervalo.
         const linhas = await tx.ingestionStaging.findMany({
           where: { clientId, ingestionId, externalNumber },
           orderBy: { externalLine: 'asc' },
@@ -173,8 +171,7 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
       for (const item of esperando) porLinha.set(item.externalLine, item);
 
       // O agregado atravessa a fronteira de persistência aqui, e não só cada
-      // item: validar linha a linha não confere a cardinalidade do pedido
-      // (REVIEW-12, R12-01).
+      // item: validar linha a linha não confere a cardinalidade do pedido.
       await persistSnapshot(
         tx,
         conferirAgregado({
@@ -302,7 +299,7 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
     // O teto é fixado na **primeira** página e viaja no cursor. Sem ele, uma
     // varredura sob escrita contínua persegue o que entra e não tem condição
     // própria de término — e é esse o cenário do requisito 1, varrer de
-    // madrugada enquanto novas cargas chegam (REVIEW-14, R14-02).
+    // madrugada enquanto novas cargas chegam.
     const until =
       posicao?.until ??
       (
@@ -475,9 +472,9 @@ async function takeWaitingItems(
     where: {
       clientId,
       externalNumber,
-      // Sem `ingestionId` é a reconciliação pelo cabeçalho, e ela só enxerga
-      // o que já foi publicado: carga em andamento não pode ter o prefixo
-      // consumido por outra requisição (REVIEW-14, R14-01).
+      // Sem `ingestionId` é a reconciliação pelo cabeçalho, e ela só enxerga o
+      // que já foi publicado: carga em andamento não pode ter o prefixo
+      // consumido por outra requisição.
       ...(ingestionId === undefined ? { publicada: true } : { ingestionId }),
     },
     // A mais recente por último: com a carga na identidade, duas podem ter a
@@ -557,9 +554,9 @@ async function currentItems(
 /**
  * Confere o pedido inteiro contra o contrato antes de gravar.
  *
- * Validar cada item não confere a **cardinalidade**: o caminho item-only do
- * Delta montava um pedido acima do teto sem ninguém reclamar, porque o teto é
- * do agregado (REVIEW-12, R12-01).
+ * Validar cada item não confere a **cardinalidade**: o teto é do agregado, e o
+ * caminho item-only do Delta monta o pedido somando itens que chegaram em
+ * cargas diferentes.
  */
 function conferirAgregado(
   order: NormalizedPurchaseOrder,

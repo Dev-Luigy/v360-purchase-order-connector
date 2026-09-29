@@ -2,64 +2,64 @@
 
 Estados: disponível, aguardando, em andamento, em revisão, concluída. Responsável `—` significa que ninguém assumiu.
 
-| ID        | Tarefa                                                           | Estado                         | Responsável | Dependência / escopo                                                          |
-| --------- | ---------------------------------------------------------------- | ------------------------------ | ----------- | ----------------------------------------------------------------------------- |
-| ENV-01    | Criar base TypeScript/Fastify e Compose                          | concluída                      | Codex       | Arquivos existentes; execução real do Compose pendente em ENV-02              |
-| CLEAN-02  | Concluir a limpeza de comentários no código de produção          | em andamento                   | Claude      | CLEAN-01 do Codex commitado; aplicar o mesmo critério ao que veio depois      |
-| COL-01    | Organizar colaboração e instalação                               | concluída                      | Codex       | AGENTS.md, CLAUDE.md, docs e link no README                                   |
-| COL-02    | Estruturar contexto compartilhado e leitura sob demanda          | concluída                      | Codex       | Documentação; registro e arquivos abaixo                                      |
-| DOC-01    | Versionar o enunciado e as amostras dos clientes                 | concluída                      | Claude      | Nenhuma; enunciado e fixtures, sem código de negócio                          |
-| DOC-02    | Reestruturar README como artefato avaliado                       | concluída                      | Claude      | As três defesas que o enunciado cobra entraram; destrava a tag parte-1        |
-| DOC-03    | Diagramar objetos e relações do contrato normalizado             | concluída                      | Claude      | P1-01; diagramas em docs/diagrams, sem código de negócio                      |
-| ARCH-04   | Registrar escolha do ORM Prisma 7                                | concluída                      | Codex       | ADR-001, ADR-002 e ADR-003; documentação apenas                               |
-| ARCH-05   | Registrar desenho de observabilidade (Grafana/Prometheus)        | aceita, implementação diferida | Claude      | Pedido do usuário; decisão apenas, sem dependência instalada                  |
-| ENV-02    | Instalar ferramentas do sistema                                  | concluída                      | Usuário     | Ferramentas instaladas; Docker e Compose verificados em ENV-03                |
-| ENV-03    | Validar Compose, conexão e reinício do banco                     | concluída                      | Claude      | Compose validado, migração aplicada e 16 testes de integração; destrava P1-05 |
-| ENV-04    | Verificar portas e isolar o Compose antes de subir               | concluída                      | Claude      | Pedido do usuário; preflight, nome fixo do projeto e portas por env           |
-| REPO-01   | Inicializar Git, commit base e fluxo de branches                 | concluída                      | Claude      | Commit base autorizado pelo usuário; docs/GIT_WORKFLOW.md                     |
-| REVIEW-01 | Revisar base e plano técnico                                     | concluída                      | Codex       | Limites de P1-03 e HTTP testados; achados no handoff                          |
-| REVIEW-02 | Revisar arquitetura contra o enunciado                           | concluída                      | Claude      | Achados para P1-01, P1-02 e ENV-03; sem editar código                         |
-| REVIEW-03 | Consolidar verificação pós-FIX-02 para a outra IA                | concluída                      | Codex       | Handoff documental; riscos residuais e retomada                               |
-| REVIEW-04 | Preparar plano de fix: arquitetura, segurança, CI/CD e Docker    | concluída                      | Codex       | Revisão documental; não altera código nem arquivos reservados por FIX-04/05   |
-| REVIEW-05 | Revisar a entrega parcial de P1-02                               | concluída                      | Codex       | Handoff para Claude; somente documentação                                     |
-| REVIEW-06 | Verificar FIX-06 e funcionalidades concluídas de P1-02           | concluída                      | Codex       | Handoff para Claude; somente documentação                                     |
-| REVIEW-07 | Revisão geral de código, segurança e engenharia                  | concluída                      | Codex       | Código completo, Zod e avaliação de bibliotecas; somente documentação         |
-| REVIEW-08 | Verificar as correções de FIX-08                                 | concluída                      | Codex       | Conferência item a item de REVIEW-07; somente documentação                    |
-| REVIEW-09 | Verificar o projeto após P2-01                                   | concluída                      | Codex       | Oito achados de código/teste e deriva documental; código preservado           |
-| REVIEW-10 | Verificar FIX-10, requisitos e cobertura de cenários             | concluída                      | Codex       | Sete achados; 226 testes integrados, handoff para Claude                      |
-| REVIEW-11 | Verificar as correções de FIX-11                                 | concluída                      | Codex       | Quatro fechados, dois parciais e gerador de evidência inseguro                |
-| REVIEW-12 | Verificar as correções de FIX-12                                 | concluída                      | Codex       | Dois fechados, um parcial e cinco regressões/lacunas documentadas             |
-| REVIEW-13 | Verificar FIX-13 pelas rotas HTTP reais                          | concluída                      | Codex       | Três fechados, três parciais; quatro falhas reproduzidas via HTTP real        |
-| REVIEW-14 | Verificar FIX-14 e FINAL-01 pela aplicação real                  | concluída                      | Codex       | Falha de staging reproduzida; sweep finito passa, sem teto de snapshot        |
-| REVIEW-15 | Validar FIX-15 do zero contra todo o enunciado                   | concluída                      | Codex       | Aceitação passa; falha fatal vaza staging e publicação perde contabilidade    |
-| REVIEW-16 | Validar FIX-16 integralmente do zero                             | concluída                      | Codex       | Duas falhas residuais reproduzidas; ver handoff                               |
-| REVIEW-17 | Verificar FIX-17 e repetir regressões de REVIEW-16               | concluída                      | Codex       | R16-01/02 fechados; falha nova de relatório registrada para FIX-18            |
-| FIX-18    | Fechar R17-01: espera invisível após falha ao fechar pedido      | em andamento                   | Claude      | Invariante: carga terminada não deixa linha não publicada                     |
-| CLEAN-01  | Enxugar comentários do código estável                            | concluída                      | Codex       | 526 linhas removidas; arquivos ativos de P1-04 preservados                    |
-| P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03          |
-| P1-02     | Implementar schema, migrações e repositórios                     | concluída                      | Claude      | Código pronto; validação contra PostgreSQL real é ENV-03                      |
-| FIX-06    | Fechar os achados de REVIEW-05 sobre P1-02                       | concluída                      | Claude      | Oito achados fechados; dois estavam desatualizados                            |
-| FIX-07    | Fechar os achados de código de REVIEW-06                         | concluída                      | Claude      | R06-01, 02, 03, 05 e 08 fechados; CI e auditoria ficam para tarefa própria    |
-| FIX-08    | Fechar os achados de código de REVIEW-07                         | concluída                      | Claude      | Seis achados de código fechados; CI, integração e P1-04 seguem fora           |
-| FIX-09    | Corrigir o retrato truncado introduzido em FIX-08                | concluída                      | Claude      | R08-01 a R08-04; regressão atravessando o adaptador                           |
-| P1-03     | Implementar domínio e adaptadores Alfa/Beta                      | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                                  |
-| FIX-01    | Estabilizar validação e limites de REVIEW-01                     | concluída                      | Claude      | REVIEW-01; sete achados corrigidos com regressão; libera P1-04                |
-| FIX-02    | Verificação pós-FIX-01: vazamento de origem e notações sem teste | concluída                      | Claude      | Dois defeitos corrigidos; notação por campo fica para decisão                 |
-| FIX-03    | Fechar riscos residuais de REVIEW-02 e REVIEW-03                 | concluída                      | Claude      | Cinco defeitos fechados; quatro decisões listadas em aberto                   |
-| FIX-04    | Fechar os pontos que dependiam de decisão                        | concluída                      | Claude      | ADR-012: notação por campo, teto do Beta, pool por propósito, lint com tipo   |
-| FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado           |
-| P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                         |
-| P1-05     | Validar desafio e registrar marco parte-1                        | concluída                      | Claude      | 18/18 exigências verificadas no ar; tag depende de DOC-02                     |
-| FIX-17    | Fechar R16-01 e R16-02                                           | concluída                      | Claude      | Conferência estrutural antes de gravar; relatório do próprio fechamento       |
-| FIX-16    | Fechar R15-01, R15-02 e R15-03                                   | concluída                      | Claude      | Fechamento por pedido sob o lock; compensação e varredura de abandono         |
-| FIX-15    | Fechar R14-01, R14-02 e R14-03                                   | concluída                      | Claude      | Ciclo de vida da espera e teto no cursor; 13/13 pelas rotas                   |
-| FINAL-01  | Fechar o enunciado inteiro e entregar a versão final             | concluída                      | Claude      | Seis lacunas fechadas; o dobro em memória não paginava de verdade             |
-| FIX-14    | Fechar REVIEW-13 e provar pela aplicação real                    | concluída                      | Claude      | Carga na identidade física; 10/10 cenários pelas rotas HTTP                   |
-| FIX-13    | Fechar os seis achados de REVIEW-12                              | concluída                      | Claude      | Identidade de carga na espera; emissão de lote centralizada                   |
-| FIX-12    | Fechar os três achados de REVIEW-11                              | concluída                      | Claude      | Guardar e decidir separados; invariante de lote; gerador fail-closed          |
-| FIX-11    | Fechar os sete achados de REVIEW-10                              | concluída                      | Claude      | Sete fechados com regressão; validador agora é repetível                      |
-| FIX-10    | Fechar os nove achados de REVIEW-09                              | concluída                      | Claude      | Nove fechados com regressão, mais três de REVIEW-07 que seguiam abertos       |
-| P2-01     | Integrar Gama/Delta e documentar mudanças                        | concluída                      | Claude      | Os quatro clientes integrados; 27/27 exigências no ar                         |
+| ID        | Tarefa                                                           | Estado                         | Responsável | Dependência / escopo                                                                       |
+| --------- | ---------------------------------------------------------------- | ------------------------------ | ----------- | ------------------------------------------------------------------------------------------ |
+| ENV-01    | Criar base TypeScript/Fastify e Compose                          | concluída                      | Codex       | Arquivos existentes; execução real do Compose pendente em ENV-02                           |
+| CLEAN-02  | Concluir a limpeza de comentários no código de produção          | concluída                      | Claude      | 93 referências de review saíram de `src/`; o motivo ficou, a história foi para os handoffs |
+| COL-01    | Organizar colaboração e instalação                               | concluída                      | Codex       | AGENTS.md, CLAUDE.md, docs e link no README                                                |
+| COL-02    | Estruturar contexto compartilhado e leitura sob demanda          | concluída                      | Codex       | Documentação; registro e arquivos abaixo                                                   |
+| DOC-01    | Versionar o enunciado e as amostras dos clientes                 | concluída                      | Claude      | Nenhuma; enunciado e fixtures, sem código de negócio                                       |
+| DOC-02    | Reestruturar README como artefato avaliado                       | concluída                      | Claude      | As três defesas que o enunciado cobra entraram; destrava a tag parte-1                     |
+| DOC-03    | Diagramar objetos e relações do contrato normalizado             | concluída                      | Claude      | P1-01; diagramas em docs/diagrams, sem código de negócio                                   |
+| ARCH-04   | Registrar escolha do ORM Prisma 7                                | concluída                      | Codex       | ADR-001, ADR-002 e ADR-003; documentação apenas                                            |
+| ARCH-05   | Registrar desenho de observabilidade (Grafana/Prometheus)        | aceita, implementação diferida | Claude      | Pedido do usuário; decisão apenas, sem dependência instalada                               |
+| ENV-02    | Instalar ferramentas do sistema                                  | concluída                      | Usuário     | Ferramentas instaladas; Docker e Compose verificados em ENV-03                             |
+| ENV-03    | Validar Compose, conexão e reinício do banco                     | concluída                      | Claude      | Compose validado, migração aplicada e 16 testes de integração; destrava P1-05              |
+| ENV-04    | Verificar portas e isolar o Compose antes de subir               | concluída                      | Claude      | Pedido do usuário; preflight, nome fixo do projeto e portas por env                        |
+| REPO-01   | Inicializar Git, commit base e fluxo de branches                 | concluída                      | Claude      | Commit base autorizado pelo usuário; docs/GIT_WORKFLOW.md                                  |
+| REVIEW-01 | Revisar base e plano técnico                                     | concluída                      | Codex       | Limites de P1-03 e HTTP testados; achados no handoff                                       |
+| REVIEW-02 | Revisar arquitetura contra o enunciado                           | concluída                      | Claude      | Achados para P1-01, P1-02 e ENV-03; sem editar código                                      |
+| REVIEW-03 | Consolidar verificação pós-FIX-02 para a outra IA                | concluída                      | Codex       | Handoff documental; riscos residuais e retomada                                            |
+| REVIEW-04 | Preparar plano de fix: arquitetura, segurança, CI/CD e Docker    | concluída                      | Codex       | Revisão documental; não altera código nem arquivos reservados por FIX-04/05                |
+| REVIEW-05 | Revisar a entrega parcial de P1-02                               | concluída                      | Codex       | Handoff para Claude; somente documentação                                                  |
+| REVIEW-06 | Verificar FIX-06 e funcionalidades concluídas de P1-02           | concluída                      | Codex       | Handoff para Claude; somente documentação                                                  |
+| REVIEW-07 | Revisão geral de código, segurança e engenharia                  | concluída                      | Codex       | Código completo, Zod e avaliação de bibliotecas; somente documentação                      |
+| REVIEW-08 | Verificar as correções de FIX-08                                 | concluída                      | Codex       | Conferência item a item de REVIEW-07; somente documentação                                 |
+| REVIEW-09 | Verificar o projeto após P2-01                                   | concluída                      | Codex       | Oito achados de código/teste e deriva documental; código preservado                        |
+| REVIEW-10 | Verificar FIX-10, requisitos e cobertura de cenários             | concluída                      | Codex       | Sete achados; 226 testes integrados, handoff para Claude                                   |
+| REVIEW-11 | Verificar as correções de FIX-11                                 | concluída                      | Codex       | Quatro fechados, dois parciais e gerador de evidência inseguro                             |
+| REVIEW-12 | Verificar as correções de FIX-12                                 | concluída                      | Codex       | Dois fechados, um parcial e cinco regressões/lacunas documentadas                          |
+| REVIEW-13 | Verificar FIX-13 pelas rotas HTTP reais                          | concluída                      | Codex       | Três fechados, três parciais; quatro falhas reproduzidas via HTTP real                     |
+| REVIEW-14 | Verificar FIX-14 e FINAL-01 pela aplicação real                  | concluída                      | Codex       | Falha de staging reproduzida; sweep finito passa, sem teto de snapshot                     |
+| REVIEW-15 | Validar FIX-15 do zero contra todo o enunciado                   | concluída                      | Codex       | Aceitação passa; falha fatal vaza staging e publicação perde contabilidade                 |
+| REVIEW-16 | Validar FIX-16 integralmente do zero                             | concluída                      | Codex       | Duas falhas residuais reproduzidas; ver handoff                                            |
+| REVIEW-17 | Verificar FIX-17 e repetir regressões de REVIEW-16               | concluída                      | Codex       | R16-01/02 fechados; falha nova de relatório registrada para FIX-18                         |
+| FIX-18    | Fechar R17-01: espera invisível após falha ao fechar pedido      | em andamento                   | Claude      | Invariante: carga terminada não deixa linha não publicada                                  |
+| CLEAN-01  | Enxugar comentários do código estável                            | concluída                      | Codex       | 526 linhas removidas; arquivos ativos de P1-04 preservados                                 |
+| P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03                       |
+| P1-02     | Implementar schema, migrações e repositórios                     | concluída                      | Claude      | Código pronto; validação contra PostgreSQL real é ENV-03                                   |
+| FIX-06    | Fechar os achados de REVIEW-05 sobre P1-02                       | concluída                      | Claude      | Oito achados fechados; dois estavam desatualizados                                         |
+| FIX-07    | Fechar os achados de código de REVIEW-06                         | concluída                      | Claude      | R06-01, 02, 03, 05 e 08 fechados; CI e auditoria ficam para tarefa própria                 |
+| FIX-08    | Fechar os achados de código de REVIEW-07                         | concluída                      | Claude      | Seis achados de código fechados; CI, integração e P1-04 seguem fora                        |
+| FIX-09    | Corrigir o retrato truncado introduzido em FIX-08                | concluída                      | Claude      | R08-01 a R08-04; regressão atravessando o adaptador                                        |
+| P1-03     | Implementar domínio e adaptadores Alfa/Beta                      | concluída                      | Claude      | P1-01; ADR-011; libera P1-04                                                               |
+| FIX-01    | Estabilizar validação e limites de REVIEW-01                     | concluída                      | Claude      | REVIEW-01; sete achados corrigidos com regressão; libera P1-04                             |
+| FIX-02    | Verificação pós-FIX-01: vazamento de origem e notações sem teste | concluída                      | Claude      | Dois defeitos corrigidos; notação por campo fica para decisão                              |
+| FIX-03    | Fechar riscos residuais de REVIEW-02 e REVIEW-03                 | concluída                      | Claude      | Cinco defeitos fechados; quatro decisões listadas em aberto                                |
+| FIX-04    | Fechar os pontos que dependiam de decisão                        | concluída                      | Claude      | ADR-012: notação por campo, teto do Beta, pool por propósito, lint com tipo                |
+| FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado                        |
+| P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                                      |
+| P1-05     | Validar desafio e registrar marco parte-1                        | concluída                      | Claude      | 18/18 exigências verificadas no ar; tag depende de DOC-02                                  |
+| FIX-17    | Fechar R16-01 e R16-02                                           | concluída                      | Claude      | Conferência estrutural antes de gravar; relatório do próprio fechamento                    |
+| FIX-16    | Fechar R15-01, R15-02 e R15-03                                   | concluída                      | Claude      | Fechamento por pedido sob o lock; compensação e varredura de abandono                      |
+| FIX-15    | Fechar R14-01, R14-02 e R14-03                                   | concluída                      | Claude      | Ciclo de vida da espera e teto no cursor; 13/13 pelas rotas                                |
+| FINAL-01  | Fechar o enunciado inteiro e entregar a versão final             | concluída                      | Claude      | Seis lacunas fechadas; o dobro em memória não paginava de verdade                          |
+| FIX-14    | Fechar REVIEW-13 e provar pela aplicação real                    | concluída                      | Claude      | Carga na identidade física; 10/10 cenários pelas rotas HTTP                                |
+| FIX-13    | Fechar os seis achados de REVIEW-12                              | concluída                      | Claude      | Identidade de carga na espera; emissão de lote centralizada                                |
+| FIX-12    | Fechar os três achados de REVIEW-11                              | concluída                      | Claude      | Guardar e decidir separados; invariante de lote; gerador fail-closed                       |
+| FIX-11    | Fechar os sete achados de REVIEW-10                              | concluída                      | Claude      | Sete fechados com regressão; validador agora é repetível                                   |
+| FIX-10    | Fechar os nove achados de REVIEW-09                              | concluída                      | Claude      | Nove fechados com regressão, mais três de REVIEW-07 que seguiam abertos                    |
+| P2-01     | Integrar Gama/Delta e documentar mudanças                        | concluída                      | Claude      | Os quatro clientes integrados; 27/27 exigências no ar                                      |
 
 Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e dependências. Uma tarefa só pode ter um responsável de implementação por vez.
 
@@ -220,12 +220,13 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## CLEAN-02 — concluir a limpeza de comentários
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/**` (exceto `src/infrastructure/database/generated/**`), `scripts/validate-case.mjs`, `docs/TASKS.md`, `docs/handoffs/CLEAN-02-claude.md`.
-- Reserva estendida durante a tarefa: a revalidação encontrou seis exigências de `scripts/validate-case.mjs` que ainda procuravam o pedido na primeira página de 100. Com os 20.000 pedidos de volume que a rodada de REVIEW-17 deixou no banco, elas falham por estado, não por defeito do serviço. O validador já tem `pedidoDe`, que busca pelo filtro; falta usá-lo nesses seis lugares.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `src/**` (exceto `src/infrastructure/database/generated/**`), `scripts/validate-case.mjs`, `docs/TASKS.md`, `docs/handoffs/CLEAN-02-claude.md`.
+- Reserva estendida durante a tarefa: a revalidação encontrou seis exigências de `scripts/validate-case.mjs` que ainda procuravam o pedido na primeira página de 100. Com os 20.000 pedidos de volume que a rodada de REVIEW-17 deixou no banco, elas falhavam por estado, não por defeito do serviço. Passaram a usar `pedidoDe`, que busca pelo filtro, como as outras já faziam.
 - Escopo: aplicar aos arquivos que vieram depois de CLEAN-01 o mesmo critério que ele fixou. O handoff dele avisava para **não reintroduzir número de review nem narrativa de correção em comentário**, e foi exatamente o que eu fiz: 93 ocorrências em `src/`. A regra que fica: a referência vive no **teste e no handoff**; o código de produção enuncia a regra, não a história dela.
 - O que permanece, por ser o motivo e não o histórico: precisão decimal e arredondamento, semântica de `items: null` contra `[]`, limites antes da materialização, encerramento de streams, locks e cursor atado aos filtros, invariantes do schema e a poda de dependências no Docker.
-- Dependências: CLEAN-01 do Codex, commitado como estava.
+- Dependências: CLEAN-01 do Codex, commitado como estava em `ec4849b`, com autoria dele. Conferi que em `prisma/schema.prisma` só saíram comentários.
+- Evidência: [handoff CLEAN-02](handoffs/CLEAN-02-claude.md); `npm run check` com 247 testes e zero falhas antes e depois, 33/33 de integração, 30/30 no enunciado **com os 20.000 pedidos de volume no banco** e 17/17 pelas rotas reais.
 
 ## CLEAN-01 — limpeza de comentários
 

@@ -9,13 +9,12 @@ import type {
 import type { Page, PageRequest } from './pagination.js';
 
 /**
- * Quantos itens a gravação de fato aplicou, separados por origem.
+ * O que aconteceu com os itens **desta carga** para um pedido.
  *
- * Somar `order.items.length` contava também os itens **preservados** de cargas
- * anteriores, então uma carga só de cabeçalhos relatava itens que ela não
- * trouxe (REVIEW-10, R10-02). Quem chama precisa distinguir as três origens.
+ * As origens ficam separadas porque `order.items.length` inclui os itens
+ * preservados de cargas anteriores: uma carga só de cabeçalhos relataria itens
+ * que não trouxe.
  */
-/** O que aconteceu com os itens desta carga para um pedido. */
 export interface StagedOutcome {
   /** Entraram no pedido agora. */
   readonly applied: number;
@@ -24,9 +23,9 @@ export interface StagedOutcome {
   /**
    * Amostra do que ficou esperando, tirada **dentro** do mesmo fechamento.
    *
-   * Recontar depois de soltar os locks deixava outra requisição consumir uma
-   * linha entre o fechamento e a contagem, e ela sumia do relatório da carga
-   * que a recebeu (REVIEW-16, R16-02).
+   * Recontar depois de soltar os locks abre espaço para outra requisição
+   * consumir uma linha entre o fechamento e a contagem, e ela some do relatório
+   * da carga que a recebeu.
    */
   readonly sample: readonly StagedRecord[];
 }
@@ -44,9 +43,9 @@ export interface PurchaseOrderFilters {
   /**
    * Número do pedido no sistema do cliente.
    *
-   * A plataforma conhece esse número — é por ele que ela identifica o pedido
-   * na conferência —, e sem este filtro a única forma de achar um pedido
-   * conhecido era varrer a consulta inteira.
+   * A plataforma conhece esse número — é por ele que ela identifica o pedido na
+   * conferência —, e sem este filtro a única forma de achar um pedido conhecido
+   * era varrer a consulta inteira.
    */
   readonly externalNumber: string | null;
   readonly supplierTaxId: TaxId | null;
@@ -64,25 +63,25 @@ export interface PurchaseOrderRepository {
    * itens já conhecidos: é a carga de cabeçalhos do Delta, que não pode apagar
    * o que a outra consulta trouxe (ADR-008).
    *
-   * Itens que esperavam por este pedido entram **na mesma transação**. Eles
-   * eram consumidos antes, numa transação própria, e uma falha na gravação do
-   * pedido os perdia para sempre (REVIEW-09, R09-01).
+   * Itens que esperavam por este pedido entram **na mesma transação**:
+   * consumi-los numa transação à parte faz uma falha na gravação do pedido
+   * perdê-los para sempre.
    */
   replaceSnapshot(snapshot: NormalizedPurchaseOrder): Promise<SnapshotResult>;
 
   /**
    * Guarda itens que chegaram sem o cabeçalho deles **nesta carga**.
    *
-   * Sempre grava, sem decidir nada: a decisão vem depois, em
-   * `finalizeStaged`. Separar as duas é o que permite ler em fluxo sem reter a
-   * carga em memória e ainda assim ter **uma** transação por pedido — a tabela
-   * de espera é o acumulador (REVIEW-11).
+   * Sempre grava, sem decidir nada: a decisão vem depois, em `finalizeStaged`.
+   * Separar as duas é o que permite ler em fluxo sem reter a carga em memória e
+   * ainda assim ter **uma** transação por pedido — a tabela de espera é o
+   * acumulador.
    *
    * Reenviar a mesma linha do mesmo pedido substitui a anterior (ADR-008).
    *
    * `ingestionId` separa os dois papéis da tabela: acumular **desta** carga e
    * guardar órfão de qualquer carga. Sem ele, duas cargas simultâneas do mesmo
-   * pedido consumiam uma a da outra (REVIEW-12, R12-02).
+   * pedido consomem uma a espera da outra.
    */
   stageLooseItems(
     clientId: ClientId,
@@ -94,7 +93,7 @@ export interface PurchaseOrderRepository {
    * Descarta as linhas que esta carga deixou esperando por um pedido.
    *
    * Um pedido recusado por passar do teto precisa desfazer o que já tinha
-   * escrito em lotes anteriores (REVIEW-13, R13-03).
+   * escrito em lotes anteriores.
    */
   purgeStaged(
     clientId: ClientId,
@@ -105,10 +104,10 @@ export interface PurchaseOrderRepository {
   /**
    * Quantas linhas desta carga continuam esperando.
    *
-   * O relatório sai daqui, do estado, e não de `entradas − aplicados`:
-   * subtrair contagens de granularidades diferentes fabricava espera que não
-   * existia, porque uma linha reenviada dentro da mesma carga substitui a
-   * anterior em vez de somar (REVIEW-13, R13-02).
+   * O relatório sai daqui, do estado, e não de `entradas − aplicados`: subtrair
+   * contagens de granularidades diferentes fabrica espera que não existe,
+   * porque uma linha reenviada dentro da mesma carga substitui a anterior em
+   * vez de somar.
    */
   countStaged(clientId: ClientId, ingestionId: string): Promise<number>;
 
@@ -120,9 +119,8 @@ export interface PurchaseOrderRepository {
    * mesmo — visíveis para a reconciliação de outra carga a partir de então.
    *
    * Decidir as duas coisas na mesma transação é o que fecha a janela: publicar
-   * tudo de uma vez e consolidar depois deixava outra requisição consumir uma
-   * linha que ainda pertencia ao relatório desta carga, e ela sumia da
-   * contabilidade (REVIEW-15, R15-02).
+   * tudo de uma vez e consolidar depois deixa outra requisição consumir uma
+   * linha que ainda pertence ao relatório desta carga.
    */
   finalizeStaged(
     clientId: ClientId,
@@ -133,9 +131,9 @@ export interface PurchaseOrderRepository {
   /**
    * Descarta tudo o que esta carga deixou, publicado ou não.
    *
-   * Uma leitura que falha no meio deixava as linhas já gravadas sem caminho de
-   * recuperação, porque elas nascem invisíveis: payload inválido comum virava
-   * crescimento permanente da espera (REVIEW-15, R15-01).
+   * As linhas nascem invisíveis, então uma leitura que falha no meio deixa as
+   * já gravadas sem caminho de recuperação: payload inválido comum viraria
+   * crescimento permanente da espera.
    */
   discardIngestion(clientId: ClientId, ingestionId: string): Promise<void>;
 
@@ -145,8 +143,8 @@ export interface PurchaseOrderRepository {
    * Uma carga que termina não pode deixar linha invisível: ninguém a
    * reconcilia, e o relatório não a menciona porque ela não está esperando
    * cabeçalho nenhum. Fechar um pedido pode falhar — por exceder o agregado,
-   * por erro do banco — e sem isto a linha ficava no banco até a varredura de
-   * uma hora, com o relatório dizendo `stagedTotal=0` (REVIEW-17, R17-01).
+   * por erro do banco — e sem isto a linha fica no banco até a varredura de uma
+   * hora, enquanto o relatório diz `stagedTotal=0`.
    *
    * Devolve quantas descartou, para o relatório poder dizer a verdade.
    */
@@ -155,23 +153,23 @@ export interface PurchaseOrderRepository {
   /**
    * Remove espera não publicada que ficou de cargas abandonadas.
    *
-   * A compensação cobre a falha que o processo enxerga; uma queda entre
-   * gravar e fechar, não. Linha não publicada é invisível por desenho, então
-   * sem isto ela ficaria para sempre — e o `catch` não alcança um processo
-   * que morreu (REVIEW-15, R15-01).
+   * A compensação cobre a falha que o processo enxerga; uma queda entre gravar
+   * e fechar, não, porque `catch` nenhum alcança um processo que morreu. Linha
+   * não publicada é invisível por desenho, então sem isto ela ficaria para
+   * sempre.
    *
-   * `idadeMinimaMs` precisa ser maior que a carga mais longa possível, senão
-   * a limpeza atinge carga ainda ativa.
+   * `idadeMinimaMs` precisa ser maior que a carga mais longa possível, senão a
+   * limpeza atinge carga ainda ativa.
    */
   discardAbandonedStaging(idadeMinimaMs: number): Promise<number>;
 
   /**
    * Amostra do que **continua** esperando por conta desta carga.
    *
-   * A amostra era montada antes da consolidação e filtrada depois, então podia
-   * sair vazia com total positivo: os cem primeiros candidatos podiam ter sido
-   * todos aplicados, escondendo justamente o que ficou (REVIEW-12, R12-05).
-   * Agora sai do estado que de fato sobrou.
+   * Sai do estado que sobrou, não dos candidatos vistos durante a leitura:
+   * montar a amostra antes da consolidação e filtrar depois pode devolvê-la
+   * vazia com total positivo, se os cem primeiros candidatos tiverem sido todos
+   * aplicados.
    */
   sampleStaged(
     clientId: ClientId,

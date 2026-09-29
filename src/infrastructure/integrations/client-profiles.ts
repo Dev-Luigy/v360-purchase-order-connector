@@ -116,16 +116,16 @@ export const betaProfile: ClientProfile = deepFreeze({
 /**
  * Beta Alimentos, exportação do ERP legado.
  *
- * O enunciado registra que o encoding e o fim de linha do CSV do Beta **não
- * são especificados**, e que exportação de ERP brasileiro costuma vir em
+ * O enunciado registra que o encoding e o fim de linha do CSV do Beta **não são
+ * especificados**, e que exportação de ERP brasileiro costuma vir em
  * Windows-1252 com CRLF. O fim de linha o leitor tolera sem configuração; o
  * encoding é declarado, porque adivinhá-lo produz acento corrompido em
  * silêncio, e falhar alto é melhor que gravar "Ã“leo" no banco.
  *
- * Este perfil existe para provar as duas coisas de uma vez: que o leitor
- * tolera a variante, e a afirmação do ADR-008 de que **cliente novo em forma
- * conhecida entra só com perfil, sem código novo**. Não há uma linha de código
- * abaixo — só rótulos.
+ * Este perfil existe para provar as duas coisas de uma vez: que o leitor tolera
+ * a variante, e a afirmação do ADR-008 de que **cliente novo em forma conhecida
+ * entra só com perfil, sem código novo**. Não há uma linha de código abaixo —
+ * só rótulos.
  */
 export const betaErpProfile: ClientProfile = deepFreeze({
   ...betaProfile,
@@ -147,8 +147,8 @@ export const gamaProfile: ClientProfile = deepFreeze({
   // O payload não traz moeda. BRL é hipótese registrada em docs/CASE.md, e
   // precisa ser declarada: sem ela todo registro seria rejeitado.
   assumedCurrency: 'BRL',
-  // Situação como código numérico. O vocabulário é fechado: código fora dele
-  // é rejeitado em vez de interpretado, como no Beta.
+  // Situação como código numérico. O vocabulário é fechado: código fora dele é
+  // rejeitado em vez de interpretado, como no Beta.
   statusVocabulary: { '1': 'aberto', '2': 'encerrado', '3': 'bloqueado' },
   csv: null,
   fields: {
@@ -179,9 +179,9 @@ export const gamaProfile: ClientProfile = deepFreeze({
 });
 
 /**
- * Delta: mesmos nomes de campo do Alfa — é o mesmo produto de mercado, em
- * outra versão. O que muda é só a entrega, em duas consultas independentes.
- * Por isso o cliente vai no caminho da URL e nunca é deduzido do conteúdo.
+ * Delta: mesmos nomes de campo do Alfa — é o mesmo produto de mercado, em outra
+ * versão. O que muda é só a entrega, em duas consultas independentes. Por isso
+ * o cliente vai no caminho da URL e nunca é deduzido do conteúdo.
  */
 export const deltaProfile: ClientProfile = deepFreeze({
   clientId: 'delta',
@@ -228,8 +228,8 @@ export const deltaProfile: ClientProfile = deepFreeze({
 });
 
 /**
- * Os quatro clientes do enunciado, mais a variante de encoding do Beta — que
- * é perfil, não cliente novo, e está aqui para provar que a variante que o
+ * Os quatro clientes do enunciado, mais a variante de encoding do Beta — que é
+ * perfil, não cliente novo, e está aqui para provar que a variante que o
  * enunciado levanta é tolerada ponta a ponta.
  */
 export const configuredProfiles: readonly ClientProfile[] = [
@@ -336,8 +336,8 @@ const profileSchema = z
     'itens aninhados exigem itemsArray',
   )
   // Onde está o array de pedidos depende da forma, e o start é o lugar de
-  // descobrir que não está em lugar nenhum. Antes isso só aparecia na primeira
-  // carga real do cliente (REVIEW-01, achado 6).
+  // descobrir que não está em lugar nenhum — senão o perfil incompleto só
+  // aparece na primeira carga real do cliente.
   .refine(
     (profile) =>
       profile.deliveryFormat === 'flat-json' ||
@@ -352,7 +352,7 @@ const profileSchema = z
     'flat-json não tem ordersArray: a raiz do payload já é o array',
   )
   // Sem campo de moeda e sem moeda assumida, todo registro do cliente seria
-  // rejeitado por falta de moeda — perfil inútil que passava no start.
+  // rejeitado por falta de moeda: um perfil inútil que o start precisa recusar.
   .refine(
     (profile) =>
       profile.fields.order.currency !== null ||

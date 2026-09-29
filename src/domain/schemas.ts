@@ -38,7 +38,7 @@ import type {
  * `Decimal.parse` aceita, e de propósito. A entrada do cliente pode vir em
  * notação exponencial; o contrato normalizado, não, porque tudo sai por
  * `toFixed`. E o tamanho tem teto: sem ele, um expoente grande gera uma string
- * de milhares de dígitos que atravessa o serviço inteiro (REVIEW-01, achado 5).
+ * de milhares de dígitos que atravessa o serviço inteiro.
  */
 export const decimalTextSchema = z.string().regex(
   // Construído a partir das constantes do domínio: o limite do schema e o
@@ -50,9 +50,8 @@ export const decimalTextSchema = z.string().regex(
 );
 
 /**
- * Decimal **persistido**: no máximo a escala que a coluna guarda. O contrato
- * aceitava doze casas para uma coluna de seis, e o adaptador arredondava em
- * silêncio (REVIEW-07, R07-01).
+ * Decimal **persistido**: no máximo a escala que a coluna guarda. Aceitar mais
+ * casas do que a coluna tem entrega o arredondamento ao adaptador, em silêncio.
  */
 export const persistedDecimalSchema = z
   .string()
@@ -71,8 +70,8 @@ export const nonNegativeDecimalSchema = persistedDecimalSchema.refine(
 
 /**
  * Decimal do contrato estritamente positivo. O fator de conversão é o caso:
- * zero fazia a conferência dividir por zero e lançar, o que viraria erro 500
- * na borda em vez de rejeição na carga (REVIEW-01, achado 2).
+ * zero faz a conferência dividir por zero, e o que deveria ser rejeição na
+ * carga vira erro 500 na borda.
  */
 export const positiveDecimalSchema = persistedDecimalSchema.refine(
   (value) => !value.startsWith('-') && /[1-9]/.test(value),
@@ -90,8 +89,8 @@ export function isCalendarInstant(value: string): boolean {
 
 /**
  * Data que existe no calendário, e não só uma que tem a forma de data.
- * `new Date` acomoda 31/02 virando 03/03; comparar de volta rejeita isso.
- * Fonte única: o adaptador e a borda HTTP usam esta mesma regra.
+ * `new Date` acomoda 31/02 virando 03/03; comparar de volta rejeita isso. Fonte
+ * única: o adaptador e a borda HTTP usam esta mesma regra.
  */
 export function isCalendarDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -113,8 +112,7 @@ export const isoInstantSchema = z
     'instante fora de ISO UTC',
   )
   // Aparência não basta: `2026-99-99T99:99:99.999Z` tem a forma certa e não
-  // existe. O irmão `isoDateSchema` já era semântico; este ficou para trás
-  // (REVIEW-03, 5).
+  // existe. Mesma regra semântica de `isoDateSchema`.
   .refine(isCalendarInstant, 'instante inexistente no calendário');
 
 /** CNPJ com 14 dígitos, sem máscara. Dígito verificador não é conferido: o dado é do ERP do cliente e recusar por checksum criaria rejeição que ninguém corrige do nosso lado. */
@@ -126,10 +124,9 @@ export const taxIdSchema = z
  * Texto que vai para uma coluna do PostgreSQL.
  *
  * `z.string()` aceita `\u0000`, e o PostgreSQL não representa NUL em `text`,
- * `varchar` nem `jsonb`. O dado atravessava toda a aplicação e abortava só na
- * gravação (REVIEW-07, R07-03). Só o NUL é recusado: outros caracteres de
- * controle e qualquer Unicode válido continuam passando, e nada é removido ou
- * truncado em silêncio.
+ * `varchar` nem `jsonb`, então o dado atravessa a aplicação inteira e aborta só
+ * na gravação. Só o NUL é recusado: outros caracteres de controle e qualquer
+ * Unicode válido continuam passando, e nada é removido ou truncado em silêncio.
  */
 export const persistedText = (max: number) =>
   z
@@ -143,7 +140,7 @@ export const persistedText = (max: number) =>
 /**
  * Moeda que o serviço suporta, com escala conhecida. Não é "três letras
  * maiúsculas": a escala decide o arredondamento da conferência, e moeda sem
- * escala conhecida não pode ser conferida (ADR-007, REVIEW-07 R07-08).
+ * escala conhecida não pode ser conferida (ADR-007).
  */
 export const currencySchema = z
   .string()
@@ -168,8 +165,8 @@ export const normalizedItemSchema = z.object({
   material: persistedText(maxMaterialLength).min(1, 'material vazio'),
   description: persistedText(maxDescriptionLength),
   purchaseUnit: persistedText(maxPurchaseUnitLength).min(1, 'unidade vazia'),
-  // Invariantes, não aparências: quantidade negativa e fator zero passavam e
-  // só explodiam na conferência (REVIEW-01, achado 2).
+  // Invariantes, não aparências: quantidade negativa e fator zero têm a forma
+  // de decimal e só explodem depois, na conferência.
   conversionFactor: positiveDecimalSchema,
   quantityOrdered: nonNegativeDecimalSchema,
   quantityReceived: nonNegativeDecimalSchema,
@@ -195,15 +192,15 @@ export const normalizedOrderSchema = z.object({
   items: z.array(normalizedItemSchema).max(maxItemsPerOrder).nullable(),
 });
 
-/** Nota fiscal como a plataforma envia. Usado na borda HTTP, em P1-04. */
+/** Nota fiscal como a plataforma envia. */
 export const invoiceCheckRequestSchema = z.object({
   // A nota vai inteira para uma coluna `jsonb`, que também recusa NUL.
   clientId: persistedText(maxClientIdLength).min(1),
   purchaseOrderNumber: persistedText(maxExternalNumberLength).min(1),
   // O CNPJ chega limpo nesta borda. Máscara é assunto do arquivo do cliente,
   // resolvido pelo adaptador; a API não precisa adivinhar pontuação, e aceitar
-  // qualquer string com 14 dígitos dentro era leniência em campo de identidade
-  // (REVIEW-01, achado 1).
+  // qualquer string com 14 dígitos dentro seria leniência em campo de
+  // identidade.
   supplierTaxId: taxIdSchema,
   // A nota é laxa de propósito onde o pedido é estrito: ela é uma afirmação
   // sobre o mundo que nós julgamos, não um registro que guardamos. Quantidade
@@ -236,7 +233,7 @@ export const stagedRecordSchema = z.object({
 
 /**
  * Resultado de uma carga. As listas são amostra e os totais vêm separados: uma
- * carga com dez mil rejeições não pode virar resposta sem teto (REVIEW-04).
+ * carga com dez mil rejeições não pode virar resposta sem teto.
  */
 export const ingestionReportSchema = z.object({
   ingestionId: z.uuid(),
@@ -255,9 +252,9 @@ export const ingestionReportSchema = z.object({
 export const divergenceCodeSchema = z.enum(divergenceCodes);
 
 /**
- * Divergência antes de persistir. `expected` e `received` copiam texto vindo
- * da nota, e sem teto uma conferência válida para o contrato falharia só na
- * gravação, na coluna `VARCHAR(512)` (REVIEW-06, R06-01).
+ * Divergência antes de persistir. `expected` e `received` copiam texto vindo da
+ * nota, e sem teto uma conferência válida para o contrato falharia só na
+ * gravação, na coluna `VARCHAR(512)`.
  */
 export const divergenceSchema = z.object({
   code: divergenceCodeSchema,
@@ -310,10 +307,9 @@ export function describeIssues(error: z.ZodError): string {
 /**
  * Trava de deriva entre schema e contrato.
  *
- * A versão anterior só verificava se o tipo inferido era **atribuível** ao
- * contrato, o que é meio caminho: uma propriedade a mais exigida pelo schema,
- * ou uma opcional a mais no contrato, passava sem ser notada (REVIEW-07,
- * R07-05). `Equal` compara nos dois sentidos.
+ * `Equal` compara nos dois sentidos. Verificar só se o tipo inferido é
+ * **atribuível** ao contrato é meio caminho: uma propriedade a mais exigida
+ * pelo schema, ou uma opcional a mais no contrato, passa sem ser notada.
  */
 type Mutavel<T> = T extends readonly (infer E)[]
   ? Mutavel<E>[]
@@ -330,9 +326,9 @@ type Equal<A, B> =
  * Falha a compilação com o nome do par que divergiu.
  *
  * O contrato é `readonly` em profundidade e o Zod não expressa isso, então a
- * comparação é contra a versão mutável. É a **única** diferença tolerada: o
- * que esta trava existe para pegar — propriedade a mais, a menos, ou mudança
- * de opcionalidade — continua sendo comparado nos dois sentidos.
+ * comparação é contra a versão mutável. É a **única** diferença tolerada: o que
+ * esta trava existe para pegar — propriedade a mais, a menos, ou mudança de
+ * opcionalidade — continua sendo comparado nos dois sentidos.
  */
 type Exact<Nome extends string, A, B> =
   Equal<A, B> extends true
