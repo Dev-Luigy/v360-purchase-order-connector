@@ -623,3 +623,158 @@ describe('REVIEW-09: o que a revisão do Codex expôs', () => {
     );
   });
 });
+
+describe('REVIEW-10: o que a segunda revisão expôs', () => {
+  const ingest = () => {
+    const orders = new InMemoryPurchaseOrderRepository();
+    return {
+      orders,
+      uso: new IngestPurchaseOrders(
+        new InMemoryClientProfiles(),
+        buildAdapterRegistry(),
+        orders,
+      ),
+    };
+  };
+
+  const partes = async (nomes: readonly ('orders' | 'items')[]) => {
+    const mapa = new Map<string, () => AsyncIterable<Uint8Array>>();
+    for (const nome of nomes) {
+      const texto = await fixture(`delta/${nome}.json`);
+      mapa.set(nome, () => bytes(texto));
+    }
+    return { clientId: 'delta', formatVersion: '1', parts: mapa };
+  };
+
+  it('R10-01: itens avulsos do mesmo pedido avançam a versão uma vez só', async () => {
+    const { uso, orders } = ingest();
+    await uso.execute(await partes(['orders', 'items']));
+    const antes = await orders.findByExternalNumber('delta', 'DL-2026-0044');
+
+    // Duas linhas do mesmo pedido, numa carga só de itens.
+    await uso.execute(await partes(['items']));
+    const depois = await orders.findByExternalNumber('delta', 'DL-2026-0044');
+
+    assert.equal(
+      (depois?.ingestionVersion ?? 0) - (antes?.ingestionVersion ?? 0),
+      1,
+      'a versão avançou por linha, não por carga',
+    );
+    assert.equal(depois?.items.length, 2);
+  });
+
+  it('R10-01: falha no meio do grupo não deixa retrato pela metade', async () => {
+    const { uso, orders } = ingest();
+    await uso.execute(await partes(['orders', 'items']));
+    const antes = await orders.findByExternalNumber('delta', 'DL-2026-0044');
+
+    const original = orders.replaceSnapshot.bind(orders);
+    orders.replaceSnapshot = () => Promise.reject(new Error('falha induzida'));
+    const relatorio = await uso.execute(await partes(['items']));
+    orders.replaceSnapshot = original;
+
+    assert.ok(relatorio.rejectedTotal > 0, 'a falha não foi reportada');
+    const depois = await orders.findByExternalNumber('delta', 'DL-2026-0044');
+    assert.deepEqual(
+      depois?.items.map((i) => i.externalLine).sort((a, b) => a - b),
+      antes?.items.map((i) => i.externalLine).sort((a, b) => a - b),
+      'o retrato mudou apesar da falha',
+    );
+  });
+
+  it('R10-02: carga só de cabeçalhos relata zero itens novos', async () => {
+    const { uso } = ingest();
+    await uso.execute(await partes(['orders', 'items']));
+
+    const soCabecalhos = await uso.execute(await partes(['orders']));
+    assert.equal(soCabecalhos.ordersAccepted, 3);
+    assert.equal(
+      soCabecalhos.itemsAccepted,
+      0,
+      'contou itens preservados como se tivessem vindo na carga',
+    );
+  });
+
+  it('R10-02: a reconciliação relata só o que foi de fato recuperado', async () => {
+    const { uso } = ingest();
+    // Quatro itens esperam; três têm cabeçalho na carga seguinte.
+    await uso.execute(await partes(['items']));
+    const comCabecalhos = await uso.execute(await partes(['orders']));
+    assert.equal(comCabecalhos.itemsAccepted, 3);
+  });
+
+  it('R10-03: as recusas do Delta respeitam o lote', async () => {
+    const invalidos = {
+      items: [0, 1, 2, 3, 4].map((n) => ({
+        purchase_order: `X-${String(n)}`,
+        created_at: 'data-invalida',
+        line: n,
+        material: 'M',
+        description: 'D',
+        uom: 'UN',
+        quantity_ordered: 1,
+        quantity_received: 0,
+        unit_price: 1.0,
+      })),
+    };
+    const porLote: number[] = [];
+    for await (const lote of new SplitJsonAdapter(2).read(
+      {
+        clientId: 'delta',
+        formatVersion: '1',
+        parts: new Map([['items', () => bytes(JSON.stringify(invalidos))]]),
+      },
+      deltaProfile,
+    )) {
+      if (lote.rejected.length > 0) porLote.push(lote.rejected.length);
+    }
+    assert.ok(
+      porLote.length > 1,
+      `um arquivo só de inválidos saiu em ${String(porLote.length)} lote(s)`,
+    );
+  });
+
+  const comCabecalhos = async (orders: readonly unknown[]) =>
+    colher(
+      new SplitJsonAdapter().read(
+        {
+          clientId: 'delta',
+          formatVersion: '1',
+          parts: new Map([['orders', () => bytes(JSON.stringify({ orders }))]]),
+        },
+        deltaProfile,
+      ),
+    );
+
+  const cabecalho = (over: Record<string, unknown> = {}) => ({
+    po_number: 'DUP',
+    created_at: '2026-09-02',
+    status: 'open',
+    currency: 'BRL',
+    vendor: { tax_id: '67890123000145', name: 'Embalagens Norte Sul Ltda' },
+    ...over,
+  });
+
+  it('R10-04: cabeçalhos duplicados que discordam recusam o pedido', async () => {
+    const resultado = await comCabecalhos([
+      cabecalho(),
+      cabecalho({
+        status: 'blocked',
+        vendor: { tax_id: '78901234000156', name: 'Fornecedor Segundo' },
+      }),
+    ]);
+    assert.equal(resultado.orders.length, 0, 'gravou um dos dois cabeçalhos');
+    assert.equal(resultado.rejected.length, 1);
+    assert.match(String(resultado.rejected[0]?.reason), /discordam/);
+  });
+
+  it('R10-04: duplicata idêntica é deduplicada, sem recusa', async () => {
+    const resultado = await comCabecalhos([cabecalho(), cabecalho()]);
+    assert.equal(resultado.orders.length, 1, 'duplicata virou dois pedidos');
+    assert.equal(
+      resultado.rejected.length,
+      0,
+      'duplicata idêntica foi recusada',
+    );
+  });
+});

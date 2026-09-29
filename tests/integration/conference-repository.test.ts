@@ -7,7 +7,7 @@ import { PrismaConferenceRepository } from '../../src/infrastructure/database/co
 import type { DatabaseConnection } from '../../src/infrastructure/database/prisma-client.js';
 import { PrismaPurchaseOrderRepository } from '../../src/infrastructure/database/purchase-order-repository.js';
 
-import { connect, limpar, pedido, semBanco } from './support.js';
+import { connect, gravar, limpar, pedido, semBanco } from './support.js';
 
 /** Histórico de conferências contra PostgreSQL real. */
 
@@ -61,7 +61,7 @@ test(
   'a conferência e as divergências são gravadas atomicamente',
   { skip: semBanco },
   async () => {
-    await orders.replaceSnapshot(pedido());
+    await gravar(orders, pedido());
     const registro = await conferir([
       { material: 'MAT-9999', quantity: '1', totalValue: '10.00' },
       { material: 'MAT-1001', quantity: '40', totalValue: '1.00' },
@@ -82,7 +82,7 @@ test(
   'a ordem das divergências sobrevive à ida e volta',
   { skip: semBanco },
   async () => {
-    await orders.replaceSnapshot(pedido());
+    await gravar(orders, pedido());
     const gravado = await conferir([
       { material: 'MAT-9999', quantity: '1', totalValue: '10.00' },
       { material: 'MAT-1001', quantity: '40', totalValue: '1.00' },
@@ -111,7 +111,7 @@ test(
   'a nota conferida volta do JSONB como o contrato exige',
   { skip: semBanco },
   async () => {
-    await orders.replaceSnapshot(pedido());
+    await gravar(orders, pedido());
     await conferir([
       { material: 'MAT-1001', quantity: '40', totalValue: '1836.00' },
     ]);
@@ -136,7 +136,7 @@ test(
   'apagar um pedido com histórico é recusado pelo banco',
   { skip: semBanco },
   async () => {
-    const salvo = await orders.replaceSnapshot(pedido());
+    const salvo = await gravar(orders, pedido());
     await conferir([
       { material: 'MAT-1001', quantity: '40', totalValue: '1836.00' },
     ]);
@@ -157,7 +157,7 @@ test(
   'o resumo conta nota e conta ocorrência separadamente',
   { skip: semBanco },
   async () => {
-    await orders.replaceSnapshot(pedido());
+    await gravar(orders, pedido());
     await conferir([
       { material: 'MAT-1001', quantity: '40', totalValue: '1836.00' },
     ]);
@@ -196,14 +196,15 @@ test(
   'reingestão não muda o sentido do histórico já gravado',
   { skip: semBanco },
   async () => {
-    await orders.replaceSnapshot(pedido());
+    await gravar(orders, pedido());
     const antes = await conferir([
       { material: 'MAT-1001', quantity: '40', totalValue: '1836.00' },
     ]);
     assert.equal(antes.purchaseOrderIngestionVersion, 1);
 
     // O cliente reenvia com o saldo já recebido.
-    await orders.replaceSnapshot(
+    await gravar(
+      orders,
       pedido({
         items: [{ ...pedido().items![0]!, quantityReceived: '100.000000' }],
       }),

@@ -1,6 +1,10 @@
 import { connectDatabase } from '../../src/infrastructure/database/prisma-client.js';
 import type { DatabaseConnection } from '../../src/infrastructure/database/prisma-client.js';
-import type { NormalizedPurchaseOrder } from '../../src/domain/purchase-order.js';
+import type { PurchaseOrderRepository } from '../../src/application/ports/purchase-order-repository.js';
+import type {
+  NormalizedPurchaseOrder,
+  PurchaseOrder,
+} from '../../src/domain/purchase-order.js';
 
 /**
  * Apoio da suíte de integração.
@@ -59,4 +63,19 @@ export function pedido(
     ],
     ...overrides,
   };
+}
+
+/**
+ * Grava o retrato e devolve o pedido.
+ *
+ * `replaceSnapshot` passou a devolver também quantos itens vieram da carga e
+ * quantos foram recuperados da espera, porque somar `order.items.length`
+ * contava os preservados (REVIEW-10, R10-02). Os testes que só querem o
+ * pedido passam por aqui.
+ */
+export async function gravar(
+  repository: PurchaseOrderRepository,
+  snapshot: NormalizedPurchaseOrder,
+): Promise<PurchaseOrder> {
+  return (await repository.replaceSnapshot(snapshot)).order;
 }

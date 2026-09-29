@@ -64,6 +64,44 @@ async function carregar(clientId, partes) {
   return relatorio;
 }
 
+/** Percorre todas as páginas de uma consulta, pelo cursor. */
+async function todasAsPaginas(caminho) {
+  const tudo = [];
+  let cursor = null;
+  for (;;) {
+    const url = new URL(`${base}${caminho}`);
+    url.searchParams.set('limit', '100');
+    if (cursor) url.searchParams.set('cursor', cursor);
+    const pagina = await (await fetch(url)).json();
+    tudo.push(...pagina.data);
+    cursor = pagina.page.nextCursor;
+    if (!cursor) break;
+  }
+  return tudo;
+}
+
+/**
+ * Linha de base do histórico, tirada **antes** de qualquer conferência desta
+ * execução. As conferências não são apagadas por reingestão — é decisão do
+ * ADR-009 —, então o script compara o que ele mesmo acrescentou.
+ */
+const baseDoResumo = (await pegar('/conferences/summary')).corpo;
+
+// Pedidos das amostras, por saldo esperado. O script afirma sobre estes, e
+// não sobre a contagem global do banco.
+const comSaldoDestaExecucao = [
+  'alfa:4500001234',
+  'beta:20260088412',
+  'beta:20260088413',
+  'gama:GL-778',
+  'delta:DL-2026-0044',
+];
+const semSaldoDestaExecucao = [
+  'gama:GL-779',
+  'delta:DL-2026-0045',
+  'delta:DL-2026-0046',
+];
+
 // ---------------------------------------------------------------- ingestão
 
 const alfa = await carregar('alfa', {
@@ -127,39 +165,66 @@ await exige(
 );
 
 await exige('Req 1', 'filtro por cliente de origem', async () => {
-  const { corpo } = await pegar('/purchase-orders?clientId=beta&limit=100');
-  confere(corpo.data.length === 2, `esperava 2, veio ${corpo.data.length}`);
+  const doBeta = await todasAsPaginas('/purchase-orders?clientId=beta');
+  const numeros = new Set(doBeta.map((p) => p.externalNumber));
+  for (const esperado of ['20260088412', '20260088413']) {
+    confere(
+      numeros.has(esperado),
+      `${esperado} não veio no filtro por cliente`,
+    );
+  }
+  // O que importa é não vazar: a contagem depende de cargas anteriores.
   confere(
-    corpo.data.every((p) => p.clientId === 'beta'),
+    doBeta.every((p) => p.clientId === 'beta'),
     'vazou pedido de outro cliente',
   );
 });
 
 await exige('Req 1', 'filtro por fornecedor', async () => {
-  const { corpo } = await pegar(
-    '/purchase-orders?supplierTaxId=98765432000155&limit=100',
+  const doFornecedor = await todasAsPaginas(
+    '/purchase-orders?supplierTaxId=98765432000155',
   );
-  confere(corpo.data.length === 1, `esperava 1, veio ${corpo.data.length}`);
-  confere(corpo.data[0].externalNumber === '20260088413', 'fornecedor errado');
+  confere(
+    doFornecedor.some((p) => p.externalNumber === '20260088413'),
+    '20260088413 não veio no filtro por fornecedor',
+  );
+  confere(
+    doFornecedor.every((p) => p.supplier.taxId === '98765432000155'),
+    'vazou pedido de outro fornecedor',
+  );
 });
 
 await exige('Req 1', 'filtro por situação do pedido', async () => {
-  const { corpo } = await pegar('/purchase-orders?status=bloqueado&limit=100');
+  const bloqueados = await todasAsPaginas('/purchase-orders?status=bloqueado');
   confere(
-    corpo.data.length === 1,
-    `esperava 1 bloqueado, veio ${corpo.data.length}`,
+    bloqueados.some((p) => p.externalNumber === '20260088413'),
+    'o pedido bloqueado da amostra não veio',
   );
-  confere(corpo.data[0].status === 'bloqueado', 'situação errada');
+  confere(
+    bloqueados.every((p) => p.status === 'bloqueado'),
+    'vazou pedido de outra situação',
+  );
 });
 
 await exige('Req 1', 'apenas os que ainda têm algo a receber', async () => {
-  const { corpo } = await pegar('/purchase-orders?pending=true&limit=100');
-  confere(
-    corpo.data.length === 5,
-    `esperava 5 com saldo, veio ${corpo.data.length}`,
+  // Asserção sobre **os pedidos desta execução**, não sobre a contagem global
+  // do banco: o script precisa valer também com dado de outra origem presente
+  // (REVIEW-10, R10-05).
+  const pendentes = await todasAsPaginas('/purchase-orders?pending=true');
+  const numeros = new Set(
+    pendentes.map((p) => `${p.clientId}:${p.externalNumber}`),
   );
+  for (const esperado of comSaldoDestaExecucao) {
+    confere(
+      numeros.has(esperado),
+      `${esperado} deveria ter saldo e não apareceu`,
+    );
+  }
+  for (const vazio of semSaldoDestaExecucao) {
+    confere(!numeros.has(vazio), `${vazio} não tem saldo e apareceu no filtro`);
+  }
   confere(
-    corpo.data.every((p) => p.hasPendingBalance),
+    pendentes.every((p) => p.hasPendingBalance),
     'veio pedido sem saldo',
   );
 });
@@ -277,10 +342,17 @@ await exige(
   'Req 3',
   'relatório diz quantas passaram, quantas travaram e por quais motivos',
   async () => {
+    // Delta contra a linha de base: o histórico é acumulativo por desenho —
+    // reingestão não o reescreve —, então exigir totais absolutos tornava o
+    // script dependente de banco recém-limpo (REVIEW-10, R10-05).
     const { corpo } = await pegar('/conferences/summary');
-    confere(corpo.checked === 2, `conferidas: ${corpo.checked}`);
-    confere(corpo.approved === 1, `aprovadas: ${corpo.approved}`);
-    confere(corpo.rejected === 1, `reprovadas: ${corpo.rejected}`);
+    const feitas = corpo.checked - baseDoResumo.checked;
+    const aprovadas = corpo.approved - baseDoResumo.approved;
+    const reprovadas = corpo.rejected - baseDoResumo.rejected;
+    // Duas até aqui: as conferências do Gama rodam depois, na Parte 2.
+    confere(feitas === 2, `conferidas até aqui: ${feitas}`);
+    confere(aprovadas === 1, `aprovadas até aqui: ${aprovadas}`);
+    confere(reprovadas === 1, `reprovadas até aqui: ${reprovadas}`);
     const motivos = Object.keys(corpo.divergencesByCode);
     confere(motivos.length >= 3, `motivos: ${motivos.join(',')}`);
   },

@@ -6,6 +6,7 @@ import type {
   LooseItemOutcome,
   PurchaseOrderFilters,
   PurchaseOrderRepository,
+  SnapshotResult,
 } from '../../src/application/ports/purchase-order-repository.js';
 import type { ClientId } from '../../src/domain/client.js';
 import { Decimal, quantityScale } from '../../src/domain/decimal.js';
@@ -42,7 +43,7 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
   private readonly waiting = new Map<string, NormalizedPurchaseOrderItem[]>();
   private sequence = 0;
 
-  replaceSnapshot(snapshot: NormalizedPurchaseOrder): Promise<PurchaseOrder> {
+  replaceSnapshot(snapshot: NormalizedPurchaseOrder): Promise<SnapshotResult> {
     const key = `${snapshot.clientId}:${snapshot.externalNumber}`;
     const existing = this.byKey.get(key);
     const esperando = this.waiting.get(key) ?? [];
@@ -80,27 +81,46 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
       items,
     };
     this.byKey.set(key, saved);
-    return Promise.resolve(saved);
+    return Promise.resolve({
+      order: saved,
+      fromLoad: snapshot.items?.length ?? 0,
+      recovered: (completo.items?.length ?? 0) - (snapshot.items?.length ?? 0),
+    });
   }
 
-  applyLooseItem(
+  applyLooseItems(
     clientId: ClientId,
-    staged: StagedItem,
+    externalNumber: string,
+    staged: readonly StagedItem[],
   ): Promise<LooseItemOutcome> {
-    const key = `${clientId}:${staged.externalNumber}`;
+    if (staged.length === 0) return Promise.resolve('aplicado');
+    const key = `${clientId}:${externalNumber}`;
     const existing = this.byKey.get(key);
     if (existing === undefined) {
-      normalizedItemSchema.parse(staged.item);
       const fila = this.waiting.get(key) ?? [];
-      const semAnterior = fila.filter(
-        (item) => item.externalLine !== staged.item.externalLine,
-      );
-      this.waiting.set(key, [...semAnterior, staged.item]);
+      const linhas = new Set(staged.map((s) => s.item.externalLine));
+      for (const s of staged) normalizedItemSchema.parse(s.item);
+      this.waiting.set(key, [
+        ...fila.filter((item) => !linhas.has(item.externalLine)),
+        ...staged.map((s) => s.item),
+      ]);
       return Promise.resolve('em-espera');
     }
-    return this.replaceSnapshot(applyItemToOrder(existing, staged.item)).then(
-      () => 'aplicado' as const,
-    );
+
+    // Um retrato só, com o grupo inteiro aplicado (R10-01).
+    let retrato = applyItemToOrder(existing, staged[0]?.item as never);
+    for (const outro of staged.slice(1)) {
+      retrato = {
+        ...retrato,
+        items: [
+          ...(retrato.items ?? []).filter(
+            (item) => item.externalLine !== outro.item.externalLine,
+          ),
+          outro.item,
+        ],
+      };
+    }
+    return this.replaceSnapshot(retrato).then(() => 'aplicado' as const);
   }
 
   /** Só para teste: quantos itens ainda esperam por este pedido. */

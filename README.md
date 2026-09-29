@@ -144,11 +144,11 @@ As demais escolhas: [TypeScript e Node](docs/decisions/ADR-002-typescript-nodejs
 | --------------------------- | ------------------------------------------------------------------------- |
 | cada exigência do enunciado | `scripts/validate-case.mjs` — uma asserção por exigência, **27/27** no ar |
 | domínio, adaptadores, rotas | `npm run check` — a suíte completa, sem exigir banco                      |
-| transação, locks, índices   | `npm run test:integration` — 16 testes contra PostgreSQL real             |
+| transação, locks, índices   | `npm run test:integration` — contra PostgreSQL real                       |
 | persistência após queda     | `scripts/verify-persistence.mjs` — reinicia o banco e reconta             |
 | volume                      | `scripts/volume-check.mjs` — 50.000 pedidos, 150.000 itens                |
 
-Contagens de teste e cobertura ficam em [docs/STATUS.md](docs/STATUS.md), e **só lá**: repetidas em dois documentos elas divergem, que foi o que aconteceu ([REVIEW-09](docs/handoffs/REVIEW-09-pos-p2-01-codex.md), R09-09). O 27/27 acima é exceção porque está atado à lista fixa de exigências do enunciado, não ao código.
+Contagens de teste e cobertura ficam em [docs/STATUS.md](docs/STATUS.md), **geradas por `npm run evidence`** e não digitadas: escritas à mão elas derivaram três vezes, mesmo depois de eu concentrá-las num documento só. O 27/27 acima é exceção porque está atado à lista fixa de exigências do enunciado, não ao código.
 
 ## Organização
 
