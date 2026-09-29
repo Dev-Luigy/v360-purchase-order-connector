@@ -8,9 +8,6 @@ import type {
 } from '../../domain/purchase-order.js';
 import type { Page, PageRequest } from './pagination.js';
 
-/** O que aconteceu com os itens que chegaram sem o cabeçalho deles. */
-export type LooseItemOutcome = 'aplicado' | 'em-espera';
-
 /**
  * Quantos itens a gravação de fato aplicou, separados por origem.
  *
@@ -50,23 +47,32 @@ export interface PurchaseOrderRepository {
   replaceSnapshot(snapshot: NormalizedPurchaseOrder): Promise<SnapshotResult>;
 
   /**
-   * Aplica **todos** os itens avulsos de um mesmo pedido de uma vez.
+   * Guarda itens que chegaram sem o cabeçalho deles **nesta carga**.
    *
-   * Se o pedido já existe, as linhas são substituídas; se não, os itens ficam
-   * esperando. Lock, leitura, decisão e escrita acontecem na mesma transação:
-   * ler o pedido fora do lock deixava duas cargas simultâneas lerem o mesmo
-   * retrato, e a segunda gravação perdia a primeira (REVIEW-09, R09-06).
+   * Sempre grava, sem decidir nada: a decisão vem depois, em
+   * `consolidateStaged`. Separar as duas é o que permite ler em fluxo sem
+   * reter a carga em memória e ainda assim ter **uma** transação por pedido —
+   * a tabela de espera é o acumulador (REVIEW-11).
    *
-   * Recebe o grupo, e não uma linha por vez, porque uma transação por linha
-   * contradiz a transação por pedido do ADR-008: a versão avançava por linha,
-   * uma falha no meio deixava o retrato pela metade, e regravar o pedido
-   * inteiro a cada linha custava O(n²) (REVIEW-10, R10-01).
+   * Reenviar a mesma linha do mesmo pedido substitui a anterior (ADR-008).
    */
-  applyLooseItems(
+  stageLooseItems(
+    clientId: ClientId,
+    staged: readonly StagedItem[],
+  ): Promise<void>;
+
+  /**
+   * Fecha um pedido cujos itens estavam esperando.
+   *
+   * Se o pedido existe, **todos** os itens em espera dele entram num retrato
+   * só, sob um lock e uma transação, com um único incremento de versão; se
+   * não existe, continuam esperando. Devolve quantos itens foram aplicados.
+   */
+  consolidateStaged(
     clientId: ClientId,
     externalNumber: string,
-    staged: readonly StagedItem[],
-  ): Promise<LooseItemOutcome>;
+  ): Promise<number>;
+
   findById(id: string): Promise<PurchaseOrder | null>;
   findByExternalNumber(
     clientId: ClientId,

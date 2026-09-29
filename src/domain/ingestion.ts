@@ -85,34 +85,14 @@ export function mergeWaitingItems(
   return { ...snapshot, items: [...desta, ...recuperados] };
 }
 
-/**
- * Substitui a linha de mesmo número num pedido que já existe, devolvendo um
- * retrato completo — que é o que `replaceSnapshot` espera receber.
- */
-export function applyItemToOrder(
-  existing: PurchaseOrder,
-  item: NormalizedPurchaseOrderItem,
-): NormalizedPurchaseOrder {
-  const outros = existing.items
-    .filter((atual) => atual.externalLine !== item.externalLine)
-    .map(semPersistencia);
-  return {
-    clientId: existing.clientId,
-    externalNumber: existing.externalNumber,
-    supplier: existing.supplier,
-    currency: existing.currency,
-    status: existing.status,
-    issuedOn: existing.issuedOn,
-    items: [...outros, item],
-  };
-}
-
-/** Descarta o que a persistência acrescentou, deixando o item do contrato. */
-function semPersistencia(
-  item: PurchaseOrder['items'][number],
-): NormalizedPurchaseOrderItem {
-  const { id, quantityPending, ...contrato } = item;
-  void id;
-  void quantityPending;
-  return contrato;
+/** Descarta o que a persistência acrescentou, deixando os itens do contrato. */
+export function semPersistencia(
+  order: PurchaseOrder,
+): readonly NormalizedPurchaseOrderItem[] {
+  return order.items.map((item) => {
+    const { id, quantityPending, ...contrato } = item;
+    void id;
+    void quantityPending;
+    return contrato;
+  });
 }

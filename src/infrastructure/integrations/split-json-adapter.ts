@@ -100,6 +100,10 @@ export class SplitJsonAdapter implements SourceAdapter {
               });
             }
             index += 1;
+            if (rejected.length >= this.batchSize) {
+              yield { orders: [], rejected, staged: [] };
+              rejected = [];
+            }
             continue;
           }
           pendentes.set(header.externalNumber, {
@@ -205,11 +209,17 @@ export class SplitJsonAdapter implements SourceAdapter {
     for (const [numero, pendente] of pendentes) {
       // Cabeçalhos que discordam já foram recusados uma vez.
       if (conflitantes.has(numero)) continue;
+
       if (pendente.overflow) {
         lote.push({
           reference: numero,
           reason: `pedido acima do teto de ${String(maxItemsPerOrder)} itens`,
         });
+        if (orders.length + lote.length >= this.batchSize) {
+          yield { orders, rejected: lote, staged: [] };
+          orders = [];
+          lote = [];
+        }
         continue;
       }
       try {

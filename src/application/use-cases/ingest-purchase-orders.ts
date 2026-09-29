@@ -10,7 +10,7 @@ import type {
   StagedItem,
   StagedRecord,
 } from '../../domain/ingestion.js';
-import { maxReportedRecords } from '../../domain/limits.js';
+import { maxReportedRecords, maxStagedOrders } from '../../domain/limits.js';
 
 /**
  * Carga de pedidos de um cliente.
@@ -46,6 +46,10 @@ export class IngestPurchaseOrders {
 
     const rejected = new Sample<RejectedRecord>();
     const staged = new Sample<StagedRecord>();
+    // Quantos itens esperam por pedido, e uma amostra limitada deles. Só os
+    // números de pedido ficam em memória; os itens estão na tabela de espera.
+    const esperandoPorPedido = new Map<string, number>();
+    const amostraDaEspera: StagedItem[] = [];
     let ordersAccepted = 0;
     let itemsAccepted = 0;
 
@@ -72,27 +76,54 @@ export class IngestPurchaseOrders {
 
       // O adaptador só enxerga os cabeçalhos **desta** carga, então o que ele
       // chama de órfão pode ser item de pedido que já existe no banco — o caso
-      // de mandar só a consulta de itens do Delta. Quem decide é o
-      // repositório, sob o lock e numa transação só (R09-06).
+      // de mandar só a consulta de itens do Delta.
       //
-      // Agrupados por pedido: uma transação por linha fazia a versão avançar
-      // por linha e deixava retrato parcial quando a segunda falhava (R10-01).
-      for (const [externalNumber, grupo] of agruparPorPedido(batch.staged)) {
-        try {
-          const destino = await this.orders.applyLooseItems(
-            payload.clientId,
-            externalNumber,
-            grupo,
+      // Os itens são **gravados na espera** agora e consolidados uma vez por
+      // pedido depois de ler tudo. Decidir lote a lote abria uma transação por
+      // lote para o mesmo pedido, porque as linhas dele atravessam lotes
+      // (REVIEW-11). A tabela de espera é o acumulador, então nada além dos
+      // números de pedido fica em memória.
+      if (batch.staged.length > 0) {
+        await this.orders.stageLooseItems(payload.clientId, batch.staged);
+        for (const item of batch.staged) {
+          const atual = esperandoPorPedido.get(item.externalNumber) ?? 0;
+          esperandoPorPedido.set(item.externalNumber, atual + 1);
+          if (amostraDaEspera.length < maxReportedRecords) {
+            amostraDaEspera.push(item);
+          }
+        }
+        if (esperandoPorPedido.size > maxStagedOrders) {
+          throw new RangeError(
+            `carga com mais de ${String(maxStagedOrders)} pedidos em espera; ` +
+              'divida o arquivo',
           );
-          if (destino === 'aplicado') itemsAccepted += grupo.length;
-          else for (const item of grupo) staged.add(item);
-        } catch (cause) {
-          rejected.add({
-            reference: `itens do pedido ${externalNumber}`,
-            reason: cause instanceof Error ? cause.message : String(cause),
-          });
         }
       }
+    }
+
+    // Uma transação por pedido, com todas as linhas que esperavam por ele.
+    const aindaEsperando = new Set<string>();
+    for (const [externalNumber, total] of esperandoPorPedido) {
+      try {
+        const aplicados = await this.orders.consolidateStaged(
+          payload.clientId,
+          externalNumber,
+        );
+        itemsAccepted += aplicados;
+        if (aplicados === 0) {
+          aindaEsperando.add(externalNumber);
+          staged.count(total);
+        }
+      } catch (cause) {
+        rejected.add({
+          reference: `itens do pedido ${externalNumber}`,
+          reason: cause instanceof Error ? cause.message : String(cause),
+        });
+      }
+    }
+    // A amostra do relatório só mostra o que de fato continua esperando.
+    for (const item of amostraDaEspera) {
+      if (aindaEsperando.has(item.externalNumber)) staged.keep(item);
     }
 
     return {
@@ -112,22 +143,6 @@ export class IngestPurchaseOrders {
 }
 
 /**
- * Agrupa os itens avulsos por pedido, preservando a ordem de chegada. Um
- * `Map` já faz isso: a inserção define a ordem da iteração.
- */
-function agruparPorPedido(
-  staged: readonly StagedItem[],
-): ReadonlyMap<string, readonly StagedItem[]> {
-  const porPedido = new Map<string, StagedItem[]>();
-  for (const item of staged) {
-    const atual = porPedido.get(item.externalNumber);
-    if (atual === undefined) porPedido.set(item.externalNumber, [item]);
-    else atual.push(item);
-  }
-  return porPedido;
-}
-
-/**
  * Guarda os primeiros registros e conta o resto. Acumular tudo para depois
  * cortar gastaria a memória que o corte existe para poupar.
  */
@@ -137,6 +152,16 @@ class Sample<T> {
 
   add(record: T): void {
     this.counted += 1;
+    if (this.kept.length < maxReportedRecords) this.kept.push(record);
+  }
+
+  /** Conta sem guardar: o total é conhecido antes da amostra. */
+  count(quantos: number): void {
+    this.counted += quantos;
+  }
+
+  /** Guarda sem contar: o total já foi contado por `count`. */
+  keep(record: T): void {
     if (this.kept.length < maxReportedRecords) this.kept.push(record);
   }
 

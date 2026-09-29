@@ -106,6 +106,15 @@ export const maxReportedRecords = 100;
 export const maxStagedRawCharacters = 8 * 1024;
 
 /**
+ * Teto de pedidos distintos em espera numa carga.
+ *
+ * A consolidação guarda um número de pedido por entrada, não os itens — eles
+ * ficam no banco. Ainda assim é memória que cresce com a carga, e o mesmo
+ * teto dos índices de cabeçalho dos adaptadores se aplica.
+ */
+export const maxStagedOrders = 100_000;
+
+/**
  * Moedas suportadas e as casas decimais de cada uma.
  *
  * Allowlist versionada, e não "três letras maiúsculas": `ZZZ` passava por ISO

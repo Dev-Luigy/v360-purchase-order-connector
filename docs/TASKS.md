@@ -42,7 +42,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado           |
 | P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                         |
 | P1-05     | Validar desafio e registrar marco parte-1                        | concluída                      | Claude      | 18/18 exigências verificadas no ar; tag depende de DOC-02                     |
-| FIX-12    | Fechar os três achados de REVIEW-11                              | em andamento                   | Claude      | REVIEW-11; R10-01 atravessa lotes, R10-03 tem dois escapes, gerador inseguro  |
+| FIX-12    | Fechar os três achados de REVIEW-11                              | concluída                      | Claude      | Guardar e decidir separados; invariante de lote; gerador fail-closed          |
 | FIX-11    | Fechar os sete achados de REVIEW-10                              | concluída                      | Claude      | Sete fechados com regressão; validador agora é repetível                      |
 | FIX-10    | Fechar os nove achados de REVIEW-09                              | concluída                      | Claude      | Nove fechados com regressão, mais três de REVIEW-07 que seguiam abertos       |
 | P2-01     | Integrar Gama/Delta e documentar mudanças                        | concluída                      | Claude      | Os quatro clientes integrados; 27/27 exigências no ar                         |
@@ -241,10 +241,11 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## FIX-12 — o que REVIEW-11 mostrou em aberto
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/application/ports/purchase-order-repository.ts`, `src/application/use-cases/ingest-purchase-orders.ts`, `src/domain/limits.ts`, `src/infrastructure/database/purchase-order-repository.ts`, `src/infrastructure/integrations/split-json-adapter.ts`, `scripts/evidence.mjs`, `tests/**`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-12-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `src/application/ports/purchase-order-repository.ts`, `src/application/use-cases/ingest-purchase-orders.ts`, `src/domain/{ingestion,limits}.ts`, `src/infrastructure/database/purchase-order-repository.ts`, `src/infrastructure/integrations/split-json-adapter.ts`, `scripts/evidence.mjs`, `tests/**`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-12-claude.md`.
 - Escopo: os três achados de [REVIEW-11](handoffs/REVIEW-11-pos-fix-11-codex.md), reproduzidos com sonda. **A correção de R10-03 em FIX-11 criou a lacuna de R10-01**: escoar o staging em lotes fez as linhas do mesmo pedido atravessarem lotes, e o caso de uso agrupava só dentro de um. O gerador de evidência que escrevi para parar de errar números pode publicar número de execução que falhou.
 - Dependências: FIX-11 concluída.
+- Evidência: [handoff FIX-12](handoffs/FIX-12-claude.md); guardar e decidir viraram operações separadas, então a espera é o acumulador e a transação continua sendo por pedido mesmo com o staging escoando em lotes. O teste de lote passou a afirmar o invariante em vez de um sintoma, e o gerador de evidência ficou fail-closed e com teste.
 
 ## FIX-11 — os sete achados de REVIEW-10
 

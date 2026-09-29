@@ -60,6 +60,19 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     item: item(overrides),
   });
 
+  /**
+   * O que a carga faz: guarda os itens e tenta fechar o pedido. Devolve
+   * quantos foram aplicados — zero significa que continuam esperando.
+   */
+  const avulsos = async (
+    clientId: string,
+    externalNumber: string,
+    items: readonly StagedItem[],
+  ): Promise<number> => {
+    await orders.stageLooseItems(clientId, items);
+    return orders.consolidateStaged(clientId, externalNumber);
+  };
+
   const emEspera = async (externalNumber: string): Promise<number> => {
     const { rows } = await database.pool.query<{ total: string }>(
       'SELECT count(*)::text AS total FROM ingestion_staging WHERE external_number = $1',
@@ -69,10 +82,8 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
   };
 
   it('item de pedido inexistente espera; o cabeçalho depois o recupera', async () => {
-    const destino = await orders.applyLooseItems('delta', 'DL-1', [
-      orfao('DL-1'),
-    ]);
-    assert.equal(destino, 'em-espera');
+    const destino = await avulsos('delta', 'DL-1', [orfao('DL-1')]);
+    assert.equal(destino, 0, 'deveria continuar esperando');
     assert.equal(await emEspera('DL-1'), 1);
 
     // O cabeçalho chega sem itens: a espera é tudo o que se sabe sobre eles.
@@ -88,7 +99,7 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
   it('falha ao gravar o pedido desfaz o consumo da espera', async () => {
     // R09-01: `takeFor` apagava numa transação própria, então a falha da
     // gravação seguinte perdia o item para sempre.
-    await orders.applyLooseItems('delta', 'DL-2', [orfao('DL-2')]);
+    await avulsos('delta', 'DL-2', [orfao('DL-2')]);
     assert.equal(await emEspera('DL-2'), 1);
 
     await assert.rejects(
@@ -115,10 +126,10 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
 
   it('item de pedido existente atualiza em vez de esperar', async () => {
     await gravar(orders, pedido({ clientId: 'delta', externalNumber: 'DL-3' }));
-    const destino = await orders.applyLooseItems('delta', 'DL-3', [
+    const destino = await avulsos('delta', 'DL-3', [
       orfao('DL-3', { externalLine: 99, material: 'NOVO-1' }),
     ]);
-    assert.equal(destino, 'aplicado');
+    assert.ok(destino > 0, 'deveria ter sido aplicado');
     assert.equal(await emEspera('DL-3'), 0);
 
     const salvo = await orders.findByExternalNumber('delta', 'DL-3');
@@ -129,8 +140,8 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
   });
 
   it('reenviar a mesma linha substitui a que esperava', async () => {
-    await orders.applyLooseItems('delta', 'DL-4', [orfao('DL-4')]);
-    await orders.applyLooseItems('delta', 'DL-4', [
+    await avulsos('delta', 'DL-4', [orfao('DL-4')]);
+    await avulsos('delta', 'DL-4', [
       orfao('DL-4', { quantityOrdered: '777.000000' }),
     ]);
     assert.equal(await emEspera('DL-4'), 1, 'duplicou em vez de substituir');
@@ -143,12 +154,8 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
   });
 
   it('a espera é isolada por cliente', async () => {
-    await orders.applyLooseItems('delta', 'MESMO-NUMERO', [
-      orfao('MESMO-NUMERO'),
-    ]);
-    await orders.applyLooseItems('alfa', 'MESMO-NUMERO', [
-      orfao('MESMO-NUMERO'),
-    ]);
+    await avulsos('delta', 'MESMO-NUMERO', [orfao('MESMO-NUMERO')]);
+    await avulsos('alfa', 'MESMO-NUMERO', [orfao('MESMO-NUMERO')]);
     assert.equal(await emEspera('MESMO-NUMERO'), 2);
 
     const salvo = await gravar(
@@ -166,7 +173,7 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
 
   it('itens recuperados entram na ordem da linha', async () => {
     for (const linha of [30, 10, 20]) {
-      await orders.applyLooseItems('delta', 'DL-5', [
+      await avulsos('delta', 'DL-5', [
         orfao('DL-5', { externalLine: linha, material: `M-${String(linha)}` }),
       ]);
     }
@@ -211,8 +218,8 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     const grupo = [21, 22, 23, 24, 25].map((linha) =>
       orfao('DL-8', { externalLine: linha, material: `G-${String(linha)}` }),
     );
-    const destino = await orders.applyLooseItems('delta', 'DL-8', grupo);
-    assert.equal(destino, 'aplicado');
+    const destino = await avulsos('delta', 'DL-8', grupo);
+    assert.ok(destino > 0, 'deveria ter sido aplicado');
 
     const depois = await orders.findByExternalNumber('delta', 'DL-8');
     assert.equal(
@@ -227,8 +234,8 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     const grupo = [10, 20].map((linha) =>
       orfao('DL-9', { externalLine: linha, material: `E-${String(linha)}` }),
     );
-    const destino = await orders.applyLooseItems('delta', 'DL-9', grupo);
-    assert.equal(destino, 'em-espera');
+    const destino = await avulsos('delta', 'DL-9', grupo);
+    assert.equal(destino, 0, 'deveria continuar esperando');
     assert.equal(await emEspera('DL-9'), 2);
     assert.equal(await orders.findByExternalNumber('delta', 'DL-9'), null);
   });
@@ -243,10 +250,7 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
       // `CHECK` do banco recusa fator zero: falha depois da primeira linha.
       orfao('DL-10', { externalLine: 22, conversionFactor: '0.000000' }),
     ];
-    await assert.rejects(
-      () => orders.applyLooseItems('delta', 'DL-10', grupo),
-      /.*/,
-    );
+    await assert.rejects(() => avulsos('delta', 'DL-10', grupo), /.*/);
     const salvo = await orders.findByExternalNumber('delta', 'DL-10');
     assert.equal(
       salvo?.items.length,
@@ -261,10 +265,10 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     await gravar(orders, pedido({ clientId: 'delta', externalNumber: 'DL-7' }));
 
     await Promise.all([
-      orders.applyLooseItems('delta', 'DL-7', [
+      avulsos('delta', 'DL-7', [
         orfao('DL-7', { externalLine: 21, material: 'CONC-A' }),
       ]),
-      orders.applyLooseItems('delta', 'DL-7', [
+      avulsos('delta', 'DL-7', [
         orfao('DL-7', { externalLine: 22, material: 'CONC-B' }),
       ]),
     ]);

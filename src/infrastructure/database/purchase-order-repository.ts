@@ -1,7 +1,6 @@
 import type { Page, PageRequest } from '../../application/ports/pagination.js';
 import { maxPageLimit } from '../../application/ports/pagination.js';
 import type {
-  LooseItemOutcome,
   PurchaseOrderFilters,
   PurchaseOrderRepository,
   SnapshotResult,
@@ -9,8 +8,8 @@ import type {
 import type { ClientId } from '../../domain/client.js';
 import { Decimal } from '../../domain/decimal.js';
 import {
-  applyItemToOrder,
   mergeWaitingItems,
+  semPersistencia,
   type StagedItem,
 } from '../../domain/ingestion.js';
 import { describeIssues, normalizedItemSchema } from '../../domain/schemas.js';
@@ -70,24 +69,35 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
   }
 
   /**
-   * Itens que chegaram sem o cabeçalho deles na mesma carga, **em grupo**.
+   * Guarda itens sem cabeçalho. Não decide nada: a decisão é de
+   * `consolidateStaged`, que roda uma vez por pedido no fim da carga.
    *
-   * O adaptador só enxerga os cabeçalhos do payload atual, então o que ele
-   * chama de órfão pode ser item de pedido que já existe — o caso de mandar só
-   * a consulta de itens do Delta, que é uso normal. A decisão é aqui, sob o
-   * lock: ler o pedido fora dele deixava duas cargas simultâneas lerem o mesmo
-   * retrato, e a segunda gravação perdia a primeira (REVIEW-09, R09-06).
-   *
-   * O grupo inteiro entra numa transação só — uma por linha fazia a versão
-   * avançar por linha e deixava retrato parcial quando a segunda falhava
-   * (REVIEW-10, R10-01).
+   * Separar as duas é o que permite escoar o staging em lotes — necessário
+   * para não reter a carga em memória — e ainda assim ter uma transação por
+   * pedido. Enquanto elas eram a mesma operação, um pedido cujas linhas
+   * atravessavam dois lotes abria duas transações (REVIEW-11).
    */
-  applyLooseItems(
+  async stageLooseItems(
+    clientId: ClientId,
+    staged: readonly StagedItem[],
+  ): Promise<void> {
+    if (staged.length === 0) return;
+    await this.prisma.$transaction(async (tx) => {
+      for (const item of staged) await stageItem(tx, clientId, item);
+    });
+  }
+
+  /**
+   * Fecha um pedido cujos itens estavam esperando.
+   *
+   * Lock, leitura, decisão e escrita na mesma transação: ler o pedido fora do
+   * lock deixava duas cargas simultâneas lerem o mesmo retrato, e a segunda
+   * gravação perdia a primeira (REVIEW-09, R09-06).
+   */
+  consolidateStaged(
     clientId: ClientId,
     externalNumber: string,
-    staged: readonly StagedItem[],
-  ): Promise<LooseItemOutcome> {
-    if (staged.length === 0) return Promise.resolve('aplicado');
+  ): Promise<number> {
     const chave = lockKeyFor({ clientId, externalNumber });
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${chave}))`;
@@ -96,10 +106,11 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
         where: { clientId_externalNumber: { clientId, externalNumber } },
         select: { id: true },
       });
-      if (encontrado === null) {
-        for (const item of staged) await stageItem(tx, clientId, item);
-        return 'em-espera';
-      }
+      // Sem cabeçalho ainda: os itens seguem esperando, intactos.
+      if (encontrado === null) return 0;
+
+      const esperando = await takeWaitingItems(tx, clientId, externalNumber);
+      if (esperando.length === 0) return 0;
 
       const existente = await findFull(tx, encontrado.id);
       if (existente === null) {
@@ -107,21 +118,22 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
           `pedido ${encontrado.id} desapareceu dentro da própria transação`,
         );
       }
-      // Um retrato só, com todas as linhas do grupo aplicadas.
-      let retrato = applyItemToOrder(existente, staged[0]?.item as never);
-      for (const outro of staged.slice(1)) {
-        retrato = {
-          ...retrato,
-          items: [
-            ...(retrato.items ?? []).filter(
-              (item) => item.externalLine !== outro.item.externalLine,
-            ),
-            outro.item,
-          ],
-        };
-      }
-      await persistSnapshot(tx, retrato);
-      return 'aplicado';
+      // Um retrato só, com todas as linhas que esperavam.
+      const porLinha = new Map(
+        semPersistencia(existente).map((item) => [item.externalLine, item]),
+      );
+      for (const item of esperando) porLinha.set(item.externalLine, item);
+
+      await persistSnapshot(tx, {
+        clientId: existente.clientId,
+        externalNumber: existente.externalNumber,
+        supplier: existente.supplier,
+        currency: existente.currency,
+        status: existente.status,
+        issuedOn: existente.issuedOn,
+        items: [...porLinha.values()],
+      });
+      return esperando.length;
     });
   }
 
