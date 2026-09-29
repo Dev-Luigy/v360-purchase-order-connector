@@ -668,6 +668,47 @@ await exige('o relatório da carga conta o que ela mesma recebeu', async () => {
   );
 });
 
+await exige(
+  'fechamento que falha não deixa item fora do relatório',
+  async () => {
+    // R17-01: o fechamento falhava por exceder o agregado, o relatório dizia
+    // `stagedTotal=0` e ficava uma linha invisível no banco — invisível para
+    // a reconciliação e ausente do relatório, mentira dos dois lados.
+    const numero = numeroDe('FECHAFALHA');
+    await carregar({
+      orders: [cabecalho(numero)],
+      items: Array.from({ length: 10_000 }, (_, i) => item(numero, i + 1)),
+    });
+    const noLimite = await detalhe(numero);
+    confere(noLimite.corpo.items.length === 10_000, 'preparação falhou');
+
+    const excede = await carregar({ items: [item(numero, 99_999)] });
+
+    confere(excede.status === 200, `HTTP ${String(excede.status)}`);
+    confere(excede.corpo.itemsAccepted === 0, 'aplicou acima do agregado');
+    confere(
+      excede.corpo.rejectedTotal === 1,
+      `recusas: ${String(excede.corpo.rejectedTotal)}`,
+    );
+    confere(
+      excede.corpo.stagedTotal === excede.corpo.staged.length,
+      'total e amostra do relatório discordam',
+    );
+    // A recusa precisa dizer o que aconteceu com os itens.
+    confere(
+      /descartad/.test(String(excede.corpo.rejected[0]?.reason)),
+      `a recusa não diz o destino dos itens: ${String(excede.corpo.rejected[0]?.reason)}`,
+    );
+
+    // E o retrato anterior segue intacto.
+    const depois = await detalhe(numero);
+    confere(
+      depois.corpo.items.length === 10_000,
+      `o retrato mudou: ${String(depois.corpo.items.length)}`,
+    );
+  },
+);
+
 // ------------------------------------------------------------- veredito
 
 const largura = Math.max(...resultados.map((r) => r.cenario.length));

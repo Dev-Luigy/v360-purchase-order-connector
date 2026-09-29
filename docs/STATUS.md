@@ -18,7 +18,7 @@ Atualizado por Codex em 2026-09-29, após REVIEW-17.
 
 ## Evidências e limitações
 
-- Após FIX-17, `npm run check` passou (26 arquivos de teste, zero falhas no resumo do Node), `npm run test:integration` passou **31/31** contra PostgreSQL real, e `npm run coverage` mediu **92,67% de linhas, 89,99% de branches e 87,10% de funções**. O resumo atual do runner agrupa casos por arquivo; consulte [REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md) para os comandos e a evidência detalhada.
+- `npm run check`: **247 testes, 0 falhas** (231 rodam sem banco; 16 são pulados sem `DATABASE_URL`). `npm run test:integration`: **33 testes** contra PostgreSQL real. Cobertura por `npm run coverage`: **92,73% de linhas, 89,86% de branches** (sem banco; os repositórios PostgreSQL só são medidos com ele no ar). Gerado por `npm run evidence`, não digitado — os números derivaram três vezes quando eram manuais.
 - Imagem de runtime construída e inspecionada sem executar container: sem CLI do Prisma e sem `mysql2`, que entrava por peer opcional e trazia CVE de credencial para uma aplicação que só fala PostgreSQL.
 - Duas mil combinações aritméticas inteiras comparadas com `BigInt` passaram; `/health` e `/ready` foram exercitados via `inject` nos limites atuais.
 - Três revisões registradas — [REVIEW-01](handoffs/REVIEW-01-codex.md), [REVIEW-02](handoffs/REVIEW-02-claude.md) e [REVIEW-03](handoffs/REVIEW-03-codex.md) — e os defeitos inequívocos das três estão fechados em [FIX-01](handoffs/FIX-01-claude.md), [FIX-02](handoffs/FIX-02-claude.md) e [FIX-03](handoffs/FIX-03-claude.md), cada um com regressão. Nenhum achado era falso positivo; dois defeitos adicionais apareceram durante as correções.

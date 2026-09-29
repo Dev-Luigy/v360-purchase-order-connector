@@ -397,6 +397,41 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     assert.equal(salvo?.items.length, 1, 'gravou um pedido acima do teto');
   });
 
+  it('carga terminada não deixa linha não publicada', async () => {
+    // R17-01: o invariante. Linha não publicada é invisível — ninguém a
+    // reconcilia e o relatório não a menciona —, então uma carga que termina
+    // não pode deixar nenhuma.
+    const carga = randomUUID();
+    await orders.stageLooseItems('delta', carga, [
+      orfao('DL-15', { externalLine: 10 }),
+      orfao('DL-15', { externalLine: 20 }),
+    ]);
+    const naoPublicadas = async (): Promise<number> => {
+      const { rows } = await database.pool.query<{ total: string }>(
+        'SELECT count(*)::text AS total FROM ingestion_staging WHERE NOT publicada',
+      );
+      return Number(rows[0]?.total ?? '0');
+    };
+    assert.equal(await naoPublicadas(), 2, 'a espera nasce invisível');
+
+    const removidas = await orders.discardUnpublished('delta', carga);
+    assert.equal(removidas, 2);
+    assert.equal(await naoPublicadas(), 0, 'sobrou linha invisível');
+  });
+
+  it('descartar o não publicado não toca no que já foi publicado', async () => {
+    const publicada = randomUUID();
+    await orders.stageLooseItems('delta', publicada, [orfao('DL-16')]);
+    await orders.finalizeStaged('delta', publicada, 'DL-16');
+
+    const outra = randomUUID();
+    await orders.stageLooseItems('delta', outra, [orfao('DL-17')]);
+
+    assert.equal(await orders.discardUnpublished('delta', outra), 1);
+    // A publicada continua lá, esperando o cabeçalho dela.
+    assert.equal(await emEspera('DL-16'), 1, 'apagou espera já publicada');
+  });
+
   it('duas aplicações concorrentes no mesmo pedido não perdem uma delas', async () => {
     // R09-06: a leitura acontecia fora do lock, então as duas liam o mesmo
     // retrato e a segunda gravação apagava a linha da primeira.

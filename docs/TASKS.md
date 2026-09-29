@@ -209,11 +209,12 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## FIX-18 — espera sem aparecer no relatório após falha
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/application/ports/purchase-order-repository.ts`, `src/application/use-cases/ingest-purchase-orders.ts`, `src/infrastructure/database/purchase-order-repository.ts`, `scripts/validate-fix-14-http.mjs`, `tests/**`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-18-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `src/application/ports/purchase-order-repository.ts`, `src/application/use-cases/ingest-purchase-orders.ts`, `src/infrastructure/database/purchase-order-repository.ts`, `scripts/validate-fix-14-http.mjs`, `tests/**`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-18-claude.md`.
 - Escopo: [R17-01](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md), reproduzido por HTTP: fechar o pedido falha por exceder o agregado, o relatório diz `stagedTotal=0` e fica **1 linha não publicada** no banco. É consequência de FIX-17 ter tirado a recontagem posterior ao fechamento sem cobrir o caminho de falha.
 - Decisão: o invariante passa a ser **carga terminada não deixa linha não publicada**. Linha invisível não é "esperando cabeçalho" — ninguém a reconcilia —, então relatá-la seria mentir de outro jeito. Ela é descartada, e o pedido volta como recusa, que é o que o relatório já dizia.
 - Dependências: FIX-17 concluída.
+- Evidência: [handoff FIX-18](handoffs/FIX-18-claude.md); 247 testes, 33 de integração, 30/30 no enunciado e 17/17 pelas rotas. Depois de carregar 80 mil pedidos, zero linhas não publicadas.
 
 ## CLEAN-01 — limpeza de comentários
 
