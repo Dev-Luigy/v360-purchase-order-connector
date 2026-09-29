@@ -30,3 +30,25 @@ Não vamos construir isso. O enunciado pede paginação que conviva com filtros,
 Contrato em `src/application/ports/pagination.ts`. P1-02 implementa a consulta com índice que sustente `(filtros, id)`; P1-04 traduz cursor e limite na borda HTTP e valida o teto.
 
 Pendência: a ordenação é por `id`, que é ordem de primeira ingestão, não de data do pedido. Se a plataforma pedir varredura por data, entra um cursor composto `(issuedOn, id)` e um índice correspondente.
+
+## Atualização — FIX-15, 2026-09-29
+
+**O cursor passou a carregar o teto da varredura**, e a versão foi para `2`:
+`{ v, after, until, f }`.
+
+Com apenas o limite inferior, uma varredura sob escrita contínua persegue o que
+entra e **não tem condição própria de término** — e é exatamente esse o cenário
+do requisito 1, varrer de madrugada enquanto novas cargas chegam
+([REVIEW-14](../handoffs/REVIEW-14-pos-fix-14-final-01-codex.md), R14-02). O
+`scripts/validate-sweep-under-load.mjs` não mostrava isso porque o escritor dele
+é finito: a varredura terminava quando o produtor acabava, não por decisão
+própria.
+
+O teto é o maior identificador que satisfaz os filtros **no momento da primeira
+página**, e viaja no cursor a partir dali. Consequências assumidas:
+
+- a varredura é um **retrato**: o que entra depois fica para a próxima, que é o
+  comportamento que a plataforma já espera de uma varredura noturna;
+- a primeira página custa uma consulta a mais, para descobrir o teto;
+- cursor da versão 1 é **recusado**, não reinterpretado — é para isso que o
+  campo de versão existe desde o começo.

@@ -83,7 +83,22 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     ingestionId: string = randomUUID(),
   ): Promise<number> => {
     await orders.stageLooseItems(clientId, ingestionId, items);
+    // O caso de uso publica ao terminar de ler; sem isso a linha fica
+    // invisível para a reconciliação de outra carga, de propósito
+    // (REVIEW-14, R14-01).
+    await orders.publishStaged(clientId, ingestionId);
     return orders.consolidateStaged(clientId, ingestionId, externalNumber);
+  };
+
+  /** Guarda e publica, sem consolidar: o estado ao fim de uma carga. */
+  const esperando = async (
+    clientId: string,
+    items: readonly StagedItem[],
+    ingestionId: string = randomUUID(),
+  ): Promise<string> => {
+    await orders.stageLooseItems(clientId, ingestionId, items);
+    await orders.publishStaged(clientId, ingestionId);
+    return ingestionId;
   };
 
   const emEspera = async (externalNumber: string): Promise<number> => {
@@ -158,6 +173,7 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     await orders.stageLooseItems('delta', carga, [
       orfao('DL-4', { quantityOrdered: '777.000000' }),
     ]);
+    await orders.publishStaged('delta', carga);
     assert.equal(await emEspera('DL-4'), 1, 'duplicou em vez de substituir');
 
     const salvo = await gravar(
@@ -171,8 +187,8 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     // A carga faz parte da identidade, então as duas linhas convivem: é o que
     // impede uma carga de tomar a linha da outra (REVIEW-13, R13-01). Na
     // reconciliação, "prevalece a última carga aceita" decide (ADR-008).
-    await orders.stageLooseItems('delta', randomUUID(), [orfao('DL-14')]);
-    await orders.stageLooseItems('delta', randomUUID(), [
+    await esperando('delta', [orfao('DL-14')]);
+    await esperando('delta', [
       orfao('DL-14', { quantityOrdered: '777.000000' }),
     ]);
     assert.equal(
@@ -229,9 +245,9 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     await database.pool.query(
       `INSERT INTO ingestion_staging
          (id, client_id, ingestion_id, external_number, external_line,
-          item, raw, staged_at)
+          item, raw, staged_at, publicada)
        VALUES (gen_random_uuid(), 'delta', gen_random_uuid(), 'DL-6', 10,
-               $1::jsonb, '{}', now())`,
+               $1::jsonb, '{}', now(), true)`,
       [JSON.stringify({ ...item(), material: 'M'.repeat(129) })],
     );
 
@@ -306,12 +322,16 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     );
     const cargaA = randomUUID();
     const cargaB = randomUUID();
-    await orders.stageLooseItems('delta', cargaA, [
-      orfao('DL-11', { externalLine: 21, material: 'DE-A' }),
-    ]);
-    await orders.stageLooseItems('delta', cargaB, [
-      orfao('DL-11', { externalLine: 22, material: 'DE-B' }),
-    ]);
+    await esperando(
+      'delta',
+      [orfao('DL-11', { externalLine: 21, material: 'DE-A' })],
+      cargaA,
+    );
+    await esperando(
+      'delta',
+      [orfao('DL-11', { externalLine: 22, material: 'DE-B' })],
+      cargaB,
+    );
 
     const aplicadosPorA = await orders.consolidateStaged(
       'delta',
@@ -338,10 +358,10 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
   it('a reconciliação pelo cabeçalho leva a espera de qualquer carga', async () => {
     // O oposto da consolidação: quando o cabeçalho chega, tudo o que esperava
     // entra, venha de que carga vier. É a promessa do ADR-008.
-    await orders.stageLooseItems('delta', randomUUID(), [
+    await esperando('delta', [
       orfao('DL-12', { externalLine: 10, material: 'DE-1' }),
     ]);
-    await orders.stageLooseItems('delta', randomUUID(), [
+    await esperando('delta', [
       orfao('DL-12', { externalLine: 20, material: 'DE-2' }),
     ]);
     const salvo = await gravar(
@@ -367,7 +387,7 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     const grupo = Array.from({ length: maxItemsPerOrder }, (_, i) =>
       orfao('DL-13', { externalLine: i + 100, material: `X-${String(i)}` }),
     );
-    await orders.stageLooseItems('delta', carga, grupo);
+    await esperando('delta', grupo, carga);
 
     await assert.rejects(
       () => orders.consolidateStaged('delta', carga, 'DL-13'),

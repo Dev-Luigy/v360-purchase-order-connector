@@ -81,23 +81,23 @@ async function carregar(partes) {
   return { status: resposta.status, corpo: await resposta.json() };
 }
 
-/** Detalhe do pedido pelas rotas de consulta, nunca por SQL. */
+/**
+ * Detalhe do pedido pelas rotas de consulta, nunca por SQL.
+ *
+ * Pelo filtro de número: paginar o cliente inteiro para achar um pedido
+ * custava centenas de requisições e batia no teto de requisições assim que o
+ * banco tinha dado de outras medições.
+ */
 async function detalhe(numero) {
-  let cursor = null;
-  for (;;) {
-    const url = new URL(`${base}/purchase-orders`);
-    url.searchParams.set('clientId', 'delta');
-    url.searchParams.set('limit', '100');
-    if (cursor) url.searchParams.set('cursor', cursor);
-    const pagina = await (await fetch(url)).json();
-    const achado = pagina.data.find((p) => p.externalNumber === numero);
-    if (achado) {
-      const resposta = await fetch(`${base}/purchase-orders/${achado.id}`);
-      return { status: resposta.status, corpo: await resposta.json() };
-    }
-    cursor = pagina.page.nextCursor;
-    if (!cursor) return { status: 404, corpo: null };
-  }
+  const lista = await (
+    await fetch(
+      `${base}/purchase-orders?clientId=delta` +
+        `&externalNumber=${encodeURIComponent(numero)}`,
+    )
+  ).json();
+  if (lista.data.length === 0) return { status: 404, corpo: null };
+  const resposta = await fetch(`${base}/purchase-orders/${lista.data[0].id}`);
+  return { status: resposta.status, corpo: await resposta.json() };
 }
 
 // ------------------------------------------------- o serviço está de pé
@@ -411,6 +411,111 @@ await exige(
     await carregar({ orders: [cabecalho(numero)] });
     const pedido = await detalhe(numero);
     confere(pedido.corpo.items.length === 1, 'a reconciliação não aconteceu');
+  },
+);
+
+await exige(
+  'pedido recusado por teto não deixa item nenhum, mesmo desalinhado',
+  async () => {
+    // R14-01: a purga apagava o que os lotes anteriores gravaram, mas os
+    // itens do mesmo pedido já percorridos **no lote atual** continuavam na
+    // lista a gravar e voltavam logo depois.
+    //
+    // O cenário anterior passava por acidente de alinhamento: 10.001 itens
+    // consecutivos com lote 200 põem o estouro numa fronteira, onde a lista
+    // está vazia. Um órfão de outro pedido antes desloca em uma posição.
+    const alvo = numeroDe('DESALINHADO');
+    const deslocador = numeroDe('DESLOCADOR');
+    await carregar({ orders: [cabecalho(alvo)] });
+
+    const carga = await carregar({
+      items: [
+        item(deslocador, 1),
+        ...Array.from({ length: 10_001 }, (_, i) => item(alvo, i + 1)),
+      ],
+    });
+
+    confere(carga.status === 200, `HTTP ${String(carga.status)}`);
+    confere(carga.corpo.rejectedTotal > 0, 'não reportou a recusa');
+    confere(
+      carga.corpo.stagedTotal === 1,
+      `espera deveria ter só o deslocador, veio ${String(carga.corpo.stagedTotal)}`,
+    );
+    confere(
+      carga.corpo.staged.every((s) => s.reference === deslocador),
+      `o pedido recusado ficou na espera: ${JSON.stringify(carga.corpo.staged.map((s) => s.reference))}`,
+    );
+
+    const depois = await detalhe(alvo);
+    confere(
+      depois.corpo.items.length === 0,
+      `o pedido recusado tem ${String(depois.corpo.items.length)} itens`,
+    );
+
+    // E reenviar o cabeçalho não pode aplicar nada do que foi recusado.
+    await carregar({ orders: [cabecalho(alvo)] });
+    const fim = await detalhe(alvo);
+    confere(
+      fim.corpo.items.length === 0,
+      `o reenvio do cabeçalho aplicou ${String(fim.corpo.items.length)} item(ns) do pedido recusado`,
+    );
+  },
+);
+
+await exige(
+  'cabeçalho concorrente não consome o prefixo de uma carga em andamento',
+  async () => {
+    // A outra metade de R14-01: enquanto a carga lê os lotes, as linhas dela
+    // ficam invisíveis para a reconciliação de outra requisição. Sem isso, um
+    // cabeçalho que chega no meio leva o prefixo — e se a carga depois recusar
+    // o pedido por teto, o que foi levado não volta.
+    const alvo = numeroDe('CORRIDA');
+
+    const excedente = carregar({
+      items: Array.from({ length: 10_001 }, (_, i) => item(alvo, i + 1)),
+    });
+    // Sem esperar: o cabeçalho entra enquanto a carga acima ainda lê.
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const cabecalhoNoMeio = await carregar({ orders: [cabecalho(alvo)] });
+    const recusa = await excedente;
+
+    confere(recusa.corpo.rejectedTotal > 0, 'a carga excedente não recusou');
+    confere(
+      cabecalhoNoMeio.corpo.itemsAccepted === 0,
+      `o cabeçalho concorrente levou ${String(cabecalhoNoMeio.corpo.itemsAccepted)} item(ns) de uma carga em andamento`,
+    );
+
+    const fim = await detalhe(alvo);
+    confere(
+      fim.corpo.items.length === 0,
+      `o pedido recusado terminou com ${String(fim.corpo.items.length)} itens`,
+    );
+  },
+);
+
+await exige(
+  'carga só de cabeçalho relata só o que veio da espera',
+  async () => {
+    // R14-03: `recovered` saía da cardinalidade final do retrato, então itens
+    // já gravados eram contados como recuperados agora.
+    const numero = numeroDe('RECUPERADOS');
+    await carregar({
+      orders: [cabecalho(numero)],
+      items: [item(numero, 10), item(numero, 20), item(numero, 30)],
+    });
+
+    // Um item novo espera; o pedido já tem três gravados.
+    const soItem = await carregar({ items: [item(numero, 40)] });
+    confere(
+      soItem.corpo.itemsAccepted === 1,
+      `aceitos: ${String(soItem.corpo.itemsAccepted)}`,
+    );
+
+    const pedido = await detalhe(numero);
+    confere(
+      pedido.corpo.items.length === 4,
+      `retrato com ${String(pedido.corpo.items.length)} itens`,
+    );
   },
 );
 

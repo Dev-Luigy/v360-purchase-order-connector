@@ -99,6 +99,17 @@ export interface PurchaseOrderRepository {
   countStaged(clientId: ClientId, ingestionId: string): Promise<number>;
 
   /**
+   * Torna visível o que esta carga deixou esperando.
+   *
+   * Enquanto a carga lê os lotes, as linhas dela ficam invisíveis para a
+   * reconciliação de outra requisição. Sem isso, um cabeçalho concorrente
+   * consumia o prefixo de uma carga ainda em andamento — e se ela depois
+   * recusasse o pedido por passar do teto, o consumido não voltava
+   * (REVIEW-14, R14-01).
+   */
+  publishStaged(clientId: ClientId, ingestionId: string): Promise<void>;
+
+  /**
    * Fecha um pedido cujos itens estavam esperando.
    *
    * Se o pedido existe, os itens **desta carga** que esperavam por ele entram

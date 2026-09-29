@@ -56,6 +56,7 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
       item: NormalizedPurchaseOrderItem;
       raw: string;
       em: number;
+      publicada: boolean;
     }[]
   >();
   private relogio = 0;
@@ -82,13 +83,17 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
     // A reconciliação pelo cabeçalho leva **tudo** o que esperava, de
     // qualquer carga: é a promessa do ADR-008.
     const porLinhaEsperando = new Map<number, NormalizedPurchaseOrderItem>();
-    for (const linha of [...(this.waiting.get(key) ?? [])].sort(
-      (a, b) => a.em - b.em,
-    )) {
+    for (const linha of [...(this.waiting.get(key) ?? [])]
+      .filter((l) => l.publicada)
+      .sort((a, b) => a.em - b.em)) {
       porLinhaEsperando.set(linha.item.externalLine, linha.item);
     }
     const esperando = [...porLinhaEsperando.values()];
-    this.waiting.delete(key);
+    // Só o publicado sai; o de carga em andamento continua esperando.
+    this.waiting.set(
+      key,
+      (this.waiting.get(key) ?? []).filter((l) => !l.publicada),
+    );
     // O test double revalida como o repositório real: era a ausência disso
     // que deixava R09-04 passar verde nos testes (REVIEW-09).
     for (const item of esperando) normalizedItemSchema.parse(item);
@@ -172,7 +177,13 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
             atual.ingestionId !== ingestionId ||
             atual.item.externalLine !== item.item.externalLine,
         ),
-        { ingestionId, item: item.item, raw: item.raw, em: this.relogio++ },
+        {
+          ingestionId,
+          item: item.item,
+          raw: item.raw,
+          em: this.relogio++,
+          publicada: false,
+        },
       ]);
     }
     return Promise.resolve();
@@ -189,6 +200,21 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
       key,
       fila.filter((linha) => linha.ingestionId !== ingestionId),
     );
+    return Promise.resolve();
+  }
+
+  publishStaged(clientId: ClientId, ingestionId: string): Promise<void> {
+    for (const [key, fila] of this.waiting) {
+      if (!key.startsWith(`${clientId}:`)) continue;
+      this.waiting.set(
+        key,
+        fila.map((linha) =>
+          linha.ingestionId === ingestionId
+            ? { ...linha, publicada: true }
+            : linha,
+        ),
+      );
+    }
     return Promise.resolve();
   }
 
@@ -297,20 +323,44 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
       status: filters.status,
       onlyPending: filters.onlyPending,
     });
-    const after =
+    const posicao =
       page.cursor === null ? null : decodeCursor(page.cursor, fingerprint);
 
-    const todos = [...this.byKey.values()]
+    const noRecorte = [...this.byKey.values()].filter(
+      (order) =>
+        (filters.clientId === null || order.clientId === filters.clientId) &&
+        (filters.externalNumber === null ||
+          order.externalNumber === filters.externalNumber) &&
+        (filters.supplierTaxId === null ||
+          order.supplier.taxId === filters.supplierTaxId) &&
+        (filters.status === null || order.status === filters.status) &&
+        (!filters.onlyPending || order.hasPendingBalance),
+    );
+
+    // O teto do retrato é fixado na primeira página, como no real.
+    const until =
+      posicao?.until ??
+      noRecorte
+        .map((o) => o.id)
+        .sort((a, b) => a.localeCompare(b))
+        .at(-1);
+
+    if (until === undefined) {
+      return Promise.resolve({
+        data: [],
+        page: {
+          limit: page.limit,
+          cursor: page.cursor,
+          nextCursor: null,
+          hasMore: false,
+        },
+      });
+    }
+
+    const todos = noRecorte
       .filter(
         (order) =>
-          (filters.clientId === null || order.clientId === filters.clientId) &&
-          (filters.externalNumber === null ||
-            order.externalNumber === filters.externalNumber) &&
-          (filters.supplierTaxId === null ||
-            order.supplier.taxId === filters.supplierTaxId) &&
-          (filters.status === null || order.status === filters.status) &&
-          (!filters.onlyPending || order.hasPendingBalance) &&
-          (after === null || order.id > after),
+          order.id <= until && (posicao === null || order.id > posicao.after),
       )
       .sort((a, b) => a.id.localeCompare(b.id));
 
@@ -339,7 +389,7 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
         cursor: page.cursor,
         nextCursor:
           hasMore && ultimo !== undefined
-            ? encodeCursor(ultimo.id, fingerprint)
+            ? encodeCursor(ultimo.id, until, fingerprint)
             : null,
         hasMore,
       },

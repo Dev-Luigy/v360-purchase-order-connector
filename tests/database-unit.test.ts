@@ -43,15 +43,29 @@ const filtros = {
 };
 const id = '0199a3f1-0000-7000-8000-000000000001';
 
-test('o cursor devolve a posição quando os filtros são os mesmos', () => {
+const teto = '0199a3f1-0000-7000-8000-000000000099';
+
+test('o cursor devolve posição e teto quando os filtros são os mesmos', () => {
   const impressao = fingerprintOf(filtros);
-  assert.equal(decodeCursor(encodeCursor(id, impressao), impressao), id);
+  assert.deepEqual(decodeCursor(encodeCursor(id, teto, impressao), impressao), {
+    after: id,
+    until: teto,
+  });
+});
+
+test('o teto viaja no cursor, e é o que dá fim à varredura', () => {
+  // Sem teto, uma varredura sob escrita contínua persegue o que entra e não
+  // tem condição própria de término (REVIEW-14, R14-02). O teto é fixado na
+  // primeira página; o que chegar depois fica para a varredura seguinte.
+  const impressao = fingerprintOf(filtros);
+  const { until } = decodeCursor(encodeCursor(id, teto, impressao), impressao);
+  assert.equal(until, teto);
 });
 
 test('trocar de filtro no meio da varredura é recusado', () => {
   // Sem isso, a página seguinte viria de outro conjunto e o cliente não
   // perceberia: registros sumiriam ou se repetiriam (ADR-010).
-  const cursor = encodeCursor(id, fingerprintOf(filtros));
+  const cursor = encodeCursor(id, id, fingerprintOf(filtros));
   assert.throws(
     () =>
       decodeCursor(cursor, fingerprintOf({ ...filtros, onlyPending: false })),
@@ -80,7 +94,7 @@ test('cursor malformado é recusado antes de chegar ao banco', () => {
     ['não-base64!', 'alfabeto'],
     [Buffer.from('não é json').toString('base64url'), 'ilegível'],
     [Buffer.from('{"a":1,"f":"x"}').toString('base64url'), 'estrutura'],
-    [encodeCursor('não-é-uuid', impressao), 'identificador'],
+    [encodeCursor('não-é-uuid', 'não-é-uuid', impressao), 'identificador'],
   ];
   for (const [cursor, motivo] of invalidos) {
     assert.throws(() => decodeCursor(cursor, impressao), CursorError, motivo);
@@ -182,13 +196,15 @@ test('o cursor carrega versão, como ADR-010 especifica', () => {
   // caminho explícito: cursor antigo seria lido errado ou daria erro obscuro.
   const impressao = fingerprintOf(filtros);
   const conteudo = JSON.parse(
-    Buffer.from(encodeCursor(id, impressao), 'base64url').toString('utf-8'),
+    Buffer.from(encodeCursor(id, teto, impressao), 'base64url').toString(
+      'utf-8',
+    ),
   ) as Record<string, unknown>;
-  assert.deepEqual(Object.keys(conteudo).sort(), ['after', 'f', 'v']);
+  assert.deepEqual(Object.keys(conteudo).sort(), ['after', 'f', 'until', 'v']);
   assert.equal(conteudo.v, cursorVersion);
 
   const deOutraVersao = Buffer.from(
-    JSON.stringify({ v: 99, after: id, f: impressao }),
+    JSON.stringify({ v: 99, after: id, until: id, f: impressao }),
   ).toString('base64url');
   assert.throws(() => decodeCursor(deOutraVersao, impressao), /versão 99/);
 });
