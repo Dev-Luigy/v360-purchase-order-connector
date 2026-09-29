@@ -26,6 +26,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-08 | Verificar as correções de FIX-08                                 | concluída                      | Codex       | Conferência item a item de REVIEW-07; somente documentação                    |
 | REVIEW-09 | Verificar o projeto após P2-01                                   | concluída                      | Codex       | Oito achados de código/teste e deriva documental; código preservado           |
 | REVIEW-10 | Verificar FIX-10, requisitos e cobertura de cenários             | concluída                      | Codex       | Sete achados; 226 testes integrados, handoff para Claude                      |
+| REVIEW-11 | Verificar as correções de FIX-11                                 | concluída                      | Codex       | Quatro fechados, dois parciais e gerador de evidência inseguro                |
 | CLEAN-01  | Enxugar comentários do código estável                            | concluída                      | Codex       | 526 linhas removidas; arquivos ativos de P1-04 preservados                    |
 | P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03          |
 | P1-02     | Implementar schema, migrações e repositórios                     | concluída                      | Claude      | Código pronto; validação contra PostgreSQL real é ENV-03                      |
@@ -41,6 +42,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado           |
 | P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                         |
 | P1-05     | Validar desafio e registrar marco parte-1                        | concluída                      | Claude      | 18/18 exigências verificadas no ar; tag depende de DOC-02                     |
+| FIX-12    | Fechar os três achados de REVIEW-11                              | em andamento                   | Claude      | REVIEW-11; R10-01 atravessa lotes, R10-03 tem dois escapes, gerador inseguro  |
 | FIX-11    | Fechar os sete achados de REVIEW-10                              | concluída                      | Claude      | Sete fechados com regressão; validador agora é repetível                      |
 | FIX-10    | Fechar os nove achados de REVIEW-09                              | concluída                      | Claude      | Nove fechados com regressão, mais três de REVIEW-07 que seguiam abertos       |
 | P2-01     | Integrar Gama/Delta e documentar mudanças                        | concluída                      | Claude      | Os quatro clientes integrados; 27/27 exigências no ar                         |
@@ -127,6 +129,15 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: conferir os fechamentos de FIX-10, mapear cada exigência do enunciado para implementação e teste, medir cobertura e procurar cenários de limite ou integração ainda ausentes; sem modificar código de produção.
 - Dependências: FIX-10 concluída; reservas de implementação liberadas.
 - Evidência: [handoff REVIEW-10](handoffs/REVIEW-10-pos-fix-10-codex.md); `npm run check`, 24/24 integração e 226/226 com cobertura integrada; quatro comportamentos incorretos reproduzidos por sonda.
+
+## REVIEW-11 — verificação pós-FIX-11
+
+- Responsável: Codex.
+- Estado: concluída.
+- Arquivos reservados: `docs/TASKS.md` e `docs/handoffs/REVIEW-11-pos-fix-11-codex.md`.
+- Escopo: conferir no código e por execução cada fechamento R10-01 a R10-07, repetir as sondas adversariais, executar checks e registrar riscos residuais; sem modificar produção.
+- Dependências: FIX-11 concluída; reservas de implementação liberadas.
+- Evidência: [handoff REVIEW-11](handoffs/REVIEW-11-pos-fix-11-codex.md); checks e 27 testes PostgreSQL verdes, validador 27/27 repetido, mas R10-01 e R10-03 falham entre lotes e `evidence.mjs` não é fail-closed.
 
 ## CLEAN-01 — limpeza de comentários
 
@@ -226,6 +237,14 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Evidência: [handoff ARCH-05](handoffs/ARCH-05-claude.md); `npm run check` verde; nada validado contra Grafana ou Prometheus reais, que não existem nesta máquina.
 - Escopo: registrar como a aplicação se conecta a Grafana e Prometheus, o consentimento de quem executa e a convenção de nomes e labels. Nenhuma dependência instalada, nenhum endpoint criado.
 - Dependências: nenhuma para o registro. A implementação depende de P1-01 e P1-03, porque os labels saem do contrato e dos adaptadores.
+
+## FIX-12 — o que REVIEW-11 mostrou em aberto
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `src/application/ports/purchase-order-repository.ts`, `src/application/use-cases/ingest-purchase-orders.ts`, `src/domain/limits.ts`, `src/infrastructure/database/purchase-order-repository.ts`, `src/infrastructure/integrations/split-json-adapter.ts`, `scripts/evidence.mjs`, `tests/**`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-12-claude.md`.
+- Escopo: os três achados de [REVIEW-11](handoffs/REVIEW-11-pos-fix-11-codex.md), reproduzidos com sonda. **A correção de R10-03 em FIX-11 criou a lacuna de R10-01**: escoar o staging em lotes fez as linhas do mesmo pedido atravessarem lotes, e o caso de uso agrupava só dentro de um. O gerador de evidência que escrevi para parar de errar números pode publicar número de execução que falhou.
+- Dependências: FIX-11 concluída.
 
 ## FIX-11 — os sete achados de REVIEW-10
 
