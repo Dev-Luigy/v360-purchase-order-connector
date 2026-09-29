@@ -221,7 +221,8 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 
 - Responsável: Claude.
 - Estado: em andamento.
-- Arquivos reservados: `src/**` (exceto `src/infrastructure/database/generated/**`), `docs/TASKS.md`, `docs/handoffs/CLEAN-02-claude.md`.
+- Arquivos reservados: `src/**` (exceto `src/infrastructure/database/generated/**`), `scripts/validate-case.mjs`, `docs/TASKS.md`, `docs/handoffs/CLEAN-02-claude.md`.
+- Reserva estendida durante a tarefa: a revalidação encontrou seis exigências de `scripts/validate-case.mjs` que ainda procuravam o pedido na primeira página de 100. Com os 20.000 pedidos de volume que a rodada de REVIEW-17 deixou no banco, elas falham por estado, não por defeito do serviço. O validador já tem `pedidoDe`, que busca pelo filtro; falta usá-lo nesses seis lugares.
 - Escopo: aplicar aos arquivos que vieram depois de CLEAN-01 o mesmo critério que ele fixou. O handoff dele avisava para **não reintroduzir número de review nem narrativa de correção em comentário**, e foi exatamente o que eu fiz: 93 ocorrências em `src/`. A regra que fica: a referência vive no **teste e no handoff**; o código de produção enuncia a regra, não a história dela.
 - O que permanece, por ser o motivo e não o histórico: precisão decimal e arredondamento, semântica de `items: null` contra `[]`, limites antes da materialização, encerramento de streams, locks e cursor atado aos filtros, invariantes do schema e a poda de dependências no Docker.
 - Dependências: CLEAN-01 do Codex, commitado como estava.
