@@ -1,19 +1,12 @@
-// Schema do contrato normalizado de P1-01. As decisões que ele materializa:
-// ADR-006 (identidade e situação), ADR-007 (decimal e unidade), ADR-009
-// (retrato da conferência) e ADR-010 (paginação por cursor).
-
 generator client {
   provider = "prisma-client"
   output   = "../src/infrastructure/database/generated"
 }
 
-// Prisma 7 não aceita mais `url` aqui: a URL de migração vive em
-// `prisma.config.ts` e o cliente recebe um adaptador de driver.
 datasource db {
   provider = "postgresql"
 }
 
-/// Situação canônica de três valores. Vocabulário do cliente fica no perfil.
 enum PurchaseOrderStatus {
   aberto
   encerrado
@@ -29,7 +22,6 @@ enum ConferenceOutcome {
   @@map("conference_outcome")
 }
 
-/// Taxonomia fechada de ADR-009. Código novo é mudança de contrato consciente.
 enum DivergenceCode {
   FORNECEDOR_DIVERGENTE
   PEDIDO_NAO_ABERTO
@@ -43,13 +35,11 @@ enum DivergenceCode {
 }
 
 model PurchaseOrder {
-  /// UUID v7: ordenável no tempo, o que dá localidade de índice e faz o cursor
-  /// de ADR-010 avançar sem ORDER BY caro.
+  /// UUID v7 mantém o cursor ordenável no tempo.
   id       String @id @default(uuid(7)) @db.Uuid
   clientId String @map("client_id") @db.VarChar(64)
 
-  /// A identidade externa é `(clientId, externalNumber)`: o mesmo número de
-  /// pedido existe em clientes diferentes (ADR-006).
+  /// Identidade externa composta, pois números se repetem entre clientes.
   externalNumber String @map("external_number") @db.VarChar(64)
 
   supplierTaxId String              @map("supplier_tax_id") @db.Char(14)
@@ -58,24 +48,16 @@ model PurchaseOrder {
   status        PurchaseOrderStatus
   issuedOn      DateTime            @map("issued_on") @db.Date
 
-  /// Cresce a cada carga aceita. Toda conferência guarda a versão que conferiu.
   ingestionVersion Int      @default(1) @map("ingestion_version")
   ingestedAt       DateTime @map("ingested_at") @db.Timestamptz(3)
 
-  /// Verdadeiro quando algum item ainda tem saldo. Persistido e indexado
-  /// porque comparar duas colunas não usa índice B-tree (ADR-006).
+  /// Persistido porque comparar duas colunas não aproveita índice B-tree.
   hasPendingBalance Boolean @map("has_pending_balance")
 
   items       PurchaseOrderItem[]
   conferences Conference[]
 
-  // Índices derivados das consultas reais de `list`, que sempre ordena por
-  // `id` (ADR-010). `(clientId, status, id)` sozinho não serve para "cliente
-  // sem status": o status no meio impede a ordenação direta por `id`.
-  //
-  // Caminhos não indexados, de propósito: filtrar só por situação, ou só por
-  // fornecedor com saldo, sobre todos os clientes. Não são a varredura que o
-  // enunciado descreve, e cada índice custa escrita em toda ingestão.
+  // O índice sem `status` cobre a consulta por cliente sem esse filtro.
   @@unique([clientId, externalNumber])
   @@index([clientId, id])
   @@index([clientId, status, id])
@@ -88,22 +70,17 @@ model PurchaseOrderItem {
   id              String @id @default(uuid(7)) @db.Uuid
   purchaseOrderId String @map("purchase_order_id") @db.Uuid
 
-  /// Número da linha no sistema do cliente: 10 e 20 no Alfa, 1 e 2 no Beta.
   externalLine Int    @map("external_line")
   material     String @db.VarChar(128)
   description  String @db.VarChar(512)
 
-  /// Unidade de compra. O preço é sempre por ela; a nota fala em unidade de
-  /// consumo, e o fator faz a ponte (ADR-007).
+  /// O fator converte unidade de compra em unidade de consumo.
   purchaseUnit     String  @map("purchase_unit") @db.VarChar(16)
   conversionFactor Decimal @map("conversion_factor") @db.Decimal(30, 6)
 
-  /// Escala 6, precisão 30: o contrato admite até 24 dígitos inteiros.
   quantityOrdered  Decimal @map("quantity_ordered") @db.Decimal(30, 6)
   quantityReceived Decimal @map("quantity_received") @db.Decimal(30, 6)
 
-  /// `quantityOrdered - quantityReceived`, persistido em vez de calculado na
-  /// consulta, pelo mesmo motivo de `hasPendingBalance` (ADR-006).
   quantityPending Decimal @map("quantity_pending") @db.Decimal(30, 6)
 
   unitPrice     Decimal   @map("unit_price") @db.Decimal(30, 6)
@@ -120,47 +97,36 @@ model Conference {
   id              String @id @default(uuid(7)) @db.Uuid
   purchaseOrderId String @map("purchase_order_id") @db.Uuid
 
-  /// Versão do pedido no instante da conferência. Sem ela, uma reingestão
-  /// mudaria o sentido do histórico retroativamente (ADR-009).
+  /// Versão usada na conferência, para preservar o sentido do histórico.
   purchaseOrderIngestionVersion Int @map("purchase_order_ingestion_version")
 
   clientId  String            @map("client_id") @db.VarChar(64)
   checkedAt DateTime          @map("checked_at") @db.Timestamptz(3)
   outcome   ConferenceOutcome
 
-  /// Retrato da nota conferida, como ela chegou. Não é consultado por campo:
-  /// serve para explicar o histórico, então JSONB basta.
   invoice Json @db.JsonB
 
-  /// `Restrict`, não `Cascade`: o histórico de conferência é imutável por
-  /// decisão de negócio (ADR-009), e apagar um pedido não pode levar junto o
-  /// registro do que já foi conferido contra ele.
+  /// O histórico não pode ser apagado em cascata com o pedido.
   purchaseOrder PurchaseOrder          @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
   divergences   ConferenceDivergence[]
 
-  // Ordenação é por `id`; o recorte por data filtra e depois ordena. Um cursor
-  // composto `(checkedAt, id)` é a pendência já registrada em ADR-010.
   @@index([clientId, id])
   @@index([checkedAt])
   @@index([purchaseOrderId])
   @@map("conference")
 }
 
-/// Tabela própria, e não um campo JSON, porque o relatório do requisito 3 conta
-/// ocorrências por código e isso precisa de índice (ADR-009).
+/// Tabela própria para agrupar e indexar ocorrências por código.
 model ConferenceDivergence {
   id           String @id @default(uuid(7)) @db.Uuid
   conferenceId String @map("conference_id") @db.Uuid
 
-  /// Posição na lista que o domínio produziu. As regras de ADR-009 avaliam em
-  /// ordem, e essa ordem é informação: ler de volta ordenando por UUID não a
-  /// reproduz, porque v7 só garante ordem entre milissegundos diferentes.
+  /// Preserva a ordem produzida pelo domínio.
   position Int
 
   code  DivergenceCode
   field String         @db.VarChar(128)
 
-  /// Índice da linha da nota; nulo quando a divergência é do cabeçalho.
   invoiceLineIndex  Int?    @map("invoice_line_index")
   purchaseOrderLine Int?    @map("purchase_order_line")
   expected          String? @db.VarChar(512)

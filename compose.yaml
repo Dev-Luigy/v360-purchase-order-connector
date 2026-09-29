@@ -1,12 +1,8 @@
-# O nome fixo isola este stack: sem ele, o Compose deriva o projeto do nome do
-# diretório, e um worktree ou uma cópia da pasta viraria outro projeto.
+# Evita que cópias do repositório criem stacks com nomes diferentes.
 name: v360-purchase-order-connector
 
 services:
-  # Migração é etapa própria, executada antes da API subir. Sem ela,
-  # `docker compose up` entregava serviço e banco vazio: o avaliador recebia
-  # 200 em /ready e 500 em todo endpoint de negócio (REVIEW-02, achado 1).
-  # A API nunca cria nem altera schema no start.
+  # A API só inicia depois da etapa de migração.
   migrate:
     build:
       context: .
@@ -16,8 +12,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    # Não verificado contra container real: ENV-03. Se o CLI precisar de
-    # diretório gravável, é aqui que aparece.
     user: node
     restart: 'no'
 

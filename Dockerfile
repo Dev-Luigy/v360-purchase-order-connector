@@ -2,11 +2,7 @@ FROM node:24.21.0-bookworm-slim AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
-# O schema e a configuração entram antes do build porque `npm run build`
-# dispara `prisma generate`: sem o cliente gerado, o TypeScript não compila.
-# O `prisma generate` do build também avisa que não detectou OpenSSL. FIX-07
-# resolveu isso só no estágio de migração; aqui o aviso continuava
-# (REVIEW-07, R07-10).
+# O build gera o cliente Prisma e requer OpenSSL.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends openssl \
  && rm -rf /var/lib/apt/lists/*
@@ -15,15 +11,8 @@ COPY prisma ./prisma
 COPY src ./src
 RUN npm run build
 
-# Estágio de migração: mantém as dependências de desenvolvimento porque o CLI
-# do Prisma é ferramenta de implantação, não de runtime. Fica separado para a
-# imagem que serve tráfego não carregar o CLI nem poder aplicar DDL
-# (REVIEW-04, R04-05).
+# Migrações usam o CLI e ficam fora da imagem de runtime.
 FROM build AS migrate
-# O CLI do Prisma avisa que não detectou OpenSSL e que "may not work as
-# expected". Não se provou fatal neste host, mas migração de schema não é lugar
-# para "provavelmente funciona" (REVIEW-06, R06-05). O pacote entra só aqui: a
-# imagem que serve tráfego usa o driver `pg` e não tem esse requisito.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends openssl \
  && rm -rf /var/lib/apt/lists/*
@@ -32,19 +21,14 @@ CMD ["npx", "prisma", "migrate", "deploy"]
 
 FROM build AS pruned
 RUN npm prune --omit=dev
-# O CLI do Prisma entra na árvore de produção por um peer opcional de
-# `@prisma/client`, e arrasta `mysql2` — com CVE de vazamento de credencial —
-# para uma aplicação que só fala PostgreSQL. `npm prune --omit=dev` não o
-# remove, porque ele é peer de uma dependência de produção (REVIEW-05, achado 3).
+# Remove o CLI e o driver MySQL trazidos por peer opcional; runtime usa `pg`.
 RUN rm -rf \
       node_modules/prisma \
       node_modules/@prisma/engines \
       node_modules/@prisma/config \
       node_modules/mysql2 \
       node_modules/deepmerge-ts
-# Prova, dentro do próprio build, que o que sobrou basta para carregar o acesso
-# a dados. Se a remoção tirar algo necessário, o build falha aqui e não em
-# produção.
+# Falha o build caso a poda remova uma dependência necessária.
 RUN node --input-type=module \
       -e "await import('/app/dist/infrastructure/database/prisma-client.js'); console.log('dependencias de runtime ok');"
 
