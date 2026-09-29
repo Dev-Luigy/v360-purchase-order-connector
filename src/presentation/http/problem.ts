@@ -5,7 +5,10 @@ import {
 import { z } from 'zod';
 
 import { PurchaseOrderNotFoundError } from '../../application/use-cases/check-invoice.js';
-import { UnknownClientError } from '../../application/use-cases/ingest-purchase-orders.js';
+import {
+  PayloadError,
+  UnknownClientError,
+} from '../../application/use-cases/ingest-purchase-orders.js';
 import { CursorError } from '../../infrastructure/database/cursor.js';
 import { FieldError } from '../../infrastructure/integrations/field-parsers.js';
 
@@ -98,6 +101,15 @@ export function toProblem(error: unknown): MappedProblem {
     return {
       status: 400,
       body: { error: 'cursor_invalido', message: error.message },
+    };
+  }
+  // Erro do leitor de payload: o parser em fluxo lança `Error` comum, e sem
+  // esta classe JSON truncado — payload inválido corriqueiro — respondia 500
+  // com "erro interno" (REVIEW-15, R15-01).
+  if (error instanceof PayloadError) {
+    return {
+      status: 422,
+      body: { error: 'payload_incompativel', message: error.message },
     };
   }
   if (error instanceof FieldError || error instanceof SyntaxError) {

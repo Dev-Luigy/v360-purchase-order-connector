@@ -115,6 +115,18 @@ export const maxStagedRawCharacters = 8 * 1024;
 export const maxStagedOrders = 100_000;
 
 /**
+ * Idade a partir da qual uma espera **não publicada** é considerada
+ * abandonada.
+ *
+ * Linha não publicada pertence a uma carga em andamento, e é invisível por
+ * desenho. Se o processo morrer no meio, ela fica para sempre. Uma hora é
+ * folgado: a carga mais longa que medimos, 50.000 pedidos, levou pouco mais
+ * de três minutos, e o tempo limite do pool de ingestão é de cinco. Um valor
+ * menor que a carga mais longa apagaria carga ativa (REVIEW-15, R15-01).
+ */
+export const idadeDeEsperaAbandonada = 60 * 60 * 1000;
+
+/**
  * Moedas suportadas e as casas decimais de cada uma.
  *
  * Allowlist versionada, e não "três letras maiúsculas": `ZZZ` passava por ISO

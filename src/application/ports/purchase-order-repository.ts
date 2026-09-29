@@ -15,6 +15,14 @@ import type { Page, PageRequest } from './pagination.js';
  * anteriores, então uma carga só de cabeçalhos relatava itens que ela não
  * trouxe (REVIEW-10, R10-02). Quem chama precisa distinguir as três origens.
  */
+/** O que aconteceu com os itens desta carga para um pedido. */
+export interface StagedOutcome {
+  /** Entraram no pedido agora. */
+  readonly applied: number;
+  /** Ficaram esperando pelo cabeçalho, já visíveis para outras cargas. */
+  readonly waiting: number;
+}
+
 export interface SnapshotResult {
   readonly order: PurchaseOrder;
   /** Vieram nesta carga. Zero quando `items` é `null`. */
@@ -58,9 +66,9 @@ export interface PurchaseOrderRepository {
    * Guarda itens que chegaram sem o cabeçalho deles **nesta carga**.
    *
    * Sempre grava, sem decidir nada: a decisão vem depois, em
-   * `consolidateStaged`. Separar as duas é o que permite ler em fluxo sem
-   * reter a carga em memória e ainda assim ter **uma** transação por pedido —
-   * a tabela de espera é o acumulador (REVIEW-11).
+   * `finalizeStaged`. Separar as duas é o que permite ler em fluxo sem reter a
+   * carga em memória e ainda assim ter **uma** transação por pedido — a tabela
+   * de espera é o acumulador (REVIEW-11).
    *
    * Reenviar a mesma linha do mesmo pedido substitui a anterior (ADR-008).
    *
@@ -78,9 +86,7 @@ export interface PurchaseOrderRepository {
    * Descarta as linhas que esta carga deixou esperando por um pedido.
    *
    * Um pedido recusado por passar do teto precisa desfazer o que já tinha
-   * escrito em lotes anteriores: sem isso, a carga dizia "pedido inteiro
-   * recusado" e mesmo assim gravava os primeiros dez mil itens
-   * (REVIEW-13, R13-03).
+   * escrito em lotes anteriores (REVIEW-13, R13-03).
    */
   purgeStaged(
     clientId: ClientId,
@@ -99,33 +105,44 @@ export interface PurchaseOrderRepository {
   countStaged(clientId: ClientId, ingestionId: string): Promise<number>;
 
   /**
-   * Torna visível o que esta carga deixou esperando.
+   * Fecha um pedido desta carga, sob o lock dele.
    *
-   * Enquanto a carga lê os lotes, as linhas dela ficam invisíveis para a
-   * reconciliação de outra requisição. Sem isso, um cabeçalho concorrente
-   * consumia o prefixo de uma carga ainda em andamento — e se ela depois
-   * recusasse o pedido por passar do teto, o consumido não voltava
-   * (REVIEW-14, R14-01).
+   * Se o pedido existe, os itens **desta carga** entram num retrato só, com um
+   * único incremento de versão. Se não existe, eles são **publicados** ali
+   * mesmo — visíveis para a reconciliação de outra carga a partir de então.
+   *
+   * Decidir as duas coisas na mesma transação é o que fecha a janela: publicar
+   * tudo de uma vez e consolidar depois deixava outra requisição consumir uma
+   * linha que ainda pertencia ao relatório desta carga, e ela sumia da
+   * contabilidade (REVIEW-15, R15-02).
    */
-  publishStaged(clientId: ClientId, ingestionId: string): Promise<void>;
-
-  /**
-   * Fecha um pedido cujos itens estavam esperando.
-   *
-   * Se o pedido existe, os itens **desta carga** que esperavam por ele entram
-   * num retrato só, sob um lock e uma transação, com um único incremento de
-   * versão; se não existe, continuam esperando. Devolve quantos foram
-   * aplicados.
-   *
-   * Leva só o que é da própria carga: levar o que outra gravou fazia os dois
-   * relatórios mentirem. Órfão de carga anterior sai daqui pela reconciliação
-   * do cabeçalho, em `replaceSnapshot`.
-   */
-  consolidateStaged(
+  finalizeStaged(
     clientId: ClientId,
     ingestionId: string,
     externalNumber: string,
-  ): Promise<number>;
+  ): Promise<StagedOutcome>;
+
+  /**
+   * Descarta tudo o que esta carga deixou, publicado ou não.
+   *
+   * Uma leitura que falha no meio deixava as linhas já gravadas sem caminho de
+   * recuperação, porque elas nascem invisíveis: payload inválido comum virava
+   * crescimento permanente da espera (REVIEW-15, R15-01).
+   */
+  discardIngestion(clientId: ClientId, ingestionId: string): Promise<void>;
+
+  /**
+   * Remove espera não publicada que ficou de cargas abandonadas.
+   *
+   * A compensação cobre a falha que o processo enxerga; uma queda entre
+   * gravar e fechar, não. Linha não publicada é invisível por desenho, então
+   * sem isto ela ficaria para sempre — e o `catch` não alcança um processo
+   * que morreu (REVIEW-15, R15-01).
+   *
+   * `idadeMinimaMs` precisa ser maior que a carga mais longa possível, senão
+   * a limpeza atinge carga ainda ativa.
+   */
+  discardAbandonedStaging(idadeMinimaMs: number): Promise<number>;
 
   /**
    * Amostra do que **continua** esperando por conta desta carga.

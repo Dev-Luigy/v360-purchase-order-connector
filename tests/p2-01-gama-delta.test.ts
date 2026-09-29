@@ -672,14 +672,13 @@ describe('REVIEW-10: o que a segunda revisão expôs', () => {
     await uso.execute(await partes(['orders', 'items']));
     const antes = await orders.findByExternalNumber('delta', 'DL-2026-0044');
 
-    // A operação que aplica o grupo é a consolidação; é ela que precisa
-    // falhar sem deixar retrato pela metade. A atomicidade de verdade é
-    // provada contra PostgreSQL em `tests/integration/staging.test.ts`.
-    const original = orders.consolidateStaged.bind(orders);
-    orders.consolidateStaged = () =>
-      Promise.reject(new Error('falha induzida'));
+    // A operação que fecha o pedido é quem precisa falhar sem deixar retrato
+    // pela metade. A atomicidade de verdade é provada contra PostgreSQL em
+    // `tests/integration/staging.test.ts`.
+    const original = orders.finalizeStaged.bind(orders);
+    orders.finalizeStaged = () => Promise.reject(new Error('falha induzida'));
     const relatorio = await uso.execute(await partes(['items']));
-    orders.consolidateStaged = original;
+    orders.finalizeStaged = original;
 
     assert.ok(relatorio.rejectedTotal > 0, 'a falha não foi reportada');
     const depois = await orders.findByExternalNumber('delta', 'DL-2026-0044');

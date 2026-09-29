@@ -6,6 +6,7 @@ import type {
   PurchaseOrderFilters,
   PurchaseOrderRepository,
   SnapshotResult,
+  StagedOutcome,
 } from '../../src/application/ports/purchase-order-repository.js';
 import type { ClientId } from '../../src/domain/client.js';
 import {
@@ -189,23 +190,20 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
     return Promise.resolve();
   }
 
-  purgeStaged(
+  finalizeStaged(
     clientId: ClientId,
     ingestionId: string,
     externalNumber: string,
-  ): Promise<void> {
+  ): Promise<StagedOutcome> {
     const key = `${clientId}:${externalNumber}`;
     const fila = this.waiting.get(key) ?? [];
-    this.waiting.set(
-      key,
-      fila.filter((linha) => linha.ingestionId !== ingestionId),
-    );
-    return Promise.resolve();
-  }
+    const meus = fila.filter((linha) => linha.ingestionId === ingestionId);
+    if (meus.length === 0) return Promise.resolve({ applied: 0, waiting: 0 });
 
-  publishStaged(clientId: ClientId, ingestionId: string): Promise<void> {
-    for (const [key, fila] of this.waiting) {
-      if (!key.startsWith(`${clientId}:`)) continue;
+    const existing = this.byKey.get(key);
+    if (existing === undefined) {
+      // Sem cabeçalho: publica **aqui**, na mesma passagem em que a carga
+      // contabiliza como esperando (REVIEW-15, R15-02).
       this.waiting.set(
         key,
         fila.map((linha) =>
@@ -214,37 +212,13 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
             : linha,
         ),
       );
+      return Promise.resolve({ applied: 0, waiting: meus.length });
     }
-    return Promise.resolve();
-  }
-
-  countStaged(clientId: ClientId, ingestionId: string): Promise<number> {
-    let total = 0;
-    for (const [key, fila] of this.waiting) {
-      if (!key.startsWith(`${clientId}:`)) continue;
-      total += fila.filter((l) => l.ingestionId === ingestionId).length;
-    }
-    return Promise.resolve(total);
-  }
-
-  consolidateStaged(
-    clientId: ClientId,
-    ingestionId: string,
-    externalNumber: string,
-  ): Promise<number> {
-    const key = `${clientId}:${externalNumber}`;
-    const existing = this.byKey.get(key);
-    if (existing === undefined) return Promise.resolve(0);
-    const fila = this.waiting.get(key) ?? [];
-    const meus = fila.filter((linha) => linha.ingestionId === ingestionId);
-    if (meus.length === 0) return Promise.resolve(0);
 
     const porLinha = new Map(
       semPersistencia(existing).map((item) => [item.externalLine, item]),
     );
     for (const linha of meus) porLinha.set(linha.item.externalLine, linha.item);
-    // O agregado inteiro atravessa o contrato antes de gravar; se falhar, a
-    // espera desta carga continua intacta (REVIEW-13, R13-04).
     const completo = normalizedOrderSchema.parse({
       clientId: existing.clientId,
       externalNumber: existing.externalNumber,
@@ -260,7 +234,53 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
       fila.filter((linha) => linha.ingestionId !== ingestionId),
     );
     this.gravar(completo);
-    return Promise.resolve(meus.length);
+    return Promise.resolve({ applied: meus.length, waiting: 0 });
+  }
+
+  discardIngestion(clientId: ClientId, ingestionId: string): Promise<void> {
+    for (const [key, fila] of this.waiting) {
+      if (!key.startsWith(`${clientId}:`)) continue;
+      this.waiting.set(
+        key,
+        fila.filter((linha) => linha.ingestionId !== ingestionId),
+      );
+    }
+    return Promise.resolve();
+  }
+
+  discardAbandonedStaging(idadeMinimaMs: number): Promise<number> {
+    // O dobro não tem relógio real; o contrato é o que importa aqui.
+    void idadeMinimaMs;
+    let removidas = 0;
+    for (const [key, fila] of this.waiting) {
+      const publicadas = fila.filter((linha) => linha.publicada);
+      removidas += fila.length - publicadas.length;
+      this.waiting.set(key, publicadas);
+    }
+    return Promise.resolve(removidas);
+  }
+
+  purgeStaged(
+    clientId: ClientId,
+    ingestionId: string,
+    externalNumber: string,
+  ): Promise<void> {
+    const key = `${clientId}:${externalNumber}`;
+    const fila = this.waiting.get(key) ?? [];
+    this.waiting.set(
+      key,
+      fila.filter((linha) => linha.ingestionId !== ingestionId),
+    );
+    return Promise.resolve();
+  }
+
+  countStaged(clientId: ClientId, ingestionId: string): Promise<number> {
+    let total = 0;
+    for (const [key, fila] of this.waiting) {
+      if (!key.startsWith(`${clientId}:`)) continue;
+      total += fila.filter((l) => l.ingestionId === ingestionId).length;
+    }
+    return Promise.resolve(total);
   }
 
   sampleStaged(

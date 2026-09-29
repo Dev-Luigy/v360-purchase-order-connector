@@ -18,6 +18,7 @@ import { buildAdapterRegistry } from '../infrastructure/integrations/adapter-reg
 import { InMemoryClientProfiles } from '../infrastructure/integrations/client-profiles.js';
 import { buildApp } from '../presentation/http/app.js';
 import { sweepSpoolLeftovers } from '../presentation/http/spool.js';
+import { idadeDeEsperaAbandonada } from '../domain/limits.js';
 
 const env = parseEnvironment(process.env);
 
@@ -62,6 +63,21 @@ const app = await buildApp({
 const removidos = await sweepSpoolLeftovers();
 if (removidos > 0) {
   app.log.warn({ removidos }, 'restos de carga anterior removidos');
+}
+
+// Espera não publicada de carga que não terminou: o `catch` do caso de uso
+// cobre a falha que o processo enxerga, não uma queda (REVIEW-15, R15-01).
+const esperaAbandonada = await ingestionOrderRepository
+  .discardAbandonedStaging(idadeDeEsperaAbandonada)
+  .catch((error: unknown) => {
+    app.log.error(error, 'falha ao limpar espera abandonada');
+    return 0;
+  });
+if (esperaAbandonada > 0) {
+  app.log.warn(
+    { linhas: esperaAbandonada },
+    'espera de carga abandonada removida',
+  );
 }
 
 for (const { pool } of [database, ingestionDatabase]) {

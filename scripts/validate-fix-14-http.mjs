@@ -496,28 +496,88 @@ await exige(
 await exige(
   'carga só de cabeçalho relata só o que veio da espera',
   async () => {
-    // R14-03: `recovered` saía da cardinalidade final do retrato, então itens
-    // já gravados eram contados como recuperados agora.
-    const numero = numeroDe('RECUPERADOS');
-    await carregar({
-      orders: [cabecalho(numero)],
+    // R14-03: `recovered` saía da cardinalidade final do retrato, contando
+    // item já gravado como recuperado agora.
+    //
+    // A versão anterior deste cenário não exercitava isso: o pedido já
+    // existia, então o item novo era aplicado pela própria carga e não havia
+    // resíduo nenhum na espera (REVIEW-15, R15-03). Agora o resíduo é criado
+    // pelo caminho real — item sem cabeçalho fica esperando — e o cabeçalho
+    // chega depois.
+    const numero = numeroDe('RESIDUO');
+
+    // Uma carga só de itens, sem cabeçalho: as três linhas ficam esperando.
+    const espera = await carregar({
       items: [item(numero, 10), item(numero, 20), item(numero, 30)],
     });
-
-    // Um item novo espera; o pedido já tem três gravados.
-    const soItem = await carregar({ items: [item(numero, 40)] });
+    confere(espera.corpo.ordersAccepted === 0, 'inventou um pedido');
     confere(
-      soItem.corpo.itemsAccepted === 1,
-      `aceitos: ${String(soItem.corpo.itemsAccepted)}`,
+      espera.corpo.stagedTotal === 3,
+      `espera: ${String(espera.corpo.stagedTotal)}`,
+    );
+    confere((await detalhe(numero)).status === 404, 'o órfão virou pedido');
+
+    // O cabeçalho chega e recupera exatamente as três, nem mais nem menos.
+    const cabecalhoDepois = await carregar({ orders: [cabecalho(numero)] });
+    confere(
+      cabecalhoDepois.corpo.itemsAccepted === 3,
+      `recuperou ${String(cabecalhoDepois.corpo.itemsAccepted)} de 3`,
     );
 
     const pedido = await detalhe(numero);
+    confere(pedido.corpo.items.length === 3, 'o retrato não tem as três');
+
+    // E um segundo reenvio do cabeçalho, sem nada esperando, não pode
+    // relatar como recuperado o que já estava gravado.
+    const semEspera = await carregar({ orders: [cabecalho(numero)] });
     confere(
-      pedido.corpo.items.length === 4,
-      `retrato com ${String(pedido.corpo.items.length)} itens`,
+      semEspera.corpo.itemsAccepted === 0,
+      `relatou ${String(semEspera.corpo.itemsAccepted)} itens sem nada esperando`,
+    );
+    confere(
+      (await detalhe(numero)).corpo.items.length === 3,
+      'o reenvio mexeu no retrato',
     );
   },
 );
+
+await exige('payload malformado responde 422 e não deixa resíduo', async () => {
+  // R15-01: JSON truncado depois de um lote respondia 500 e deixava linhas
+  // invisíveis no banco, sem caminho de recuperação.
+  const numero = numeroDe('TRUNCADO');
+  const validos = Array.from({ length: 700 }, (_, i) =>
+    item(`${numero}-${String(i)}`, 10),
+  );
+  const texto = JSON.stringify({ items: validos });
+
+  const corpo = new FormData();
+  corpo.append(
+    'items',
+    new Blob([texto.slice(0, texto.length - 30)], {
+      type: 'application/json',
+    }),
+    'items.json',
+  );
+  const resposta = await fetch(`${base}/clients/delta/ingestions`, {
+    method: 'POST',
+    headers: { 'x-format-version': '1' },
+    body: corpo,
+  });
+
+  confere(
+    resposta.status === 422,
+    `payload malformado respondeu ${String(resposta.status)}`,
+  );
+  const relatorio = await resposta.json();
+  confere(
+    relatorio.error !== 'erro_interno',
+    'tratou payload do cliente como defeito interno',
+  );
+
+  // Nenhum dos pedidos da carga interrompida pode ter ficado para trás.
+  const sobrou = await detalhe(`${numero}-0`);
+  confere(sobrou.status === 404, 'a carga interrompida gravou pedido');
+});
 
 // ------------------------------------------------------------- veredito
 
