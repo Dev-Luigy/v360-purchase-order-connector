@@ -45,7 +45,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado           |
 | P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                         |
 | P1-05     | Validar desafio e registrar marco parte-1                        | concluída                      | Claude      | 18/18 exigências verificadas no ar; tag depende de DOC-02                     |
-| FIX-15    | Fechar R14-01, R14-02 e R14-03                                   | em andamento                   | Claude      | REVIEW-14; R14-01 é defeito que introduzi em FINAL-01                         |
+| FIX-15    | Fechar R14-01, R14-02 e R14-03                                   | concluída                      | Claude      | Ciclo de vida da espera e teto no cursor; 13/13 pelas rotas                   |
 | FINAL-01  | Fechar o enunciado inteiro e entregar a versão final             | concluída                      | Claude      | Seis lacunas fechadas; o dobro em memória não paginava de verdade             |
 | FIX-14    | Fechar REVIEW-13 e provar pela aplicação real                    | concluída                      | Claude      | Carga na identidade física; 10/10 cenários pelas rotas HTTP                   |
 | FIX-13    | Fechar os seis achados de REVIEW-12                              | concluída                      | Claude      | Identidade de carga na espera; emissão de lote centralizada                   |
@@ -275,14 +275,15 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## FIX-15 — os três achados técnicos de REVIEW-14
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/application/use-cases/ingest-purchase-orders.ts`, `src/application/ports/purchase-order-repository.ts`, `src/infrastructure/database/{purchase-order-repository,cursor}.ts`, `prisma/schema.prisma` (só a publicação da espera), `database/migrations/0007_*/**`, `src/infrastructure/database/migrations.ts`, `scripts/{validate-fix-14-http,validate-sweep-under-load}.mjs`, `tests/**`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-15-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `src/application/use-cases/ingest-purchase-orders.ts`, `src/application/ports/purchase-order-repository.ts`, `docs/decisions/ADR-010-paginacao.md`, `src/infrastructure/database/{purchase-order-repository,cursor}.ts`, `prisma/schema.prisma` (só a publicação da espera), `database/migrations/0007_*/**`, `src/infrastructure/database/migrations.ts`, `scripts/{validate-fix-14-http,validate-sweep-under-load}.mjs`, `tests/**`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-15-claude.md`.
 - Escopo: os três achados de [REVIEW-14](handoffs/REVIEW-14-pos-fix-14-final-01-codex.md), reproduzidos antes de aceitar.
   - **R14-01** é defeito que introduzi em FINAL-01: o estouro purga o que os lotes anteriores gravaram, mas os itens do mesmo pedido **já percorridos no lote atual** continuam em `aceitos` e são regravados logo depois. O meu validador não pegou porque 10.001 itens consecutivos com lote 200 põem o estouro numa fronteira; deslocar em uma posição quebra. Há também a corrida: um cabeçalho concorrente consome o prefixo antes do estouro.
   - **R14-02**: o cursor só tem limite inferior, então a varredura pode perseguir escrita contínua e não tem condição própria de término. Meu script não prova o contrário, porque o escritor dele é finito.
   - **R14-03**: `recovered` sai da cardinalidade final do retrato e conta itens antigos como recuperados.
 - Aceitação: por HTTP real, incluindo o deslocamento determinístico do lote e a corrida com cabeçalho.
 - Dependências: FINAL-01 concluída.
+- Evidência: [handoff FIX-15](handoffs/FIX-15-claude.md); migração `0007` dá ciclo de vida à espera e o cursor foi para a versão 2 com teto. 13/13 pelas rotas, incluindo o deslocamento de lote e a corrida com cabeçalho que a revisão exigiu.
 
 ## FINAL-01 — fechar o enunciado inteiro
 

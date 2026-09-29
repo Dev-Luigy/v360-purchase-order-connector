@@ -198,6 +198,13 @@ model IngestionStaging {
 
   stagedAt DateTime @map("staged_at") @db.Timestamptz(3)
 
+  /// A carga que gravou esta linha já terminou de ler?
+  ///
+  /// Enquanto `false`, a linha é invisível para a reconciliação de outra
+  /// requisição: uma carga em andamento não pode ter o prefixo dela consumido
+  /// por um cabeçalho concorrente (REVIEW-14, R14-01).
+  publicada Boolean @default(false)
+
   @@unique([clientId, ingestionId, externalNumber, externalLine], map: "ingestion_staging_owner_line_key")
   @@index([clientId, ingestionId], map: "ingestion_staging_client_ingestion_idx")
   @@index([clientId, externalNumber], map: "ingestion_staging_client_order_idx")

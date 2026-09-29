@@ -128,7 +128,17 @@ export class IngestPurchaseOrders {
           aceitos.push(item);
         }
 
-        if (aceitos.length > 0) {
+        // Um pedido pode ter estourado **no meio deste lote**, e os itens
+        // dele percorridos antes disso continuavam em `aceitos`: a purga
+        // apagava o que os lotes anteriores gravaram e logo em seguida estes
+        // eram regravados. O meu teste não pegava porque 10.001 itens
+        // consecutivos com lote 200 põem o estouro numa fronteira, e ali
+        // `aceitos` está vazio (REVIEW-14, R14-01).
+        const paraGravar = aceitos.filter(
+          (item) => !recusados.has(item.externalNumber),
+        );
+
+        if (paraGravar.length > 0) {
           // O teto de pedidos distintos é conferido **antes** de escrever
           // (REVIEW-12, R12-03).
           if (linhasPorPedido.size > maxStagedOrders) {
@@ -140,11 +150,16 @@ export class IngestPurchaseOrders {
           await this.orders.stageLooseItems(
             payload.clientId,
             ingestionId,
-            aceitos,
+            paraGravar,
           );
         }
       }
     }
+
+    // A leitura terminou: o que sobrou vira visível para a reconciliação de
+    // outras cargas. Publicar só aqui é o que impede um cabeçalho concorrente
+    // de consumir o prefixo de uma carga ainda em andamento (R14-01).
+    await this.orders.publishStaged(payload.clientId, ingestionId);
 
     // Uma transação por pedido, com todas as linhas que esperavam por ele.
     for (const externalNumber of linhasPorPedido.keys()) {

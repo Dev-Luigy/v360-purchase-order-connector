@@ -12,7 +12,14 @@
  *   - nenhum pedido aparece duas vezes, porque repetir faria a plataforma
  *     reconferir nota já conferida;
  *   - nenhum pedido que existia no início desaparece da varredura;
- *   - a varredura termina, em vez de perseguir para sempre o que entra.
+ *   - a varredura **termina por decisão própria**, e não porque a escrita
+ *     acabou.
+ *
+ * O terceiro ponto é o que a primeira versão deste script não provava: o
+ * escritor dela era finito, então qualquer varredura terminava quando o
+ * produtor acabava (REVIEW-14, R14-02). Agora o escritor só para **depois**
+ * da varredura, e há um prazo de segurança — se a varredura não terminar
+ * sozinha, o script falha em vez de rodar para sempre.
  *
  * Pedidos novos podem ou não aparecer, e as duas respostas são legítimas: a
  * varredura é de um instante. O que não pode é perder o que já estava lá.
@@ -104,17 +111,26 @@ console.log(`  ${String(antes.size)} pedidos no conjunto inicial`);
 // a varredura, não antes dela. Um lote grande demora mais que a varredura
 // inteira e a sobreposição vira zero — foi o que aconteceu na primeira versão
 // deste script, que passou sem provar nada.
-let escrevendo = true;
+// O escritor só para quando a varredura avisar. Se ela nunca terminar, o
+// prazo de segurança abaixo derruba o script — que é o resultado certo, e não
+// uma espera infinita.
+let varrendo = true;
 let novosAceitos = 0;
 let lotesEscritos = 0;
+let lotesDepoisDaVarredura = 0;
 const escritor = (async () => {
-  for (let lote = 0; escrevendo && lote < cargas; lote += 1) {
+  for (let lote = 0; lote < cargas; lote += 1) {
     const numeros = Array.from({ length: 50 }, (_, n) =>
       numeroDe(`NOVO${String(lote)}`, n),
     );
     const relatorio = await carregar(numeros);
     novosAceitos += relatorio.ordersAccepted;
-    lotesEscritos += 1;
+    if (varrendo) lotesEscritos += 1;
+    else {
+      lotesDepoisDaVarredura += 1;
+      // Mais alguns depois do fim, só para provar que ele ainda estava vivo.
+      if (lotesDepoisDaVarredura >= 2) break;
+    }
   }
 })();
 
@@ -124,7 +140,19 @@ let repetidos = 0;
 let paginas = 0;
 let cursor = null;
 const comecou = Date.now();
+// Prazo de segurança: uma varredura que persegue a escrita não termina, e o
+// script precisa dizer isso em vez de travar.
+const prazo = Number(process.env.SWEEP_TIMEOUT_MS ?? 120_000);
 for (;;) {
+  if (Date.now() - comecou > prazo) {
+    console.error(
+      `\n  FALHOU: a varredura passou de ${String(prazo / 1000)}s sem terminar. ` +
+        'Sem teto no cursor ela persegue o que entra e não tem fim próprio.',
+    );
+    varrendo = false;
+    await escritor;
+    process.exit(1);
+  }
   const url = new URL(`${base}/purchase-orders`);
   url.searchParams.set('clientId', 'delta');
   url.searchParams.set('pending', 'true');
@@ -134,7 +162,7 @@ for (;;) {
   const resposta = await fetch(url);
   if (!resposta.ok) {
     console.error(`página recusada: HTTP ${String(resposta.status)}`);
-    escrevendo = false;
+    varrendo = false;
     await escritor;
     process.exit(1);
   }
@@ -148,7 +176,8 @@ for (;;) {
   if (!cursor) break;
 }
 const varreuEm = (Date.now() - comecou) / 1000;
-escrevendo = false;
+// A varredura terminou **sozinha**, com o escritor ainda ativo.
+varrendo = false;
 await escritor;
 
 // ----------------------------------------------------------- veredito
@@ -185,11 +214,20 @@ console.log(
   `  cargas novas durante ela    ${String(novosAceitos)} pedidos em ${String(lotesEscritos)} lotes`,
 );
 console.log(
+  `  escrita continuou depois    ${String(lotesDepoisDaVarredura)} lotes`,
+);
+console.log(
   `  do conjunto inicial         ${String(varridosDoInicio.length)} de ${String(antes.size)} apareceram`,
 );
 console.log(`  sumiram do banco            ${String(perdidos.length)}`);
 
 const problemas = [];
+if (lotesDepoisDaVarredura < 1) {
+  problemas.push(
+    'a escrita acabou antes da varredura: o término pode ter sido do produtor, ' +
+      'não da varredura — aumente as cargas',
+  );
+}
 if (lotesEscritos < 2) {
   problemas.push(
     `só ${String(lotesEscritos)} lote(s) entraram durante a varredura: ` +

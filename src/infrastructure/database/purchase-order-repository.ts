@@ -76,8 +76,10 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
         // `items: null` não traz item nenhum, por mais que o pedido salvo
         // tenha itens preservados de antes (REVIEW-10, R10-02).
         fromLoad: snapshot.items?.length ?? 0,
-        recovered:
-          (completo.items?.length ?? 0) - (snapshot.items?.length ?? 0),
+        // Os itens de fato consumidos da espera, depois da deduplicação por
+        // linha. Sair da cardinalidade final contava como recuperado o que já
+        // estava gravado antes (REVIEW-14, R14-03).
+        recovered: esperando.length,
       };
     });
   }
@@ -176,6 +178,13 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
     });
   }
 
+  async publishStaged(clientId: ClientId, ingestionId: string): Promise<void> {
+    await this.prisma.ingestionStaging.updateMany({
+      where: { clientId, ingestionId },
+      data: { publicada: true },
+    });
+  }
+
   countStaged(clientId: ClientId, ingestionId: string): Promise<number> {
     return this.prisma.ingestionStaging.count({
       where: { clientId, ingestionId },
@@ -230,21 +239,52 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
       status: filters.status,
       onlyPending: filters.onlyPending,
     });
-    const after =
+    const posicao =
       page.cursor === null ? null : decodeCursor(page.cursor, fingerprint);
+
+    const recorte = {
+      ...(filters.clientId === null ? {} : { clientId: filters.clientId }),
+      ...(filters.externalNumber === null
+        ? {}
+        : { externalNumber: filters.externalNumber }),
+      ...(filters.supplierTaxId === null
+        ? {}
+        : { supplierTaxId: filters.supplierTaxId }),
+      ...(filters.status === null ? {} : { status: filters.status }),
+      ...(filters.onlyPending ? { hasPendingBalance: true } : {}),
+    };
+
+    // O teto é fixado na **primeira** página e viaja no cursor. Sem ele, uma
+    // varredura sob escrita contínua persegue o que entra e não tem condição
+    // própria de término — e é esse o cenário do requisito 1, varrer de
+    // madrugada enquanto novas cargas chegam (REVIEW-14, R14-02).
+    const until =
+      posicao?.until ??
+      (
+        await this.prisma.purchaseOrder.findFirst({
+          where: recorte,
+          orderBy: { id: 'desc' },
+          select: { id: true },
+        })
+      )?.id;
+
+    if (until === undefined) {
+      return {
+        data: [],
+        page: {
+          limit: page.limit,
+          cursor: page.cursor,
+          nextCursor: null,
+          hasMore: false,
+        },
+      };
+    }
 
     const rows = await this.prisma.purchaseOrder.findMany({
       where: {
-        ...(filters.clientId === null ? {} : { clientId: filters.clientId }),
-        ...(filters.externalNumber === null
-          ? {}
-          : { externalNumber: filters.externalNumber }),
-        ...(filters.supplierTaxId === null
-          ? {}
-          : { supplierTaxId: filters.supplierTaxId }),
-        ...(filters.status === null ? {} : { status: filters.status }),
-        ...(filters.onlyPending ? { hasPendingBalance: true } : {}),
-        ...(after === null ? {} : { id: { gt: after } }),
+        ...recorte,
+        id:
+          posicao === null ? { lte: until } : { gt: posicao.after, lte: until },
       },
       orderBy: { id: 'asc' },
       take: page.limit + 1,
@@ -262,7 +302,7 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
         cursor: page.cursor,
         nextCursor:
           hasMore && last !== undefined
-            ? encodeCursor(last.id, fingerprint)
+            ? encodeCursor(last.id, until, fingerprint)
             : null,
         hasMore,
       },
@@ -390,7 +430,10 @@ async function takeWaitingItems(
     where: {
       clientId,
       externalNumber,
-      ...(ingestionId === undefined ? {} : { ingestionId }),
+      // Sem `ingestionId` é a reconciliação pelo cabeçalho, e ela só enxerga
+      // o que já foi publicado: carga em andamento não pode ter o prefixo
+      // consumido por outra requisição (REVIEW-14, R14-01).
+      ...(ingestionId === undefined ? { publicada: true } : { ingestionId }),
     },
     // A mais recente por último: com a carga na identidade, duas podem ter a
     // mesma linha esperando, e "prevalece a última aceita" decide (ADR-008).

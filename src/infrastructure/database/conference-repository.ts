@@ -84,13 +84,40 @@ export class PrismaConferenceRepository implements ConferenceRepository {
       from: filters.from,
       to: filters.to,
     });
-    const after =
+    const posicao =
       page.cursor === null ? null : decodeCursor(page.cursor, fingerprint);
+
+    const recorte = whereOf(filters);
+    // O teto do retrato é fixado na primeira página e viaja no cursor: o
+    // histórico cresce enquanto a plataforma o lê, e sem teto a leitura não
+    // tem condição própria de término (REVIEW-14, R14-02).
+    const until =
+      posicao?.until ??
+      (
+        await this.prisma.conference.findFirst({
+          where: recorte,
+          orderBy: { id: 'desc' },
+          select: { id: true },
+        })
+      )?.id;
+
+    if (until === undefined) {
+      return {
+        data: [],
+        page: {
+          limit: page.limit,
+          cursor: page.cursor,
+          nextCursor: null,
+          hasMore: false,
+        },
+      };
+    }
 
     const rows = await this.prisma.conference.findMany({
       where: {
-        ...whereOf(filters),
-        ...(after === null ? {} : { id: { gt: after } }),
+        ...recorte,
+        id:
+          posicao === null ? { lte: until } : { gt: posicao.after, lte: until },
       },
       orderBy: { id: 'asc' },
       take: page.limit + 1,
@@ -108,7 +135,7 @@ export class PrismaConferenceRepository implements ConferenceRepository {
         cursor: page.cursor,
         nextCursor:
           hasMore && last !== undefined
-            ? encodeCursor(last.id, fingerprint)
+            ? encodeCursor(last.id, until, fingerprint)
             : null,
         hasMore,
       },
