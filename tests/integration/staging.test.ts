@@ -83,11 +83,14 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     ingestionId: string = randomUUID(),
   ): Promise<number> => {
     await orders.stageLooseItems(clientId, ingestionId, items);
-    // O caso de uso publica ao terminar de ler; sem isso a linha fica
-    // invisível para a reconciliação de outra carga, de propósito
-    // (REVIEW-14, R14-01).
-    await orders.publishStaged(clientId, ingestionId);
-    return orders.consolidateStaged(clientId, ingestionId, externalNumber);
+    // Fechar o pedido é o que decide entre aplicar e publicar, sob o lock
+    // dele — é o que o caso de uso faz ao fim da leitura.
+    const destino = await orders.finalizeStaged(
+      clientId,
+      ingestionId,
+      externalNumber,
+    );
+    return destino.applied;
   };
 
   /** Guarda e publica, sem consolidar: o estado ao fim de uma carga. */
@@ -97,7 +100,9 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     ingestionId: string = randomUUID(),
   ): Promise<string> => {
     await orders.stageLooseItems(clientId, ingestionId, items);
-    await orders.publishStaged(clientId, ingestionId);
+    for (const numero of new Set(items.map((i) => i.externalNumber))) {
+      await orders.finalizeStaged(clientId, ingestionId, numero);
+    }
     return ingestionId;
   };
 
@@ -173,7 +178,7 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     await orders.stageLooseItems('delta', carga, [
       orfao('DL-4', { quantityOrdered: '777.000000' }),
     ]);
-    await orders.publishStaged('delta', carga);
+    await orders.finalizeStaged('delta', carga, 'DL-4');
     assert.equal(await emEspera('DL-4'), 1, 'duplicou em vez de substituir');
 
     const salvo = await gravar(
@@ -322,27 +327,22 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     );
     const cargaA = randomUUID();
     const cargaB = randomUUID();
-    await esperando(
-      'delta',
-      [orfao('DL-11', { externalLine: 21, material: 'DE-A' })],
-      cargaA,
-    );
-    await esperando(
-      'delta',
-      [orfao('DL-11', { externalLine: 22, material: 'DE-B' })],
-      cargaB,
-    );
+    // As duas **gravam** antes de qualquer uma fechar: é o entrelaçamento que
+    // o achado descreve. Fechar já no `esperando` aplicaria a primeira antes
+    // de a segunda existir, e o teste não provaria nada.
+    await orders.stageLooseItems('delta', cargaA, [
+      orfao('DL-11', { externalLine: 21, material: 'DE-A' }),
+    ]);
+    await orders.stageLooseItems('delta', cargaB, [
+      orfao('DL-11', { externalLine: 22, material: 'DE-B' }),
+    ]);
 
-    const aplicadosPorA = await orders.consolidateStaged(
-      'delta',
-      cargaA,
-      'DL-11',
-    );
-    const aplicadosPorB = await orders.consolidateStaged(
-      'delta',
-      cargaB,
-      'DL-11',
-    );
+    const aplicadosPorA = (
+      await orders.finalizeStaged('delta', cargaA, 'DL-11')
+    ).applied;
+    const aplicadosPorB = (
+      await orders.finalizeStaged('delta', cargaB, 'DL-11')
+    ).applied;
     assert.equal(aplicadosPorA, 1, 'A tomou crédito pelo item de B');
     assert.equal(aplicadosPorB, 1, 'B não encontrou o próprio item');
 
@@ -387,10 +387,10 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     const grupo = Array.from({ length: maxItemsPerOrder }, (_, i) =>
       orfao('DL-13', { externalLine: i + 100, material: `X-${String(i)}` }),
     );
-    await esperando('delta', grupo, carga);
+    await orders.stageLooseItems('delta', carga, grupo);
 
     await assert.rejects(
-      () => orders.consolidateStaged('delta', carga, 'DL-13'),
+      () => orders.finalizeStaged('delta', carga, 'DL-13'),
       /itens|teto|máximo|too/i,
     );
     const salvo = await orders.findByExternalNumber('delta', 'DL-13');

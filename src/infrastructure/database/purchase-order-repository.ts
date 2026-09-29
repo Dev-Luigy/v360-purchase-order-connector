@@ -4,6 +4,7 @@ import type {
   PurchaseOrderFilters,
   PurchaseOrderRepository,
   SnapshotResult,
+  StagedOutcome,
 } from '../../application/ports/purchase-order-repository.js';
 import type { ClientId } from '../../domain/client.js';
 import { Decimal } from '../../domain/decimal.js';
@@ -106,18 +107,11 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
     });
   }
 
-  /**
-   * Fecha um pedido cujos itens estavam esperando.
-   *
-   * Lock, leitura, decisão e escrita na mesma transação: ler o pedido fora do
-   * lock deixava duas cargas simultâneas lerem o mesmo retrato, e a segunda
-   * gravação perdia a primeira (REVIEW-09, R09-06).
-   */
-  consolidateStaged(
+  finalizeStaged(
     clientId: ClientId,
     ingestionId: string,
     externalNumber: string,
-  ): Promise<number> {
+  ): Promise<StagedOutcome> {
     const chave = lockKeyFor({ clientId, externalNumber });
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${chave}))`;
@@ -126,8 +120,19 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
         where: { clientId_externalNumber: { clientId, externalNumber } },
         select: { id: true },
       });
-      // Sem cabeçalho ainda: os itens seguem esperando, intactos.
-      if (encontrado === null) return 0;
+
+      if (encontrado === null) {
+        // Sem cabeçalho: as linhas desta carga viram visíveis **aqui**, na
+        // mesma transação em que a carga as contabiliza como esperando.
+        // Publicar tudo antes e consolidar depois deixava outra requisição
+        // consumir uma linha que ainda pertencia a este relatório
+        // (REVIEW-15, R15-02).
+        const { count } = await tx.ingestionStaging.updateMany({
+          where: { clientId, ingestionId, externalNumber },
+          data: { publicada: true },
+        });
+        return { applied: 0, waiting: count };
+      }
 
       const esperando = await takeWaitingItems(
         tx,
@@ -135,7 +140,7 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
         externalNumber,
         ingestionId,
       );
-      if (esperando.length === 0) return 0;
+      if (esperando.length === 0) return { applied: 0, waiting: 0 };
 
       const existente = await findFull(tx, encontrado.id);
       if (existente === null) {
@@ -143,15 +148,14 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
           `pedido ${encontrado.id} desapareceu dentro da própria transação`,
         );
       }
-      // Um retrato só, com todas as linhas que esperavam.
       const porLinha = new Map(
         semPersistencia(existente).map((item) => [item.externalLine, item]),
       );
       for (const item of esperando) porLinha.set(item.externalLine, item);
 
       // O agregado atravessa a fronteira de persistência aqui, e não só cada
-      // item: validar linha a linha não confere a cardinalidade do pedido, e
-      // o caminho item-only do Delta passava do teto (REVIEW-12, R12-01).
+      // item: validar linha a linha não confere a cardinalidade do pedido
+      // (REVIEW-12, R12-01).
       await persistSnapshot(
         tx,
         conferirAgregado({
@@ -164,8 +168,27 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
           items: [...porLinha.values()],
         }),
       );
-      return esperando.length;
+      return { applied: esperando.length, waiting: 0 };
     });
+  }
+
+  async discardIngestion(
+    clientId: ClientId,
+    ingestionId: string,
+  ): Promise<void> {
+    await this.prisma.ingestionStaging.deleteMany({
+      where: { clientId, ingestionId },
+    });
+  }
+
+  async discardAbandonedStaging(idadeMinimaMs: number): Promise<number> {
+    const { count } = await this.prisma.ingestionStaging.deleteMany({
+      where: {
+        publicada: false,
+        stagedAt: { lt: new Date(Date.now() - idadeMinimaMs) },
+      },
+    });
+    return count;
   }
 
   async purgeStaged(
@@ -175,13 +198,6 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
   ): Promise<void> {
     await this.prisma.ingestionStaging.deleteMany({
       where: { clientId, ingestionId, externalNumber },
-    });
-  }
-
-  async publishStaged(clientId: ClientId, ingestionId: string): Promise<void> {
-    await this.prisma.ingestionStaging.updateMany({
-      where: { clientId, ingestionId },
-      data: { publicada: true },
     });
   }
 

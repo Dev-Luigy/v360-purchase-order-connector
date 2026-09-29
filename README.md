@@ -148,7 +148,7 @@ As demais escolhas: [TypeScript e Node](docs/decisions/ADR-002-typescript-nodejs
 | persistência após queda     | `scripts/verify-persistence.mjs` — reinicia o banco e reconta             |
 | volume, nos quatro formatos | `npm run validate:volume -- 20000 3 <cliente>`                            |
 | varredura sob carga         | `npm run validate:sweep` — o cenário que o requisito 1 descreve           |
-| a aplicação, pelas rotas    | `npm run validate:http` — 10 cenários por `fetch`, sem `app.inject`       |
+| a aplicação, pelas rotas    | `npm run validate:http` — 14 cenários por `fetch`, sem `app.inject`       |
 
 Contagens de teste e cobertura ficam em [docs/STATUS.md](docs/STATUS.md), **geradas por `npm run evidence`** e não digitadas: escritas à mão elas derivaram três vezes, mesmo depois de eu concentrá-las num documento só. O 30/30 acima é exceção porque está atado à lista fixa de exigências do enunciado, não ao código.
 
@@ -176,9 +176,9 @@ Os objetos e as portas estão desenhados em [docs/diagrams/](docs/diagrams/READM
 
 Registradas porque são reais, não porque não têm solução:
 
+- **Espera não publicada depende de varredura no start.** Uma queda entre gravar e fechar deixa linhas invisíveis; o serviço as remove ao subir, depois de uma hora de idade. Com várias réplicas, isso é folgado mas não é coordenação.
 - **A carga é síncrona.** 50.000 pedidos são uma requisição HTTP de 3,2 minutos. Funciona no Compose; um balanceador com tempo limite padrão a derruba, e não há retomada — o cliente reenvia tudo. Ingestão assíncrona com protocolo de acompanhamento é o desenho certo e é mudança de contrato.
 - **O teto de requisições é por origem, não por identidade.** Sem autenticação — que o enunciado explicitamente não pede — clientes atrás do mesmo IP dividem a quota. Configurável por `RATE_LIMIT_MAX`.
-- **Windows-1252 com CRLF** tem teste unitário no leitor de CSV, não fixture ponta a ponta com arquivo de ERP real.
 - **Migração e runtime usam a mesma credencial.** Separar DDL de DML fica para quando houver ambiente implantado.
 - **Não há CI**, e a política de exceção da auditoria npm não está definida.
 - `GET /metrics` está desenhado em [ADR-005](docs/decisions/ADR-005-observabilidade.md) e não implementado.

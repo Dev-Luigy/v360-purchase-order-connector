@@ -46,7 +46,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado           |
 | P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                         |
 | P1-05     | Validar desafio e registrar marco parte-1                        | concluída                      | Claude      | 18/18 exigências verificadas no ar; tag depende de DOC-02                     |
-| FIX-16    | Fechar R15-01, R15-02 e R15-03                                   | em andamento                   | Claude      | REVIEW-15; o ciclo de publicação deixa resíduo e permite apropriação cruzada  |
+| FIX-16    | Fechar R15-01, R15-02 e R15-03                                   | concluída                      | Claude      | Fechamento por pedido sob o lock; compensação e varredura de abandono         |
 | FIX-15    | Fechar R14-01, R14-02 e R14-03                                   | concluída                      | Claude      | Ciclo de vida da espera e teto no cursor; 13/13 pelas rotas                   |
 | FINAL-01  | Fechar o enunciado inteiro e entregar a versão final             | concluída                      | Claude      | Seis lacunas fechadas; o dobro em memória não paginava de verdade             |
 | FIX-14    | Fechar REVIEW-13 e provar pela aplicação real                    | concluída                      | Claude      | Carga na identidade física; 10/10 cenários pelas rotas HTTP                   |
@@ -286,14 +286,15 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## FIX-16 — o ciclo de vida da ingestão, de verdade
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/application/use-cases/ingest-purchase-orders.ts`, `src/application/ports/purchase-order-repository.ts`, `src/infrastructure/database/purchase-order-repository.ts`, `src/presentation/http/problem.ts`, `src/main/server.ts`, `src/domain/limits.ts`, `scripts/validate-fix-14-http.mjs`, `tests/**`, `README.md`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-16-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `src/application/use-cases/ingest-purchase-orders.ts`, `src/application/ports/purchase-order-repository.ts`, `src/infrastructure/database/purchase-order-repository.ts`, `src/presentation/http/problem.ts`, `src/main/server.ts`, `src/domain/limits.ts`, `scripts/validate-fix-14-http.mjs`, `tests/**`, `README.md`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-16-claude.md`.
 - Escopo: os achados de [REVIEW-15](handoffs/REVIEW-15-validacao-integral-pos-fix-15-codex.md), reproduzidos antes de aceitar.
   - **R15-01**: JSON truncado depois de um lote responde **500** e deixa linhas não publicadas no banco para sempre. Reproduzido: HTTP 500 e 600 linhas órfãs.
   - **R15-02**: a carga publica **tudo** e só então consolida pedido a pedido; nesse intervalo outro cabeçalho consome linha que ainda pertence ao relatório da carga dona, e ela some da contabilidade.
   - **R15-03**: o 13º cenário do aceite HTTP não exercita o que o nome diz — é falso positivo.
 - Os dois primeiros são o mesmo problema: o ciclo de vida da ingestão não existe de fato. Corrigir só a limpeza não fecha a apropriação.
 - Dependências: FIX-15 concluída.
+- Evidência: [handoff FIX-16](handoffs/FIX-16-claude.md); `finalizeStaged` fecha cada pedido sob o lock dele, publicando e contabilizando na mesma transação. Payload malformado passou de 500 com resíduo para 422 sem resíduo. 14/14 pelas rotas.
 
 ## FIX-15 — os três achados técnicos de REVIEW-14
 
