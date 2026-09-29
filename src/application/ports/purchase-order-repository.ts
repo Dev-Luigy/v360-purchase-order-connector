@@ -140,6 +140,19 @@ export interface PurchaseOrderRepository {
   discardIngestion(clientId: ClientId, ingestionId: string): Promise<void>;
 
   /**
+   * Descarta o que esta carga deixou **sem publicar**.
+   *
+   * Uma carga que termina não pode deixar linha invisível: ninguém a
+   * reconcilia, e o relatório não a menciona porque ela não está esperando
+   * cabeçalho nenhum. Fechar um pedido pode falhar — por exceder o agregado,
+   * por erro do banco — e sem isto a linha ficava no banco até a varredura de
+   * uma hora, com o relatório dizendo `stagedTotal=0` (REVIEW-17, R17-01).
+   *
+   * Devolve quantas descartou, para o relatório poder dizer a verdade.
+   */
+  discardUnpublished(clientId: ClientId, ingestionId: string): Promise<number>;
+
+  /**
    * Remove espera não publicada que ficou de cargas abandonadas.
    *
    * A compensação cobre a falha que o processo enxerga; uma queda entre

@@ -200,6 +200,16 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
     });
   }
 
+  async discardUnpublished(
+    clientId: ClientId,
+    ingestionId: string,
+  ): Promise<number> {
+    const { count } = await this.prisma.ingestionStaging.deleteMany({
+      where: { clientId, ingestionId, publicada: false },
+    });
+    return count;
+  }
+
   async discardAbandonedStaging(idadeMinimaMs: number): Promise<number> {
     const { count } = await this.prisma.ingestionStaging.deleteMany({
       where: {

@@ -198,11 +198,36 @@ export class IngestPurchaseOrders {
         staged.count(destino.waiting);
         for (const registro of destino.sample) staged.keep(registro);
       } catch (cause) {
+        // Fechar falhou: a linha ficaria invisível no banco, sem ninguém para
+        // reconciliá-la e sem aparecer no relatório. É descartada aqui, e a
+        // recusa explica o evento **uma vez** (REVIEW-17, R17-01).
+        await this.orders
+          .purgeStaged(payload.clientId, ingestionId, externalNumber)
+          .catch(() => undefined);
         rejected.add({
           reference: `itens do pedido ${externalNumber}`,
-          reason: cause instanceof Error ? cause.message : String(cause),
+          reason:
+            `${cause instanceof Error ? cause.message : String(cause)}; ` +
+            'os itens desta carga foram descartados, reenvie',
         });
       }
+    }
+
+    // Invariante: carga terminada não deixa linha não publicada. Fechar um
+    // pedido pode falhar, e a linha ficava invisível no banco com o relatório
+    // dizendo que nada esperava — mentira dos dois lados (REVIEW-17, R17-01).
+    const invisiveis = await this.orders.discardUnpublished(
+      payload.clientId,
+      ingestionId,
+    );
+    // Rede de segurança: normalmente é zero, porque o `catch` acima já
+    // descartou. Se sobrar algo, é sinal de caminho não previsto, e o
+    // relatório precisa dizer em vez de deixar a linha invisível no banco.
+    if (invisiveis > 0) {
+      rejected.add({
+        reference: `${String(invisiveis)} item(ns) sem pedido fechado`,
+        reason: 'itens descartados por não terem sido fechados; reenvie',
+      });
     }
 
     return {

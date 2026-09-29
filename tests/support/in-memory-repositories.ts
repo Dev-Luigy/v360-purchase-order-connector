@@ -260,6 +260,19 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
     return Promise.resolve();
   }
 
+  discardUnpublished(clientId: ClientId, ingestionId: string): Promise<number> {
+    let removidas = 0;
+    for (const [key, fila] of this.waiting) {
+      if (!key.startsWith(`${clientId}:`)) continue;
+      const restam = fila.filter(
+        (linha) => linha.publicada || linha.ingestionId !== ingestionId,
+      );
+      removidas += fila.length - restam.length;
+      this.waiting.set(key, restam);
+    }
+    return Promise.resolve(removidas);
+  }
+
   discardAbandonedStaging(idadeMinimaMs: number): Promise<number> {
     // O dobro não tem relógio real; o contrato é o que importa aqui.
     void idadeMinimaMs;
