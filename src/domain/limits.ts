@@ -1,15 +1,10 @@
 /**
  * Limites do contrato, em um lugar só.
  *
- * O schema Zod validava conteúdo e o schema Prisma declarava `VARCHAR(n)`, sem
- * nenhuma relação entre os dois. O resultado é que um registro passava por
- * válido e morria na gravação: `material` com 129 caracteres era aceito pelo
- * contrato e recusado pela coluna. Quando P1-04 traduzir isso para HTTP, viraria
- * 500 em vez de rejeição determinística (REVIEW-06, R06-01).
- *
- * Estas constantes são a fonte única: o Zod as aplica e o
- * `prisma/schema.prisma` declara exatamente os mesmos números, com um teste
- * comparando os dois lados para não divergirem em silêncio.
+ * Fonte única: o Zod os aplica e o `prisma/schema.prisma` declara exatamente os
+ * mesmos números, com um teste comparando os dois lados. Se divergirem, o
+ * registro passa pelo contrato e morre na gravação — o que a borda HTTP traduz
+ * em 500, no lugar de uma rejeição determinística na carga.
  */
 
 /** `VARCHAR(64)` em `purchase_order.client_id`. */
@@ -60,10 +55,9 @@ export const maxDecimalPlaces = 12;
  * Casas decimais que um campo **persistido** pode ter: a escala de
  * `NUMERIC(30, 6)`, que ADR-007 fixou.
  *
- * Separar as duas escalas é o que impede o arredondamento silencioso: o
- * contrato aceitava doze casas, a coluna guardava seis, e `toText(6)` no
- * adaptador fazia `0.0000001` virar `0.000000` — o valor sumia sem ninguém
- * ser avisado (REVIEW-07, R07-01).
+ * Separar as duas escalas é o que impede o arredondamento silencioso. Aceitar
+ * no contrato mais casas do que a coluna guarda faz o excedente desaparecer na
+ * gravação, sem erro: `0.0000001` viraria `0.000000`.
  */
 export const maxPersistedDecimalPlaces = 6;
 
@@ -71,18 +65,18 @@ export const maxPersistedDecimalPlaces = 6;
  * Itens em um pedido e linhas em uma nota.
  *
  * Números escolhidos, não medidos: são teto de sanidade para impedir que um
- * único registro consuma memória sem limite (REVIEW-04, R04-02), e precisam
- * ser confirmados com dado real antes de virarem compromisso. Pedido de ERP
- * com mais de dez mil linhas existe, mas é exceção que merece decisão própria,
- * não caminho silencioso.
+ * único registro consuma memória sem limite, e precisam ser confirmados com
+ * dado real antes de virarem compromisso. Pedido de ERP com mais de dez mil
+ * linhas existe, mas é exceção que merece decisão própria, não caminho
+ * silencioso.
  */
 export const maxItemsPerOrder = 10_000;
 
 /**
  * Tamanho máximo de um registro de CSV, em bytes. Sem isso, o `csv-parse`
- * acumula um campo ou uma linha sem limite até encher o buffer (REVIEW-07,
- * R07-02). O valor cobre com folga a maior linha plausível: todas as colunas
- * no comprimento máximo, mais delimitadores.
+ * acumula um campo ou uma linha sem limite até encher o buffer. O valor cobre
+ * com folga a maior linha plausível: todas as colunas no comprimento máximo,
+ * mais delimitadores.
  */
 export const maxCsvRecordSize = 64 * 1024;
 export const maxInvoiceLines = 1_000;
@@ -90,9 +84,9 @@ export const maxInvoiceLines = 1_000;
 /**
  * Quantos registros rejeitados ou em staging a resposta de uma carga devolve.
  *
- * O total vai separado, então nada é escondido — só não cabe tudo numa
- * resposta HTTP. Quem precisar da lista inteira consulta o registro da carga,
- * que é trabalho de outra tarefa (REVIEW-04, R04-02).
+ * O total vai separado, então nada é escondido — só não cabe tudo numa resposta
+ * HTTP. Quem precisar da lista inteira consulta o registro da carga, que é
+ * trabalho de outra tarefa.
  */
 export const maxReportedRecords = 100;
 
@@ -100,8 +94,7 @@ export const maxReportedRecords = 100;
  * Teto do conteúdo cru guardado por item em espera.
  *
  * O cru existe para auditoria, não para reprocessar o payload inteiro: sem
- * teto, um registro gigante entra no banco e volta no relatório da carga
- * (REVIEW-09, R09-05).
+ * teto, um registro gigante entra no banco e volta no relatório da carga.
  */
 export const maxStagedRawCharacters = 8 * 1024;
 
@@ -109,30 +102,29 @@ export const maxStagedRawCharacters = 8 * 1024;
  * Teto de pedidos distintos em espera numa carga.
  *
  * A consolidação guarda um número de pedido por entrada, não os itens — eles
- * ficam no banco. Ainda assim é memória que cresce com a carga, e o mesmo
- * teto dos índices de cabeçalho dos adaptadores se aplica.
+ * ficam no banco. Ainda assim é memória que cresce com a carga, e o mesmo teto
+ * dos índices de cabeçalho dos adaptadores se aplica.
  */
 export const maxStagedOrders = 100_000;
 
 /**
- * Idade a partir da qual uma espera **não publicada** é considerada
- * abandonada.
+ * Idade a partir da qual uma espera **não publicada** é considerada abandonada.
  *
  * Linha não publicada pertence a uma carga em andamento, e é invisível por
  * desenho. Se o processo morrer no meio, ela fica para sempre. Uma hora é
- * folgado: a carga mais longa que medimos, 50.000 pedidos, levou pouco mais
- * de três minutos, e o tempo limite do pool de ingestão é de cinco. Um valor
- * menor que a carga mais longa apagaria carga ativa (REVIEW-15, R15-01).
+ * folgado: a carga mais longa que medimos, 50.000 pedidos, levou pouco mais de
+ * três minutos, e o tempo limite do pool de ingestão é de cinco. Um valor menor
+ * que a carga mais longa apagaria carga ativa.
  */
 export const idadeDeEsperaAbandonada = 60 * 60 * 1000;
 
 /**
  * Moedas suportadas e as casas decimais de cada uma.
  *
- * Allowlist versionada, e não "três letras maiúsculas": `ZZZ` passava por ISO
- * 4217 e caía numa escala padrão de duas casas, o que muda o resultado da
- * conferência sem ninguém decidir isso (REVIEW-07, R07-08). Moeda nova entra
- * aqui, conscientemente, com a escala certa.
+ * Allowlist versionada, e não "três letras maiúsculas": `ZZZ` passa por ISO
+ * 4217 e cai numa escala padrão de duas casas, o que muda o resultado da
+ * conferência sem ninguém decidir isso. Moeda nova entra aqui, conscientemente,
+ * com a escala certa.
  */
 export const supportedCurrencies: Readonly<Record<string, number>> = {
   BRL: 2,
@@ -156,8 +148,8 @@ export const supportedCurrencies: Readonly<Record<string, number>> = {
 };
 
 /**
- * Comprimento máximo de um cursor de paginação. Um cursor legítimo tem cerca
- * de oitenta caracteres; o teto existe para a borda HTTP recusar antes de
+ * Comprimento máximo de um cursor de paginação. Um cursor legítimo tem cerca de
+ * oitenta caracteres; o teto existe para a borda HTTP recusar antes de
  * decodificar (ADR-010).
  */
 export const maxCursorLength = 256;

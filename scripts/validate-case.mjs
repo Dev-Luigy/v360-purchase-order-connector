@@ -295,13 +295,11 @@ await exige(
   'Req 1',
   'detalhe traz o que já foi recebido e o que falta em cada item',
   async () => {
-    // Pelo número do pedido, não por posição: `data[0]` é outro pedido assim
-    // que o banco tem mais de um do mesmo cliente.
-    const { corpo: lista } = await pegar(
-      '/purchase-orders?clientId=alfa&limit=100',
-    );
-    const daAmostra = lista.data.find((p) => p.externalNumber === '4500001234');
-    confere(daAmostra !== undefined, 'o pedido da amostra sumiu da consulta');
+    // Pelo filtro do número, não por posição numa página: `data[0]` é outro
+    // pedido assim que o banco tem mais de um do mesmo cliente, e a primeira
+    // página não alcança o pedido da amostra quando há volume no banco.
+    const daAmostra = await pedidoDe('alfa', '4500001234');
+    confere(daAmostra !== null, 'o pedido da amostra sumiu da consulta');
     const { status, corpo } = await pegar(`/purchase-orders/${daAmostra.id}`);
     confere(status === 200, `detalhe respondeu ${status}`);
     const item = corpo.items.find((i) => i.material === 'MAT-1001');
@@ -440,8 +438,10 @@ await exige(
     // fazia a contagem global mentir sobre duplicação (REVIEW-10, R10-05).
     const numero = '4500001234';
     const daAmostra = async () => {
-      const { corpo } = await pegar('/purchase-orders?clientId=alfa&limit=100');
-      const achados = corpo.data.filter((p) => p.externalNumber === numero);
+      const { corpo } = await pegar(
+        `/purchase-orders?clientId=alfa&externalNumber=${numero}`,
+      );
+      const achados = corpo.data;
       confere(
         achados.length === 1,
         `reenvio duplicou: ${achados.length} pedidos com o número ${numero}`,
@@ -561,12 +561,13 @@ await exige(
   'Gama',
   'timestamp Unix, centavos e situação numérica viram o contrato',
   async () => {
-    const { corpo } = await pegar('/purchase-orders?clientId=gama&limit=10');
-    const aberto = corpo.data.find((p) => p.externalNumber === 'GL-778');
+    const aberto = await pedidoDe('gama', 'GL-778');
+    confere(aberto !== null, 'GL-778 sumiu da consulta');
     confere(aberto.issuedOn === '2026-08-15', `data: ${aberto.issuedOn}`);
     confere(aberto.status === 'aberto', `situação 1 virou: ${aberto.status}`);
     confere(aberto.currency === 'BRL', `moeda assumida: ${aberto.currency}`);
-    const encerrado = corpo.data.find((p) => p.externalNumber === 'GL-779');
+    const encerrado = await pedidoDe('gama', 'GL-779');
+    confere(encerrado !== null, 'GL-779 sumiu da consulta');
     confere(
       encerrado.status === 'encerrado',
       `situação 2 virou: ${encerrado.status}`,
@@ -649,9 +650,8 @@ await exige(
   'Delta',
   'cabeçalho sem itens é pedido legítimo, sem saldo pendente',
   async () => {
-    const { corpo } = await pegar('/purchase-orders?clientId=delta&limit=10');
-    const vazio = corpo.data.find((p) => p.externalNumber === 'DL-2026-0046');
-    confere(vazio !== undefined, 'cabeçalho sem itens sumiu da consulta');
+    const vazio = await pedidoDe('delta', 'DL-2026-0046');
+    confere(vazio !== null, 'cabeçalho sem itens sumiu da consulta');
     confere(vazio.itemCount === 0, `itens: ${vazio.itemCount}`);
     confere(
       vazio.hasPendingBalance === false,
@@ -664,22 +664,16 @@ await exige(
   'Delta',
   'mandar só cabeçalhos NÃO apaga os itens já conhecidos',
   async () => {
-    const { corpo: antes } = await pegar(
-      '/purchase-orders?clientId=delta&limit=10',
-    );
-    const itensAntes = antes.data.find(
-      (p) => p.externalNumber === 'DL-2026-0044',
-    ).itemCount;
+    const antes = await pedidoDe('delta', 'DL-2026-0044');
+    confere(antes !== null, 'DL-2026-0044 sumiu da consulta');
+    const itensAntes = antes.itemCount;
     confere(itensAntes === 2, `esperava 2 itens antes, veio ${itensAntes}`);
 
     await carregar('delta', { orders: 'tests/fixtures/delta/orders.json' });
 
-    const { corpo: depois } = await pegar(
-      '/purchase-orders?clientId=delta&limit=10',
-    );
-    const itensDepois = depois.data.find(
-      (p) => p.externalNumber === 'DL-2026-0044',
-    ).itemCount;
+    const depois = await pedidoDe('delta', 'DL-2026-0044');
+    confere(depois !== null, 'DL-2026-0044 sumiu depois da recarga');
+    const itensDepois = depois.itemCount;
     confere(
       itensDepois === 2,
       `carga só de cabeçalhos apagou itens: ${itensDepois}`,
@@ -688,11 +682,9 @@ await exige(
 );
 
 await exige('Delta', 'cada item guarda a própria data de criação', async () => {
-  const { corpo: lista } = await pegar(
-    '/purchase-orders?clientId=delta&limit=10',
-  );
-  const id = lista.data.find((p) => p.externalNumber === 'DL-2026-0044').id;
-  const { corpo } = await pegar(`/purchase-orders/${id}`);
+  const alvo = await pedidoDe('delta', 'DL-2026-0044');
+  confere(alvo !== null, 'DL-2026-0044 sumiu da consulta');
+  const { corpo } = await pegar(`/purchase-orders/${alvo.id}`);
   const linhas = corpo.items.map((i) => i.lineCreatedOn).sort();
   confere(
     linhas.join(',') === '2026-09-02,2026-09-08',

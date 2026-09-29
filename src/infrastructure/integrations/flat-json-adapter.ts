@@ -71,9 +71,9 @@ export class FlatJsonAdapter implements SourceAdapter {
     let rejected: RejectedRecord[] = [];
     let group: Group | null = null;
     let index = 0;
-    // Grupos já encerrados. O enunciado não garante que as linhas de um
-    // pedido venham juntas, e reabrir um grupo emitiria um segundo retrato
-    // que apagaria o primeiro na gravação (REVIEW-09, R09-03).
+    // Grupos já encerrados. O enunciado não garante que as linhas de um pedido
+    // venham juntas, e reabrir um grupo emitiria um segundo retrato que
+    // apagaria o primeiro na gravação.
     const encerrados = new Set<string>();
 
     const fechar = (): void => {
@@ -132,9 +132,9 @@ export class FlatJsonAdapter implements SourceAdapter {
 
       try {
         // **Cada** linha tem o cabeçalho lido e validado, não só a primeira.
-        // Com `??=`, uma segunda linha com situação fora do vocabulário ou
-        // CNPJ inválido atravessava sem ser olhada, e o resultado dependia da
-        // ordem das linhas (REVIEW-09, R09-02).
+        // Com `??=`, uma segunda linha com situação fora do vocabulário ou CNPJ
+        // inválido atravessa sem ser olhada, e o resultado passa a depender da
+        // ordem das linhas.
         const desta = readOrderHeader(source, profile);
         if (group.header === null) {
           group.header = desta;
@@ -186,8 +186,8 @@ function finish(
 ): { order: NormalizedPurchaseOrder | null; rejected: RejectedRecord | null } {
   // Passar do teto recusa o **pedido inteiro**. Persistir os primeiros dez mil
   // como se fossem o pedido completo zeraria o saldo dos itens que sobraram, e
-  // a conferência passaria a aprovar nota que não deveria.
-  // Cabeçalho inconsistente já foi recusado uma vez; nada é gravado.
+  // a conferência passaria a aprovar nota que não deveria. Cabeçalho
+  // inconsistente já foi recusado uma vez; nada é gravado.
   if (group.inconsistent) {
     return { order: null, rejected: null };
   }
@@ -201,8 +201,8 @@ function finish(
     };
   }
   // Sem cabeçalho, nenhuma linha do grupo pôde ser lida — e cada uma delas já
-  // foi recusada com o motivo próprio. Acrescentar uma recusa do grupo
-  // contaria o mesmo problema duas vezes e inflaria o relatório de carga.
+  // foi recusada com o motivo próprio. Acrescentar uma recusa do grupo contaria
+  // o mesmo problema duas vezes e inflaria o relatório de carga.
   if (group.header === null) {
     return { order: null, rejected: null };
   }

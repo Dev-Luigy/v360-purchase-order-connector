@@ -16,8 +16,8 @@ import { spoolMultipart } from '../spool.js';
  * Alfa, então dedução quebraria justamente onde mais dói (ADR-008).
  *
  * A versão do formato vem em cabeçalho. Versão diferente da que o perfil
- * declara é recusa, não tentativa de leitura: mudança no ERP do cliente
- * precisa de perfil novo, não de parse otimista.
+ * declara é recusa, não tentativa de leitura: mudança no ERP do cliente precisa
+ * de perfil novo, não de parse otimista.
  */
 
 /** Nomes de parte aceitos, por forma de entrega. É allowlist, não sugestão. */
@@ -25,8 +25,8 @@ const partsByFormat: Readonly<Record<string, readonly string[]>> = {
   'nested-json': ['orders'],
   'paired-csv': ['headers', 'items'],
   'flat-json': ['lines'],
-  // Delta entrega duas consultas independentes e qualquer uma pode vir
-  // sozinha; `requiredParts` é quem diz que nenhuma é obrigatória.
+  // Delta entrega duas consultas independentes e qualquer uma pode vir sozinha;
+  // `requiredParts` é quem diz que nenhuma é obrigatória.
   'split-json': ['orders', 'items'],
 };
 
@@ -87,7 +87,7 @@ export function registerIngestionRoutes(
       }
 
       // O spool precisa ser desfeito em qualquer saída — sucesso, erro do
-      // parser ou desconexão do cliente (REVIEW-04, R04-01).
+      // parser ou desconexão do cliente.
       const spooled = await spoolMultipart(request.files(), allowed);
       try {
         const obrigatorias = requiredPartsByFormat[format] ?? allowed;

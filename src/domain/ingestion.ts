@@ -45,9 +45,9 @@ export interface StagedItem extends StagedRecord {
  * Resultado de uma carga.
  *
  * As listas são **amostra**, não o conjunto: uma carga com dez mil rejeições
- * viraria uma resposta JSON sem teto, e o enunciado fala em dezenas de
- * milhares de registros (REVIEW-04, R04-02). Os totais vêm separados, e o
- * quanto ficou de fora é `total - lista.length`.
+ * viraria uma resposta JSON sem teto, e o enunciado fala em dezenas de milhares
+ * de registros. Os totais vêm separados, e o quanto ficou de fora é
+ * `total - lista.length`.
  */
 export interface IngestionReport {
   readonly ingestionId: string;
@@ -68,10 +68,10 @@ export interface IngestionReport {
 /**
  * Traz para o retrato os itens que esperavam pelo cabeçalho dele.
  *
- * A carga da vez manda: se ela trouxe a linha, a versão que esperava está
- * velha e é descartada — coerente com "prevalece a última carga aceita"
- * (ADR-008). `items: null` é carga que não trouxe itens, e aí os que
- * esperavam são tudo o que se sabe sobre eles.
+ * A carga da vez manda: se ela trouxe a linha, a versão que esperava está velha
+ * e é descartada — coerente com "prevalece a última carga aceita" (ADR-008).
+ * `items: null` é carga que não trouxe itens, e aí os que esperavam são tudo o
+ * que se sabe sobre eles.
  */
 export function mergeWaitingItems(
   snapshot: NormalizedPurchaseOrder,

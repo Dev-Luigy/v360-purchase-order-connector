@@ -51,8 +51,8 @@ interface Pending {
  *
  * Qualquer uma das partes pode vir sozinha, e a substituição é escopada ao que
  * a carga trouxe (ADR-008): mandar só `orders` atualiza cabeçalhos e **não
- * apaga** os itens já conhecidos. Sem isso, uma consulta de cabeçalhos do
- * Delta apagaria todos os itens válidos.
+ * apaga** os itens já conhecidos. Sem isso, uma consulta de cabeçalhos do Delta
+ * apagaria todos os itens válidos.
  */
 export class SplitJsonAdapter implements SourceAdapter {
   readonly deliveryFormat = 'split-json' as const;
@@ -85,9 +85,9 @@ export class SplitJsonAdapter implements SourceAdapter {
       );
     }
 
-    // Uma emissão só, que conta as três categorias juntas. Enquanto cada uma
-    // tinha o próprio controle, o lote final somava pedidos, recusas e espera
-    // sem conferir nada e passava do teto (REVIEW-12, R12-04).
+    // Uma emissão só, que conta as três categorias juntas: com um controle por
+    // categoria, o lote final soma pedidos, recusas e espera sem conferir nada
+    // e passa do teto.
     const lote = new Lote(this.batchSize);
     const pendentes = new Map<string, Pending>();
     // Pedidos com cabeçalhos que discordam: nada é gravado para eles.
@@ -114,9 +114,9 @@ export class SplitJsonAdapter implements SourceAdapter {
               overflow: false,
             });
           } else if (!sameHeader(anterior.header, header)) {
-            // "Último vence" em silêncio escolhia um dos dois cabeçalhos sem
-            // dizer nada. Duplicata idêntica é ignorada; conflito recusa o
-            // pedido, como o Gama já faz (REVIEW-10, R10-04).
+            // Duplicata idêntica é ignorada; conflito recusa o pedido, como o
+            // Gama já faz. "Último vence" escolheria um dos dois cabeçalhos sem
+            // dizer nada.
             conflitantes.add(header.externalNumber);
             lote.recusar({
               reference: header.externalNumber,
@@ -133,8 +133,8 @@ export class SplitJsonAdapter implements SourceAdapter {
         }
         if (lote.cheio) yield lote.tirar();
         // Fora do `try`: estourar o teto encerra a carga inteira, não vira
-        // recusa de um registro. Aceitar em parte gravaria pedidos sem os
-        // itens que viriam depois (REVIEW-09, R09-05).
+        // recusa de um registro. Aceitar em parte gravaria pedidos sem os itens
+        // que viriam depois.
         if (pendentes.size > this.maxIndexedHeaders) {
           throw new FieldError(
             splitJsonOrdersPart,
@@ -164,13 +164,13 @@ export class SplitJsonAdapter implements SourceAdapter {
             // significaria inventar fornecedor, situação e data — e um pedido
             // sem situação nunca poderia ser conferido (ADR-008).
             //
-            // O teto de itens por pedido é do agregado e vive no caso de
-            // uso, que enxerga a soma entre lotes e sabe desfazer o que já
-            // foi escrito. Conferir aqui também produziria recusa dupla.
+            // O teto de itens por pedido é do agregado e vive no caso de uso,
+            // que enxerga a soma entre lotes e sabe desfazer o que já foi
+            // escrito. Conferir aqui também produziria recusa dupla.
             //
             // Validado contra o contrato antes de esperar: sem isso, material
-            // acima do limite entrava e só estourava muito depois, fora do
-            // tratamento por registro (REVIEW-09, R09-04).
+            // acima do limite entra e só estoura muito depois, fora do
+            // tratamento por registro.
             const conferido = normalizedItemSchema.safeParse(
               readItem(jsonFieldSource(raw), profile),
             );
@@ -241,9 +241,9 @@ export class SplitJsonAdapter implements SourceAdapter {
 }
 
 /**
- * Acumula um lote e diz quando ele encheu, contando as três categorias
- * juntas. Como a conferência acontece depois de **cada** inclusão, nenhuma
- * emissão passa do teto — nem a última.
+ * Acumula um lote e diz quando ele encheu, contando as três categorias juntas.
+ * Como a conferência acontece depois de **cada** inclusão, nenhuma emissão
+ * passa do teto — nem a última.
  */
 class Lote {
   private orders: NormalizedPurchaseOrder[] = [];
@@ -305,8 +305,8 @@ function marcarFalha(
 
 /**
  * Dois cabeçalhos do mesmo pedido são o mesmo? Comparados **depois** de
- * normalizados: o que importa é o significado, não o texto de origem. É a
- * mesma regra do Gama, pelo mesmo motivo.
+ * normalizados: o que importa é o significado, não o texto de origem. É a mesma
+ * regra do Gama, pelo mesmo motivo.
  */
 function sameHeader(a: OrderHeader, b: OrderHeader): boolean {
   return (

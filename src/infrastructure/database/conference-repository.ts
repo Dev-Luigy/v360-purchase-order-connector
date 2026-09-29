@@ -28,15 +28,15 @@ export class PrismaConferenceRepository implements ConferenceRepository {
     const divergences = record.divergences.map((divergence) =>
       divergenceSchema.parse(divergence),
     );
-    // A nota é persistida **como o schema a devolve**, não como veio. Gravar
-    // o objeto original com cast deixava uma chave extra entrar no JSONB e
-    // desaparecer em silêncio na leitura, que aplica o schema (REVIEW-07,
-    // R07-04). Hoje a borda HTTP também filtra, mas a porta do repositório é
-    // pública e não pode depender de quem a chama.
+    // A nota é persistida **como o schema a devolve**, não como veio. Gravar o
+    // objeto original com cast deixa uma chave extra entrar no JSONB e
+    // desaparecer em silêncio na leitura, que aplica o schema. A borda HTTP
+    // também filtra, mas a porta do repositório é pública e não pode depender
+    // de quem a chama.
     const invoice = invoiceCheckRequestSchema.parse(record.invoice);
 
-    // Coerência que o banco não consegue garantir por linha: aprovada tem
-    // zero divergências e reprovada tem ao menos uma (REVIEW-07, R07-09).
+    // Coerência que o banco não consegue garantir por linha: aprovada tem zero
+    // divergências e reprovada tem ao menos uma.
     const esperado = divergences.length === 0 ? 'aprovada' : 'reprovada';
     if (record.outcome !== esperado) {
       throw new RangeError(
@@ -89,8 +89,8 @@ export class PrismaConferenceRepository implements ConferenceRepository {
 
     const recorte = whereOf(filters);
     // O teto do retrato é fixado na primeira página e viaja no cursor: o
-    // histórico cresce enquanto a plataforma o lê, e sem teto a leitura não
-    // tem condição própria de término (REVIEW-14, R14-02).
+    // histórico cresce enquanto a plataforma o lê, e sem teto a leitura não tem
+    // condição própria de término.
     const until =
       posicao?.until ??
       (

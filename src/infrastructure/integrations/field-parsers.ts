@@ -24,17 +24,17 @@ const cleanTaxId = /^\d{14}$/;
 
 /**
  * Máscara brasileira completa. Tudo ou nada: com a pontuação opcional campo a
- * campo, `12.345678/0001-90` passava, o que não é nem uma coisa nem outra
- * (REVIEW-01, achado 4). E sem a alternativa de catorze dígitos limpos, porque
- * um perfil que declara máscara precisa exigi-la (REVIEW-08, R08-02).
+ * campo, `12.345678/0001-90` passaria, o que não é nem uma coisa nem outra. E
+ * sem a alternativa de catorze dígitos limpos, porque um perfil que declara
+ * máscara precisa exigi-la.
  */
 const brazilianTaxIdMask = /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/;
 
 /**
- * Tradutores de notação, um por rótulo declarado no perfil. Todos recusam o
- * que não entendem: `1.200,000` lido com a política do Alfa viraria outro
- * número sem nada explodir, e é exatamente isso que o perfil errado precisa
- * evitar (ADR-008).
+ * Tradutores de notação, um por rótulo declarado no perfil. Todos recusam o que
+ * não entendem: `1.200,000` lido com a política do Alfa viraria outro número
+ * sem nada explodir, e é exatamente isso que o perfil errado precisa evitar
+ * (ADR-008).
  */
 
 /** Erro de um campo, com o nome no vocabulário do cliente, para a rejeição. */
@@ -82,7 +82,7 @@ export function parseDate(
 
 function assertCalendarDate(value: string, field: string): IsoDate {
   // A regra mora no schema do contrato, para o adaptador e a borda HTTP não
-  // divergirem sobre o que é uma data (REVIEW-01, achado 5).
+  // divergirem sobre o que é uma data.
   if (!isCalendarDate(value)) {
     throw new FieldError(field, `data inválida ou inexistente: ${value}`);
   }
@@ -95,10 +95,9 @@ function assertCalendarDate(value: string, field: string): IsoDate {
  * `120000` centavos (ADR-007).
  *
  * Com `scale`, valor com mais casas do que a escala é **rejeitado**, não
- * arredondado. Antes, `toText(6)` fazia `0.0000001` virar `0.000000` — o valor
- * sumia sem ninguém ser avisado, exatamente o que o `AGENTS.md` proíbe para
- * dinheiro (REVIEW-07, R07-01). Cliente que precise de mais casas é decisão de
- * contrato, não arredondamento por acidente.
+ * arredondado: `toText(6)` faria `0.0000001` virar `0.000000`, e valor que some
+ * sem aviso é exatamente o que o `AGENTS.md` proíbe para dinheiro. Cliente que
+ * precise de mais casas é decisão de contrato, não arredondamento por acidente.
  */
 export function parseDecimal(
   raw: string,
@@ -117,9 +116,8 @@ export function parseDecimal(
     }
     return value.toText(scale);
   } catch (cause) {
-    // A razão específica precisa chegar a quem lê o relatório de carga:
-    // "casas decimais acima do contrato" diz o que corrigir, "decimal
-    // inválido" não.
+    // A razão específica precisa chegar a quem lê o relatório de carga: "casas
+    // decimais acima do contrato" diz o que corrigir, "decimal inválido" não.
     const reason = cause instanceof Error ? `: ${cause.message}` : '';
     throw new FieldError(
       field,
@@ -137,8 +135,8 @@ function readNotation(text: string, format: NumberFormat): Decimal {
     case 'br': {
       // O ponto é separador de milhar, e separador de milhar aparece a cada
       // três dígitos. Apagar todo ponto sem conferir onde ele estava faz
-      // `12.34` virar 1234: erro de cem vezes em dinheiro, que passa por toda
-      // a validação seguinte parecendo certo (REVIEW-01, achado 4).
+      // `12.34` virar 1234: erro de cem vezes em dinheiro, que passa por toda a
+      // validação seguinte parecendo certo.
       if (!brazilianNumber.test(text)) {
         throw new RangeError(`agrupamento de milhar inválido: ${text}`);
       }
@@ -173,20 +171,20 @@ export function parseInteger(raw: string, field: string): number {
  * `masked` diz se o cliente entrega com pontuação, e vem do `taxIdMasked` do
  * perfil. O campo é **exclusivo nos dois sentidos**: `true` exige a máscara
  * completa e `false` exige a forma limpa. Aceitar as duas formas de todo mundo
- * fazia o perfil prometer uma regra que ninguém cumpria (REVIEW-07, R07-06), e
- * aceitar a forma limpa num perfil mascarado deixava a mesma promessa pela
- * metade (REVIEW-08, R08-02). Mudança de formato no ERP do cliente vira
- * rejeição, que é o aviso de que o perfil precisa de versão nova.
+ * faz o perfil prometer uma regra que ninguém cumpre, e aceitar a forma limpa
+ * num perfil mascarado deixa a mesma promessa pela metade. Mudança de formato
+ * no ERP do cliente vira rejeição, que é o aviso de que o perfil precisa de
+ * versão nova.
  *
  * Sem valor padrão de propósito: quem chama declara o formato, e um padrão
  * implícito é exatamente o que produz leniência por descuido.
  *
  * Em nenhum dos dois casos se apaga caractere qualquer: aceitar
- * `abc12.345.678/0001-90xyz` seria leniência em campo de identidade
- * (REVIEW-01, achado 1). Dígito verificador continua sem conferência, porque o
- * dado é do ERP do cliente e recusar por checksum criaria rejeição que ninguém
- * consegue corrigir do nosso lado — a menos que o perfil declare
- * `validatesTaxIdChecksum`, que é quando o cliente tem dado real (ADR-013).
+ * `abc12.345.678/0001-90xyz` seria leniência em campo de identidade. Dígito
+ * verificador continua sem conferência, porque o dado é do ERP do cliente e
+ * recusar por checksum criaria rejeição que ninguém consegue corrigir do nosso
+ * lado — a menos que o perfil declare `validatesTaxIdChecksum`, que é quando o
+ * cliente tem dado real (ADR-013).
  */
 export function parseTaxId(
   raw: string,
@@ -197,8 +195,8 @@ export function parseTaxId(
   const text = raw.trim();
   const aceito = masked ? brazilianTaxIdMask : cleanTaxId;
   if (!aceito.test(text)) {
-    // Três causas diferentes merecem três mensagens: valor torto é um
-    // problema, e formato certo para o cliente errado é outro, nos dois lados.
+    // Três causas diferentes merecem três mensagens: valor torto é um problema,
+    // e formato certo para o cliente errado é outro, nos dois lados.
     const comPontuacao = /\D/.test(text);
     const soDigitos = cleanTaxId.test(text);
     let reason = `CNPJ fora do formato esperado: ${raw}`;

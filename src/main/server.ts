@@ -22,10 +22,9 @@ import { idadeDeEsperaAbandonada } from '../domain/limits.js';
 
 const env = parseEnvironment(process.env);
 
-// Dois pools, por propósito (ADR-012): o caminho de requisição desiste rápido
-// e o de carga aceita transação longa mas finita. O preset de ingestão existia
-// desde P1-02 e **nada o usava** — as cargas passavam pelo pool de requisição,
-// com tempo limite de 3 segundos (REVIEW-09, R09-07).
+// Dois pools, por propósito (ADR-012): o caminho de requisição desiste rápido e
+// o de carga aceita transação longa mas finita. Uma carga que atravesse o pool
+// de requisição morre no tempo limite de 3 segundos dele.
 const database = connectDatabase(env.DATABASE_URL, 'request');
 const ingestionDatabase = connectDatabase(env.DATABASE_URL, 'ingestion');
 const profiles = new InMemoryClientProfiles();
@@ -40,7 +39,7 @@ const ingestionOrderRepository = new PrismaPurchaseOrderRepository(
 
 const app = await buildApp({
   // Prontidão olha o estado das migrações, não só a conexão: banco vazio
-  // respondendo 200 fazia o healthcheck do Compose mentir (REVIEW-02, 2).
+  // respondendo 200 faz o healthcheck do Compose mentir.
   readiness: new CheckReadiness(new SchemaReadiness(database.pool)),
   ingest: new IngestPurchaseOrders(
     profiles,
@@ -66,7 +65,7 @@ if (removidos > 0) {
 }
 
 // Espera não publicada de carga que não terminou: o `catch` do caso de uso
-// cobre a falha que o processo enxerga, não uma queda (REVIEW-15, R15-01).
+// cobre a falha que o processo enxerga, não uma queda.
 const esperaAbandonada = await ingestionOrderRepository
   .discardAbandonedStaging(idadeDeEsperaAbandonada)
   .catch((error: unknown) => {
@@ -86,8 +85,8 @@ for (const { pool } of [database, ingestionDatabase]) {
   );
 }
 app.addHook('onClose', async () => {
-  // Os dois precisam fechar: deixar o de carga aberto segurava conexão e o
-  // processo não encerrava sozinho.
+  // Os dois precisam fechar: um pool aberto segura conexão e o processo não
+  // encerra sozinho.
   await Promise.all([database.close(), ingestionDatabase.close()]);
 });
 

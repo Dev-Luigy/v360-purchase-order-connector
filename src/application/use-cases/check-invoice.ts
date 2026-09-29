@@ -13,7 +13,7 @@ import type {
  * `purchaseOrderId`, `purchaseOrderIngestionVersion` e `clientId` do registro
  * vêm do que estava no banco; da nota vem só o que a nota tem autoridade para
  * afirmar — fornecedor e linhas. Sem isso, um chamador poderia gravar um
- * histórico dizendo que conferiu outra coisa (REVIEW-07, R07-04 e R07-09).
+ * histórico dizendo que conferiu outra coisa.
  *
  * O pedido é encontrado por `(clientId, externalNumber)`, e não pelo nosso
  * identificador interno: a plataforma conhece o número do pedido do cliente,
@@ -32,8 +32,8 @@ export class CheckInvoice {
       invoice.purchaseOrderNumber,
     );
     if (order === null) {
-      // Pedido inexistente não é divergência da nota: a nota pode estar certa
-      // e o pedido simplesmente não ter sido carregado ainda (ADR-009).
+      // Pedido inexistente não é divergência da nota: a nota pode estar certa e
+      // o pedido simplesmente não ter sido carregado ainda (ADR-009).
       throw new PurchaseOrderNotFoundError(
         invoice.clientId,
         invoice.purchaseOrderNumber,

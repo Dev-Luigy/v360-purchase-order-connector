@@ -28,7 +28,7 @@ import { registerPurchaseOrderRoutes } from './routes/purchase-orders.js';
  *
  * O enunciado fala em dezenas de milhares de registros, então a carga precisa
  * de teto próprio, bem acima do corpo JSON comum. Sem limite explícito, o
- * padrão do multipart e do Fastify decide por nós (REVIEW-04, R04-02).
+ * padrão do multipart e do Fastify decide por nós.
  */
 export const httpLimits = {
   /** Corpo JSON de uma requisição comum: nota fiscal, filtros. */
@@ -49,10 +49,10 @@ export const httpLimits = {
      * Por origem e por minuto; vira quota por identidade quando houver
      * autenticação.
      *
-     * Eram 120/min, número escolhido sem medir. A varredura noturna que o
-     * próprio enunciado descreve — dezenas de milhares de pedidos em páginas de
-     * 100 — precisa de centenas de requisições seguidas, e o teto derrubava o
-     * caso de uso que o sistema existe para servir. Medido em P1-05.
+     * Medido, não escolhido: a varredura noturna que o próprio enunciado
+     * descreve — dezenas de milhares de pedidos em páginas de 100 — precisa de
+     * centenas de requisições seguidas, e um teto na casa das centenas derruba
+     * o caso de uso que o sistema existe para servir.
      */
     max: 1200,
     timeWindow: '1 minute',
@@ -101,8 +101,8 @@ export async function buildApp(
 
   app.setErrorHandler((error, request, reply) => {
     const problem = toProblem(error);
-    // O erro inteiro vai para o log, nunca para a resposta: detalhe de banco
-    // ou pilha conta ao cliente como a nossa infraestrutura é por dentro.
+    // O erro inteiro vai para o log, nunca para a resposta: detalhe de banco ou
+    // pilha conta ao cliente como a nossa infraestrutura é por dentro.
     if (problem.status >= 500) {
       request.log.error(error, 'falha ao processar requisição');
     } else {

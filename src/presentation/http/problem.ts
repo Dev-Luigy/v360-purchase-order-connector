@@ -17,12 +17,12 @@ import { SpoolError } from './spool.js';
 /**
  * Forma única de erro das rotas de negócio.
  *
- * `error` é código estável, para a plataforma decidir sem interpretar texto —
- * a mesma razão pela qual a taxonomia de divergências é fechada (ADR-009).
+ * `error` é código estável, para a plataforma decidir sem interpretar texto — a
+ * mesma razão pela qual a taxonomia de divergências é fechada (ADR-009).
  * `message` é para gente ler.
  *
- * Nada de pilha, nada de erro do Prisma: mensagem de banco na resposta conta
- * ao cliente detalhes da nossa infraestrutura.
+ * Nada de pilha, nada de erro do Prisma: mensagem de banco na resposta conta ao
+ * cliente detalhes da nossa infraestrutura.
  */
 export const problemSchema = z.object({
   error: z.string().min(1),
@@ -55,9 +55,8 @@ export interface MappedProblem {
  * isso, cada rota escolheria um status diferente para a mesma causa.
  */
 export function toProblem(error: unknown): MappedProblem {
-  // Falha de schema na entrada é requisição malformada, e sem este ramo caía
-  // no 500 genérico — que é exatamente o risco apontado em REVIEW-07, R06-01:
-  // rejeição determinística virando erro interno.
+  // Falha de schema na entrada é requisição malformada, e sem este ramo cai no
+  // 500 genérico: rejeição determinística virando erro interno.
   if (hasZodFastifySchemaValidationErrors(error)) {
     return {
       status: 400,
@@ -104,8 +103,8 @@ export function toProblem(error: unknown): MappedProblem {
     };
   }
   // Erro do leitor de payload: o parser em fluxo lança `Error` comum, e sem
-  // esta classe JSON truncado — payload inválido corriqueiro — respondia 500
-  // com "erro interno" (REVIEW-15, R15-01).
+  // esta classe JSON truncado — payload inválido corriqueiro — responderia 500
+  // com "erro interno".
   if (error instanceof PayloadError) {
     return {
       status: 422,
@@ -122,8 +121,8 @@ export function toProblem(error: unknown): MappedProblem {
   }
   // O framework e os plugins já decidem o status de casos que eles conhecem:
   // 429 do rate limit, 413 do corpo acima do teto, 415 de tipo não suportado.
-  // Sem honrar isso, tudo virava 500 — o cliente recebia "erro interno" para
-  // uma recusa que ele podia corrigir. Descoberto medindo volume.
+  // Sem honrar isso, tudo vira 500 — "erro interno" para uma recusa que o
+  // cliente podia corrigir.
   const doFramework = frameworkStatus(error);
   if (doFramework !== null) {
     return {

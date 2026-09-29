@@ -40,7 +40,7 @@ const reportQuerySchema = z.object({
  *
  * O handler não decide nada — valida, chama o caso de uso e traduz. Toda regra
  * está em `checkInvoice`, e todo campo derivado é montado a partir do pedido
- * carregado, dentro do caso de uso (REVIEW-07, R07-04).
+ * carregado, dentro do caso de uso.
  *
  * `201` porque a conferência **cria** um registro no histórico: o resultado não
  * é uma consulta, é um fato novo que sobrevive à parada do serviço.
@@ -53,8 +53,8 @@ export function registerConferenceRoutes(
 ): void {
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
-  // Rota estática antes da paginada: `/conferences/summary` nunca deve ser
-  // lida como um identificador de conferência.
+  // Rota estática antes da paginada: `/conferences/summary` nunca deve ser lida
+  // como um identificador de conferência.
   typed.get(
     '/conferences/summary',
     {

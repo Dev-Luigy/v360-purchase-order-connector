@@ -13,10 +13,10 @@ import type { MultipartFile } from '@fastify/multipart';
  *
  * O contrato `SourcePayload` pede **fábricas** de fluxo, porque o adaptador do
  * Beta precisa ler os cabeçalhos antes dos itens. Um fluxo de multipart é
- * descartável e sequencial: não dá para reabrir nem para ler fora de ordem.
- * O spool resolve os dois, e é a política que REVIEW-04 pediu em R04-01.
+ * descartável e sequencial: não dá para reabrir nem para ler fora de ordem. O
+ * spool resolve os dois.
  *
- * Três cuidados que o mesmo achado exige:
+ * Três cuidados que ele exige:
  *
  * - o nome no disco é **gerado por nós**; o nome que o cliente manda nunca
  *   toca o caminho, senão `../../algo` escreveria fora do diretório;
