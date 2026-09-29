@@ -30,6 +30,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-12 | Verificar as correções de FIX-12                                 | concluída                      | Codex       | Dois fechados, um parcial e cinco regressões/lacunas documentadas             |
 | REVIEW-13 | Verificar FIX-13 pelas rotas HTTP reais                          | concluída                      | Codex       | Três fechados, três parciais; quatro falhas reproduzidas via HTTP real        |
 | REVIEW-14 | Verificar FIX-14 e FINAL-01 pela aplicação real                  | concluída                      | Codex       | Falha de staging reproduzida; sweep finito passa, sem teto de snapshot        |
+| REVIEW-15 | Validar FIX-15 do zero contra todo o enunciado                   | concluída                      | Codex       | Aceitação passa; falha fatal vaza staging e publicação perde contabilidade    |
 | CLEAN-01  | Enxugar comentários do código estável                            | concluída                      | Codex       | 526 linhas removidas; arquivos ativos de P1-04 preservados                    |
 | P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03          |
 | P1-02     | Implementar schema, migrações e repositórios                     | concluída                      | Claude      | Código pronto; validação contra PostgreSQL real é ENV-03                      |
@@ -45,6 +46,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado           |
 | P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                         |
 | P1-05     | Validar desafio e registrar marco parte-1                        | concluída                      | Claude      | 18/18 exigências verificadas no ar; tag depende de DOC-02                     |
+| FIX-16    | Fechar R15-01, R15-02 e R15-03                                   | em andamento                   | Claude      | REVIEW-15; o ciclo de publicação deixa resíduo e permite apropriação cruzada  |
 | FIX-15    | Fechar R14-01, R14-02 e R14-03                                   | concluída                      | Claude      | Ciclo de vida da espera e teto no cursor; 13/13 pelas rotas                   |
 | FINAL-01  | Fechar o enunciado inteiro e entregar a versão final             | concluída                      | Claude      | Seis lacunas fechadas; o dobro em memória não paginava de verdade             |
 | FIX-14    | Fechar REVIEW-13 e provar pela aplicação real                    | concluída                      | Claude      | Carga na identidade física; 10/10 cenários pelas rotas HTTP                   |
@@ -173,6 +175,15 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Dependências: FIX-14 e FINAL-01 concluídas; reservas de implementação liberadas.
 - Evidência: [handoff REVIEW-14](handoffs/REVIEW-14-pos-fix-14-final-01-codex.md); check, 31 integrações, 30/30 do caso, 10/10 HTTP e sweep finito passaram, mas o limite deslocado regrava parte do pedido recusado e o cursor não congela o fim do conjunto.
 
+## REVIEW-15 — validação integral pós-FIX-15 com banco limpo
+
+- Responsável: Codex.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `docs/TASKS.md`, `docs/STATUS.md` e `docs/handoffs/REVIEW-15-validacao-integral-pos-fix-15-codex.md`.
+- Escopo: apagar os dados do banco do Compose conforme autorização explícita do usuário, reconstruir o estado por migrações e validar todos os requisitos do documento, cenários felizes, falhas, limites, concorrência, persistência, HTTP real, PostgreSQL, Docker e segurança; sem modificar código de produção.
+- Dependências: FIX-15 concluída; reservas de implementação liberadas.
+- Evidência: [handoff REVIEW-15](handoffs/REVIEW-15-validacao-integral-pos-fix-15-codex.md); banco recriado e entregue vazio, toda aceitação oficial e volume dos quatro formatos passaram, mas duas corridas do ciclo de publicação foram reproduzidas por HTTP/PostgreSQL reais.
+
 ## CLEAN-01 — limpeza de comentários
 
 - Responsável: Codex.
@@ -271,6 +282,18 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Evidência: [handoff ARCH-05](handoffs/ARCH-05-claude.md); `npm run check` verde; nada validado contra Grafana ou Prometheus reais, que não existem nesta máquina.
 - Escopo: registrar como a aplicação se conecta a Grafana e Prometheus, o consentimento de quem executa e a convenção de nomes e labels. Nenhuma dependência instalada, nenhum endpoint criado.
 - Dependências: nenhuma para o registro. A implementação depende de P1-01 e P1-03, porque os labels saem do contrato e dos adaptadores.
+
+## FIX-16 — o ciclo de vida da ingestão, de verdade
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `src/application/use-cases/ingest-purchase-orders.ts`, `src/application/ports/purchase-order-repository.ts`, `src/infrastructure/database/purchase-order-repository.ts`, `src/presentation/http/problem.ts`, `src/main/server.ts`, `src/domain/limits.ts`, `scripts/validate-fix-14-http.mjs`, `tests/**`, `README.md`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-16-claude.md`.
+- Escopo: os achados de [REVIEW-15](handoffs/REVIEW-15-validacao-integral-pos-fix-15-codex.md), reproduzidos antes de aceitar.
+  - **R15-01**: JSON truncado depois de um lote responde **500** e deixa linhas não publicadas no banco para sempre. Reproduzido: HTTP 500 e 600 linhas órfãs.
+  - **R15-02**: a carga publica **tudo** e só então consolida pedido a pedido; nesse intervalo outro cabeçalho consome linha que ainda pertence ao relatório da carga dona, e ela some da contabilidade.
+  - **R15-03**: o 13º cenário do aceite HTTP não exercita o que o nome diz — é falso positivo.
+- Os dois primeiros são o mesmo problema: o ciclo de vida da ingestão não existe de fato. Corrigir só a limpeza não fecha a apropriação.
+- Dependências: FIX-15 concluída.
 
 ## FIX-15 — os três achados técnicos de REVIEW-14
 

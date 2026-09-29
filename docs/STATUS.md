@@ -1,6 +1,6 @@
 # Estado do projeto
 
-Atualizado por Claude em 2026-09-29, após FIX-15.
+Atualizado por Codex em 2026-09-29, após REVIEW-15.
 
 ## Implementado
 
@@ -40,6 +40,8 @@ Atualizado por Claude em 2026-09-29, após FIX-15.
 ## Ainda não implementado
 
 Pipeline de CI e política de exceção da auditoria npm. A espera de itens órfãos não tem expiração nem teto, e a política depende de dado de uso real ([ADR-008](decisions/ADR-008-ingestao.md)).
+
+REVIEW-15 executou novamente toda a aceitação em banco recriado e encontrou duas lacunas no ciclo novo de publicação: falha estrutural depois de um lote deixa linhas não publicadas no banco, e um cabeçalho pode consumir uma linha já publicada antes de a carga dona consolidá-la, deixando o relatório dela incompleto. Evidência e critérios de aceite em [REVIEW-15](handoffs/REVIEW-15-validacao-integral-pos-fix-15-codex.md).
 
 ## Próxima retomada
 
