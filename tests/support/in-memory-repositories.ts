@@ -3,7 +3,6 @@ import type {
   PageRequest,
 } from '../../src/application/ports/pagination.js';
 import type {
-  LooseItemOutcome,
   PurchaseOrderFilters,
   PurchaseOrderRepository,
   SnapshotResult,
@@ -11,8 +10,8 @@ import type {
 import type { ClientId } from '../../src/domain/client.js';
 import { Decimal, quantityScale } from '../../src/domain/decimal.js';
 import {
-  applyItemToOrder,
   mergeWaitingItems,
+  semPersistencia,
   type StagedItem,
 } from '../../src/domain/ingestion.js';
 import { normalizedItemSchema } from '../../src/domain/schemas.js';
@@ -88,39 +87,49 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
     });
   }
 
-  applyLooseItems(
+  stageLooseItems(
+    clientId: ClientId,
+    staged: readonly StagedItem[],
+  ): Promise<void> {
+    for (const item of staged) {
+      normalizedItemSchema.parse(item.item);
+      const key = `${clientId}:${item.externalNumber}`;
+      const fila = this.waiting.get(key) ?? [];
+      this.waiting.set(key, [
+        ...fila.filter(
+          (atual) => atual.externalLine !== item.item.externalLine,
+        ),
+        item.item,
+      ]);
+    }
+    return Promise.resolve();
+  }
+
+  async consolidateStaged(
     clientId: ClientId,
     externalNumber: string,
-    staged: readonly StagedItem[],
-  ): Promise<LooseItemOutcome> {
-    if (staged.length === 0) return Promise.resolve('aplicado');
+  ): Promise<number> {
     const key = `${clientId}:${externalNumber}`;
     const existing = this.byKey.get(key);
-    if (existing === undefined) {
-      const fila = this.waiting.get(key) ?? [];
-      const linhas = new Set(staged.map((s) => s.item.externalLine));
-      for (const s of staged) normalizedItemSchema.parse(s.item);
-      this.waiting.set(key, [
-        ...fila.filter((item) => !linhas.has(item.externalLine)),
-        ...staged.map((s) => s.item),
-      ]);
-      return Promise.resolve('em-espera');
-    }
+    if (existing === undefined) return 0;
+    const esperando = this.waiting.get(key) ?? [];
+    if (esperando.length === 0) return 0;
+    this.waiting.delete(key);
 
-    // Um retrato só, com o grupo inteiro aplicado (R10-01).
-    let retrato = applyItemToOrder(existing, staged[0]?.item as never);
-    for (const outro of staged.slice(1)) {
-      retrato = {
-        ...retrato,
-        items: [
-          ...(retrato.items ?? []).filter(
-            (item) => item.externalLine !== outro.item.externalLine,
-          ),
-          outro.item,
-        ],
-      };
-    }
-    return this.replaceSnapshot(retrato).then(() => 'aplicado' as const);
+    const porLinha = new Map(
+      semPersistencia(existing).map((item) => [item.externalLine, item]),
+    );
+    for (const item of esperando) porLinha.set(item.externalLine, item);
+    await this.replaceSnapshot({
+      clientId: existing.clientId,
+      externalNumber: existing.externalNumber,
+      supplier: existing.supplier,
+      currency: existing.currency,
+      status: existing.status,
+      issuedOn: existing.issuedOn,
+      items: [...porLinha.values()],
+    });
+    return esperando.length;
   }
 
   /** Só para teste: quantos itens ainda esperam por este pedido. */

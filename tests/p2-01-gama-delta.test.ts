@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 
 import { checkInvoice } from '../src/domain/conference-rules.js';
+import { maxItemsPerOrder } from '../src/domain/limits.js';
 import { Decimal, quantityScale } from '../src/domain/decimal.js';
 import {
   deltaProfile,
@@ -776,5 +777,182 @@ describe('REVIEW-10: o que a segunda revisão expôs', () => {
       0,
       'duplicata idêntica foi recusada',
     );
+  });
+});
+
+describe('REVIEW-11: o que ficou em aberto do FIX-11', () => {
+  const cabecalho = (over: Record<string, unknown> = {}) => ({
+    po_number: 'DUP',
+    created_at: '2026-09-02',
+    status: 'open',
+    currency: 'BRL',
+    vendor: { tax_id: '67890123000145', name: 'Embalagens Norte Sul Ltda' },
+    ...over,
+  });
+
+  /**
+   * Afirma o invariante, não um sintoma: **nenhum** lote passa do teto, em
+   * qualquer caminho. O teste anterior só verificava que havia mais de um
+   * lote, e por isso não pegou os dois `continue` que pulavam a conferência
+   * (REVIEW-11).
+   */
+  const lotesDe = async (
+    payload: unknown,
+    parte: 'orders' | 'items',
+    batchSize = 2,
+  ): Promise<number[]> => {
+    const tamanhos: number[] = [];
+    for await (const lote of new SplitJsonAdapter(batchSize).read(
+      {
+        clientId: 'delta',
+        formatVersion: '1',
+        parts: new Map([[parte, () => bytes(JSON.stringify(payload))]]),
+      },
+      deltaProfile,
+    )) {
+      tamanhos.push(
+        lote.orders.length + lote.rejected.length + lote.staged.length,
+      );
+    }
+    return tamanhos;
+  };
+
+  const nenhumEstourou = (lotes: readonly number[], teto: number) => {
+    const estourados = lotes.filter((n) => n > teto);
+    assert.equal(
+      estourados.length,
+      0,
+      `lotes acima do teto ${String(teto)}: ${JSON.stringify(lotes)}`,
+    );
+  };
+
+  it('R10-03: cabeçalhos conflitantes repetidos respeitam o lote', async () => {
+    const lotes = await lotesDe(
+      {
+        orders: [0, 1, 2, 3, 4].map((n) => ({
+          ...cabecalho(),
+          status: n === 0 ? 'open' : 'blocked',
+          vendor: {
+            tax_id: '67890123000145',
+            name: `Fornecedor ${String(n)}`,
+          },
+        })),
+      },
+      'orders',
+    );
+    nenhumEstourou(lotes, 2);
+  });
+
+  it('R10-03: vários pedidos acima do teto de itens respeitam o lote', async () => {
+    // Cada pedido estoura `maxItemsPerOrder`; a recusa de cada um vai para o
+    // laço final, que também precisa escoar.
+    const pedidos = [0, 1, 2];
+    const orders = pedidos.map((n) => ({
+      ...cabecalho(),
+      po_number: `OVER-${String(n)}`,
+    }));
+    const items = pedidos.flatMap((n) =>
+      Array.from({ length: maxItemsPerOrder + 1 }, (_, linha) => ({
+        purchase_order: `OVER-${String(n)}`,
+        created_at: '2026-09-02',
+        line: linha + 1,
+        material: 'M',
+        description: 'D',
+        uom: 'UN',
+        quantity_ordered: 1,
+        quantity_received: 0,
+        unit_price: 1.0,
+      })),
+    );
+    const tamanhos: number[] = [];
+    for await (const lote of new SplitJsonAdapter(2).read(
+      {
+        clientId: 'delta',
+        formatVersion: '1',
+        parts: new Map([
+          ['orders', () => bytes(JSON.stringify({ orders }))],
+          ['items', () => bytes(JSON.stringify({ items }))],
+        ]),
+      },
+      deltaProfile,
+    )) {
+      tamanhos.push(
+        lote.orders.length + lote.rejected.length + lote.staged.length,
+      );
+    }
+    nenhumEstourou(tamanhos, 2);
+  });
+
+  it('R10-03: itens inválidos respeitam o lote', async () => {
+    const lotes = await lotesDe(
+      {
+        items: [0, 1, 2, 3, 4].map((n) => ({
+          purchase_order: `X-${String(n)}`,
+          created_at: 'data-invalida',
+          line: n,
+          material: 'M',
+          description: 'D',
+          uom: 'UN',
+          quantity_ordered: 1,
+          quantity_received: 0,
+          unit_price: 1.0,
+        })),
+      },
+      'items',
+    );
+    nenhumEstourou(lotes, 2);
+  });
+
+  it('R10-01: pedido cujas linhas atravessam lotes ganha uma versão só', async () => {
+    // O caminho completo: adaptador com lote pequeno, caso de uso e
+    // repositório. Os testes anteriores usavam duas linhas, abaixo do lote
+    // padrão, ou chamavam o repositório com o grupo já montado (REVIEW-11).
+    const repositorio = new InMemoryPurchaseOrderRepository();
+    const registro = new Map(buildAdapterRegistry());
+    registro.set('split-json', new SplitJsonAdapter(2));
+    const uso = new IngestPurchaseOrders(
+      new InMemoryClientProfiles(),
+      registro,
+      repositorio,
+    );
+
+    const soCabecalho = JSON.stringify({
+      orders: [{ ...cabecalho(), po_number: 'DL-LOTE' }],
+    });
+    await uso.execute({
+      clientId: 'delta',
+      formatVersion: '1',
+      parts: new Map([['orders', () => bytes(soCabecalho)]]),
+    });
+    const antes = await repositorio.findByExternalNumber('delta', 'DL-LOTE');
+
+    const cincoItens = JSON.stringify({
+      items: [10, 20, 30, 40, 50].map((linha) => ({
+        purchase_order: 'DL-LOTE',
+        created_at: '2026-09-02',
+        line: linha,
+        material: `M-${String(linha)}`,
+        description: 'D',
+        uom: 'UN',
+        quantity_ordered: 10,
+        quantity_received: 0,
+        unit_price: 1.5,
+      })),
+    });
+    const relatorio = await uso.execute({
+      clientId: 'delta',
+      formatVersion: '1',
+      parts: new Map([['items', () => bytes(cincoItens)]]),
+    });
+
+    const depois = await repositorio.findByExternalNumber('delta', 'DL-LOTE');
+    assert.equal(
+      (depois?.ingestionVersion ?? 0) - (antes?.ingestionVersion ?? 0),
+      1,
+      'cinco linhas em três lotes abriram mais de uma transação',
+    );
+    assert.equal(depois?.items.length, 5);
+    assert.equal(relatorio.itemsAccepted, 5);
+    assert.equal(relatorio.stagedTotal, 0);
   });
 });

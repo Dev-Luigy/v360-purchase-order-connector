@@ -18,7 +18,7 @@ Atualizado por Claude em 2026-09-29, após FIX-11.
 
 ## Evidências e limitações
 
-- `npm run check`: **225 testes, 0 falhas** (209 rodam sem banco; 16 são pulados sem `DATABASE_URL`). `npm run test:integration`: **27 testes** contra PostgreSQL real. Cobertura por `npm run coverage`: **94,66% de linhas, 89,98% de branches** (sem banco; os repositórios PostgreSQL só são medidos com ele no ar). Gerado por `npm run evidence`, não digitado — os números derivaram três vezes quando eram manuais (REVIEW-10, R10-06).
+- `npm run check`: **235 testes, 0 falhas** (219 rodam sem banco; 16 são pulados sem `DATABASE_URL`). `npm run test:integration`: **27 testes** contra PostgreSQL real. Cobertura por `npm run coverage`: **93,76% de linhas, 90,02% de branches** (sem banco; os repositórios PostgreSQL só são medidos com ele no ar). Gerado por `npm run evidence`, não digitado — os números derivaram três vezes quando eram manuais.
 - Imagem de runtime construída e inspecionada sem executar container: sem CLI do Prisma e sem `mysql2`, que entrava por peer opcional e trazia CVE de credencial para uma aplicação que só fala PostgreSQL.
 - Duas mil combinações aritméticas inteiras comparadas com `BigInt` passaram; `/health` e `/ready` foram exercitados via `inject` nos limites atuais.
 - Três revisões registradas — [REVIEW-01](handoffs/REVIEW-01-codex.md), [REVIEW-02](handoffs/REVIEW-02-claude.md) e [REVIEW-03](handoffs/REVIEW-03-codex.md) — e os defeitos inequívocos das três estão fechados em [FIX-01](handoffs/FIX-01-claude.md), [FIX-02](handoffs/FIX-02-claude.md) e [FIX-03](handoffs/FIX-03-claude.md), cada um com regressão. Nenhum achado era falso positivo; dois defeitos adicionais apareceram durante as correções.
