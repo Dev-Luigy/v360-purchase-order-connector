@@ -5,6 +5,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | ID        | Tarefa                                                           | Estado                         | Responsável | Dependência / escopo                                                          |
 | --------- | ---------------------------------------------------------------- | ------------------------------ | ----------- | ----------------------------------------------------------------------------- |
 | ENV-01    | Criar base TypeScript/Fastify e Compose                          | concluída                      | Codex       | Arquivos existentes; execução real do Compose pendente em ENV-02              |
+| CLEAN-02  | Concluir a limpeza de comentários no código de produção          | em andamento                   | Claude      | CLEAN-01 do Codex commitado; aplicar o mesmo critério ao que veio depois      |
 | COL-01    | Organizar colaboração e instalação                               | concluída                      | Codex       | AGENTS.md, CLAUDE.md, docs e link no README                                   |
 | COL-02    | Estruturar contexto compartilhado e leitura sob demanda          | concluída                      | Codex       | Documentação; registro e arquivos abaixo                                      |
 | DOC-01    | Versionar o enunciado e as amostras dos clientes                 | concluída                      | Claude      | Nenhuma; enunciado e fixtures, sem código de negócio                          |
@@ -215,6 +216,15 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Decisão: o invariante passa a ser **carga terminada não deixa linha não publicada**. Linha invisível não é "esperando cabeçalho" — ninguém a reconcilia —, então relatá-la seria mentir de outro jeito. Ela é descartada, e o pedido volta como recusa, que é o que o relatório já dizia.
 - Dependências: FIX-17 concluída.
 - Evidência: [handoff FIX-18](handoffs/FIX-18-claude.md); 247 testes, 33 de integração, 30/30 no enunciado e 17/17 pelas rotas. Depois de carregar 80 mil pedidos, zero linhas não publicadas.
+
+## CLEAN-02 — concluir a limpeza de comentários
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `src/**` (exceto `src/infrastructure/database/generated/**`), `docs/TASKS.md`, `docs/handoffs/CLEAN-02-claude.md`.
+- Escopo: aplicar aos arquivos que vieram depois de CLEAN-01 o mesmo critério que ele fixou. O handoff dele avisava para **não reintroduzir número de review nem narrativa de correção em comentário**, e foi exatamente o que eu fiz: 93 ocorrências em `src/`. A regra que fica: a referência vive no **teste e no handoff**; o código de produção enuncia a regra, não a história dela.
+- O que permanece, por ser o motivo e não o histórico: precisão decimal e arredondamento, semântica de `items: null` contra `[]`, limites antes da materialização, encerramento de streams, locks e cursor atado aos filtros, invariantes do schema e a poda de dependências no Docker.
+- Dependências: CLEAN-01 do Codex, commitado como estava.
 
 ## CLEAN-01 — limpeza de comentários
 
