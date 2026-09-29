@@ -43,7 +43,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado           |
 | P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                         |
 | P1-05     | Validar desafio e registrar marco parte-1                        | concluída                      | Claude      | 18/18 exigências verificadas no ar; tag depende de DOC-02                     |
-| FIX-13    | Fechar os seis achados de REVIEW-12                              | em andamento                   | Claude      | REVIEW-12; a espera virou acumulador sem identidade de carga                  |
+| FIX-13    | Fechar os seis achados de REVIEW-12                              | concluída                      | Claude      | Identidade de carga na espera; emissão de lote centralizada                   |
 | FIX-12    | Fechar os três achados de REVIEW-11                              | concluída                      | Claude      | Guardar e decidir separados; invariante de lote; gerador fail-closed          |
 | FIX-11    | Fechar os sete achados de REVIEW-10                              | concluída                      | Claude      | Sete fechados com regressão; validador agora é repetível                      |
 | FIX-10    | Fechar os nove achados de REVIEW-09                              | concluída                      | Claude      | Nove fechados com regressão, mais três de REVIEW-07 que seguiam abertos       |
@@ -252,10 +252,11 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## FIX-13 — os seis achados de REVIEW-12
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/application/ports/purchase-order-repository.ts`, `src/application/use-cases/ingest-purchase-orders.ts`, `src/domain/ingestion.ts`, `src/infrastructure/database/purchase-order-repository.ts`, `src/infrastructure/integrations/split-json-adapter.ts`, `prisma/schema.prisma` (só o campo novo), `database/migrations/0004_*/**`, `src/infrastructure/database/migrations.ts`, `tests/**`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-13-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `src/application/ports/purchase-order-repository.ts`, `src/application/use-cases/ingest-purchase-orders.ts`, `src/domain/ingestion.ts`, `src/infrastructure/database/purchase-order-repository.ts`, `src/infrastructure/integrations/split-json-adapter.ts`, `prisma/schema.prisma` (só o campo novo), `database/migrations/0004_*/**`, `src/infrastructure/database/migrations.ts`, `tests/**`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-13-claude.md`.
 - Escopo: os seis achados de [REVIEW-12](handoffs/REVIEW-12-pos-fix-12-codex.md), todos reproduzidos com sonda. O eixo é R12-02: em FIX-12 eu fiz a tabela de espera acumular a carga sem identidade de ingestão, então duas cargas simultâneas consomem uma a da outra e os dois relatórios mentem. R12-01 e R12-05 saem do mesmo ponto.
 - Dependências: FIX-12 concluída.
+- Evidência: [handoff FIX-13](handoffs/FIX-13-claude.md); a migração `0004` dá identidade de carga à espera, separando os dois papéis que ela acumulava. A emissão de lotes do Delta foi centralizada num objeto só, então nenhuma saída passa do teto por construção.
 
 ## FIX-12 — o que REVIEW-11 mostrou em aberto
 

@@ -185,6 +185,10 @@ model IngestionStaging {
   externalNumber String @map("external_number") @db.VarChar(64)
   externalLine   Int    @map("external_line")
 
+  /// De qual carga esta linha veio. `null` é órfã de carga anterior, que só
+  /// sai daqui quando o cabeçalho chegar (ADR-008).
+  ingestionId String? @map("ingestion_id") @db.Uuid
+
   /// O item já normalizado; quem reconcilia não conhece o formato do cliente.
   item Json
   /// O conteúdo original, para auditoria e para o relatório da carga.
@@ -193,5 +197,6 @@ model IngestionStaging {
   stagedAt DateTime @map("staged_at") @db.Timestamptz(3)
 
   @@unique([clientId, externalNumber, externalLine], map: "ingestion_staging_client_external_line_key")
+  @@index([clientId, ingestionId], map: "ingestion_staging_client_ingestion_idx")
   @@map("ingestion_staging")
 }

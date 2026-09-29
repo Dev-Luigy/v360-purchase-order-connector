@@ -11,8 +11,13 @@ import {
   mergeWaitingItems,
   semPersistencia,
   type StagedItem,
+  type StagedRecord,
 } from '../../domain/ingestion.js';
-import { describeIssues, normalizedItemSchema } from '../../domain/schemas.js';
+import {
+  describeIssues,
+  normalizedItemSchema,
+  normalizedOrderSchema,
+} from '../../domain/schemas.js';
 import type {
   NormalizedPurchaseOrder,
   NormalizedPurchaseOrderItem,
@@ -79,11 +84,14 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
    */
   async stageLooseItems(
     clientId: ClientId,
+    ingestionId: string,
     staged: readonly StagedItem[],
   ): Promise<void> {
     if (staged.length === 0) return;
     await this.prisma.$transaction(async (tx) => {
-      for (const item of staged) await stageItem(tx, clientId, item);
+      for (const item of staged) {
+        await stageItem(tx, clientId, ingestionId, item);
+      }
     });
   }
 
@@ -96,6 +104,7 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
    */
   consolidateStaged(
     clientId: ClientId,
+    ingestionId: string,
     externalNumber: string,
   ): Promise<number> {
     const chave = lockKeyFor({ clientId, externalNumber });
@@ -109,7 +118,12 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
       // Sem cabeçalho ainda: os itens seguem esperando, intactos.
       if (encontrado === null) return 0;
 
-      const esperando = await takeWaitingItems(tx, clientId, externalNumber);
+      const esperando = await takeWaitingItems(
+        tx,
+        clientId,
+        externalNumber,
+        ingestionId,
+      );
       if (esperando.length === 0) return 0;
 
       const existente = await findFull(tx, encontrado.id);
@@ -124,17 +138,41 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
       );
       for (const item of esperando) porLinha.set(item.externalLine, item);
 
-      await persistSnapshot(tx, {
-        clientId: existente.clientId,
-        externalNumber: existente.externalNumber,
-        supplier: existente.supplier,
-        currency: existente.currency,
-        status: existente.status,
-        issuedOn: existente.issuedOn,
-        items: [...porLinha.values()],
-      });
+      // O agregado atravessa a fronteira de persistência aqui, e não só cada
+      // item: validar linha a linha não confere a cardinalidade do pedido, e
+      // o caminho item-only do Delta passava do teto (REVIEW-12, R12-01).
+      await persistSnapshot(
+        tx,
+        conferirAgregado({
+          clientId: existente.clientId,
+          externalNumber: existente.externalNumber,
+          supplier: existente.supplier,
+          currency: existente.currency,
+          status: existente.status,
+          issuedOn: existente.issuedOn,
+          items: [...porLinha.values()],
+        }),
+      );
       return esperando.length;
     });
+  }
+
+  async sampleStaged(
+    clientId: ClientId,
+    ingestionId: string,
+    limite: number,
+  ): Promise<readonly StagedRecord[]> {
+    const rows = await this.prisma.ingestionStaging.findMany({
+      where: { clientId, ingestionId },
+      orderBy: [{ externalNumber: 'asc' }, { externalLine: 'asc' }],
+      take: limite,
+      select: { externalNumber: true, raw: true },
+    });
+    return rows.map((row) => ({
+      reference: row.externalNumber,
+      reason: 'cabecalho-ausente' as const,
+      raw: row.raw,
+    }));
   }
 
   findById(id: string): Promise<PurchaseOrder | null> {
@@ -311,9 +349,18 @@ async function takeWaitingItems(
   tx: Transaction,
   clientId: ClientId,
   externalNumber: string,
+  /**
+   * Quando informado, leva só as linhas desta carga — é a consolidação. Sem
+   * ele, leva todas, que é a reconciliação pelo cabeçalho (ADR-008).
+   */
+  ingestionId?: string,
 ): Promise<readonly NormalizedPurchaseOrderItem[]> {
   const rows = await tx.ingestionStaging.findMany({
-    where: { clientId, externalNumber },
+    where: {
+      clientId,
+      externalNumber,
+      ...(ingestionId === undefined ? {} : { ingestionId }),
+    },
     orderBy: { externalLine: 'asc' },
   });
   if (rows.length === 0) return [];
@@ -337,6 +384,7 @@ async function takeWaitingItems(
 async function stageItem(
   tx: Transaction,
   clientId: ClientId,
+  ingestionId: string,
   staged: StagedItem,
 ): Promise<void> {
   const item = staged.item as unknown as Prisma.InputJsonValue;
@@ -352,12 +400,32 @@ async function stageItem(
       clientId,
       externalNumber: staged.externalNumber,
       externalLine: staged.item.externalLine,
+      ingestionId,
       item,
       raw: staged.raw,
       stagedAt: new Date(),
     },
-    update: { item, raw: staged.raw, stagedAt: new Date() },
+    update: { ingestionId, item, raw: staged.raw, stagedAt: new Date() },
   });
+}
+
+/**
+ * Confere o pedido inteiro contra o contrato antes de gravar.
+ *
+ * Validar cada item não confere a **cardinalidade**: o caminho item-only do
+ * Delta montava um pedido acima do teto sem ninguém reclamar, porque o teto é
+ * do agregado (REVIEW-12, R12-01).
+ */
+function conferirAgregado(
+  order: NormalizedPurchaseOrder,
+): NormalizedPurchaseOrder {
+  const conferido = normalizedOrderSchema.safeParse(order);
+  if (!conferido.success) {
+    throw new RangeError(
+      `pedido ${order.externalNumber}: ${describeIssues(conferido.error)}`,
+    );
+  }
+  return order;
 }
 
 /** Inclui o comprimento para evitar colisões na concatenação das partes. */
