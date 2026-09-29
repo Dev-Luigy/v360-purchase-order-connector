@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, before, beforeEach, describe, it } from 'node:test';
 
 import { PrismaPurchaseOrderRepository } from '../../src/infrastructure/database/purchase-order-repository.js';
 import type { DatabaseConnection } from '../../src/infrastructure/database/prisma-client.js';
 import type { StagedItem } from '../../src/domain/ingestion.js';
 import type { NormalizedPurchaseOrderItem } from '../../src/domain/purchase-order.js';
+
+import { maxItemsPerOrder } from '../../src/domain/limits.js';
 
 import { connect, gravar, limpar, pedido, semBanco } from './support.js';
 
@@ -68,9 +71,11 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     clientId: string,
     externalNumber: string,
     items: readonly StagedItem[],
+    // Cada chamada é uma carga distinta, como na vida real.
+    ingestionId: string = randomUUID(),
   ): Promise<number> => {
-    await orders.stageLooseItems(clientId, items);
-    return orders.consolidateStaged(clientId, externalNumber);
+    await orders.stageLooseItems(clientId, ingestionId, items);
+    return orders.consolidateStaged(clientId, ingestionId, externalNumber);
   };
 
   const emEspera = async (externalNumber: string): Promise<number> => {
@@ -257,6 +262,86 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
       1,
       'a primeira linha do grupo ficou confirmada apesar da falha',
     );
+  });
+
+  it('duas cargas simultâneas não consomem o staging uma da outra', async () => {
+    // R12-02: sem identidade de carga, a primeira a pegar o lock levava as
+    // duas e os dois relatórios mentiam.
+    await gravar(
+      orders,
+      pedido({ clientId: 'delta', externalNumber: 'DL-11' }),
+    );
+    const cargaA = randomUUID();
+    const cargaB = randomUUID();
+    await orders.stageLooseItems('delta', cargaA, [
+      orfao('DL-11', { externalLine: 21, material: 'DE-A' }),
+    ]);
+    await orders.stageLooseItems('delta', cargaB, [
+      orfao('DL-11', { externalLine: 22, material: 'DE-B' }),
+    ]);
+
+    const aplicadosPorA = await orders.consolidateStaged(
+      'delta',
+      cargaA,
+      'DL-11',
+    );
+    const aplicadosPorB = await orders.consolidateStaged(
+      'delta',
+      cargaB,
+      'DL-11',
+    );
+    assert.equal(aplicadosPorA, 1, 'A tomou crédito pelo item de B');
+    assert.equal(aplicadosPorB, 1, 'B não encontrou o próprio item');
+
+    const salvo = await orders.findByExternalNumber('delta', 'DL-11');
+    assert.deepEqual(
+      salvo?.items.map((i) => i.material).sort(),
+      ['DE-A', 'DE-B', 'MAT-1001'],
+      'um dos itens se perdeu',
+    );
+    assert.equal(await emEspera('DL-11'), 0);
+  });
+
+  it('a reconciliação pelo cabeçalho leva a espera de qualquer carga', async () => {
+    // O oposto da consolidação: quando o cabeçalho chega, tudo o que esperava
+    // entra, venha de que carga vier. É a promessa do ADR-008.
+    await orders.stageLooseItems('delta', randomUUID(), [
+      orfao('DL-12', { externalLine: 10, material: 'DE-1' }),
+    ]);
+    await orders.stageLooseItems('delta', randomUUID(), [
+      orfao('DL-12', { externalLine: 20, material: 'DE-2' }),
+    ]);
+    const salvo = await gravar(
+      orders,
+      pedido({ clientId: 'delta', externalNumber: 'DL-12', items: null }),
+    );
+    assert.equal(
+      salvo.items.length,
+      2,
+      'a reconciliação deixou item para trás',
+    );
+    assert.equal(await emEspera('DL-12'), 0);
+  });
+
+  it('consolidação acima do teto de itens recusa em vez de gravar', async () => {
+    // R12-01: o teto é do agregado. Validar item a item não o confere, e o
+    // caminho item-only montava um retrato acima do limite.
+    await gravar(
+      orders,
+      pedido({ clientId: 'delta', externalNumber: 'DL-13' }),
+    );
+    const carga = randomUUID();
+    const grupo = Array.from({ length: maxItemsPerOrder }, (_, i) =>
+      orfao('DL-13', { externalLine: i + 100, material: `X-${String(i)}` }),
+    );
+    await orders.stageLooseItems('delta', carga, grupo);
+
+    await assert.rejects(
+      () => orders.consolidateStaged('delta', carga, 'DL-13'),
+      /itens|teto|máximo|too/i,
+    );
+    const salvo = await orders.findByExternalNumber('delta', 'DL-13');
+    assert.equal(salvo?.items.length, 1, 'gravou um pedido acima do teto');
   });
 
   it('duas aplicações concorrentes no mesmo pedido não perdem uma delas', async () => {

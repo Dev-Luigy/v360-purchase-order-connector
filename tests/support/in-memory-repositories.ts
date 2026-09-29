@@ -13,6 +13,7 @@ import {
   mergeWaitingItems,
   semPersistencia,
   type StagedItem,
+  type StagedRecord,
 } from '../../src/domain/ingestion.js';
 import { normalizedItemSchema } from '../../src/domain/schemas.js';
 import type {
@@ -39,18 +40,40 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
   private readonly byKey = new Map<string, PurchaseOrder>();
   // A espera fica aqui, e não num colaborador à parte, pelo mesmo motivo do
   // PostgreSQL: consumir a espera e gravar o pedido é uma operação só.
-  private readonly waiting = new Map<string, NormalizedPurchaseOrderItem[]>();
+  private readonly waiting = new Map<
+    string,
+    { ingestionId: string; item: NormalizedPurchaseOrderItem; raw: string }[]
+  >();
   private sequence = 0;
 
   replaceSnapshot(snapshot: NormalizedPurchaseOrder): Promise<SnapshotResult> {
     const key = `${snapshot.clientId}:${snapshot.externalNumber}`;
-    const existing = this.byKey.get(key);
-    const esperando = this.waiting.get(key) ?? [];
+    // A reconciliação pelo cabeçalho leva **tudo** o que esperava, de
+    // qualquer carga: é a promessa do ADR-008.
+    const esperando = (this.waiting.get(key) ?? []).map((linha) => linha.item);
     this.waiting.delete(key);
     // O test double revalida como o repositório real: era a ausência disso
     // que deixava R09-04 passar verde nos testes (REVIEW-09).
     for (const item of esperando) normalizedItemSchema.parse(item);
     const completo = mergeWaitingItems(snapshot, esperando);
+    return Promise.resolve({
+      order: this.gravar(completo),
+      fromLoad: snapshot.items?.length ?? 0,
+      recovered: (completo.items?.length ?? 0) - (snapshot.items?.length ?? 0),
+    });
+  }
+
+  /**
+   * Grava sem tocar na espera.
+   *
+   * `consolidateStaged` passava por `replaceSnapshot`, que consome **toda** a
+   * espera do pedido — inclusive linhas de outra carga que ainda não tinham
+   * sido consolidadas. O repositório real não faz isso, e a divergência entre
+   * o dobro e ele escondia o comportamento certo (REVIEW-12, R12-02).
+   */
+  private gravar(completo: NormalizedPurchaseOrder): PurchaseOrder {
+    const key = `${completo.clientId}:${completo.externalNumber}`;
+    const existing = this.byKey.get(key);
 
     const items =
       completo.items === null
@@ -66,12 +89,12 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
     this.sequence += 1;
     const saved: PurchaseOrder = {
       id: existing?.id ?? `order-${String(this.sequence)}`,
-      clientId: snapshot.clientId,
-      externalNumber: snapshot.externalNumber,
-      supplier: snapshot.supplier,
-      currency: snapshot.currency,
-      status: snapshot.status,
-      issuedOn: snapshot.issuedOn,
+      clientId: completo.clientId,
+      externalNumber: completo.externalNumber,
+      supplier: completo.supplier,
+      currency: completo.currency,
+      status: completo.status,
+      issuedOn: completo.issuedOn,
       ingestionVersion: (existing?.ingestionVersion ?? 0) + 1,
       ingestedAt: new Date().toISOString(),
       hasPendingBalance: items.some(
@@ -80,15 +103,12 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
       items,
     };
     this.byKey.set(key, saved);
-    return Promise.resolve({
-      order: saved,
-      fromLoad: snapshot.items?.length ?? 0,
-      recovered: (completo.items?.length ?? 0) - (snapshot.items?.length ?? 0),
-    });
+    return saved;
   }
 
   stageLooseItems(
     clientId: ClientId,
+    ingestionId: string,
     staged: readonly StagedItem[],
   ): Promise<void> {
     for (const item of staged) {
@@ -97,30 +117,37 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
       const fila = this.waiting.get(key) ?? [];
       this.waiting.set(key, [
         ...fila.filter(
-          (atual) => atual.externalLine !== item.item.externalLine,
+          (atual) => atual.item.externalLine !== item.item.externalLine,
         ),
-        item.item,
+        { ingestionId, item: item.item, raw: item.raw },
       ]);
     }
     return Promise.resolve();
   }
 
-  async consolidateStaged(
+  consolidateStaged(
     clientId: ClientId,
+    ingestionId: string,
     externalNumber: string,
   ): Promise<number> {
     const key = `${clientId}:${externalNumber}`;
     const existing = this.byKey.get(key);
-    if (existing === undefined) return 0;
-    const esperando = this.waiting.get(key) ?? [];
-    if (esperando.length === 0) return 0;
-    this.waiting.delete(key);
+    if (existing === undefined) return Promise.resolve(0);
+    const fila = this.waiting.get(key) ?? [];
+    // Só o que é desta carga: levar o que outra gravou faria os dois
+    // relatórios mentirem (REVIEW-12, R12-02).
+    const meus = fila.filter((linha) => linha.ingestionId === ingestionId);
+    if (meus.length === 0) return Promise.resolve(0);
+    this.waiting.set(
+      key,
+      fila.filter((linha) => linha.ingestionId !== ingestionId),
+    );
 
     const porLinha = new Map(
       semPersistencia(existing).map((item) => [item.externalLine, item]),
     );
-    for (const item of esperando) porLinha.set(item.externalLine, item);
-    await this.replaceSnapshot({
+    for (const linha of meus) porLinha.set(linha.item.externalLine, linha.item);
+    this.gravar({
       clientId: existing.clientId,
       externalNumber: existing.externalNumber,
       supplier: existing.supplier,
@@ -129,7 +156,29 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
       issuedOn: existing.issuedOn,
       items: [...porLinha.values()],
     });
-    return esperando.length;
+    return Promise.resolve(meus.length);
+  }
+
+  sampleStaged(
+    clientId: ClientId,
+    ingestionId: string,
+    limite: number,
+  ): Promise<readonly StagedRecord[]> {
+    const encontrados: StagedRecord[] = [];
+    for (const [key, fila] of this.waiting) {
+      if (!key.startsWith(`${clientId}:`)) continue;
+      const externalNumber = key.slice(clientId.length + 1);
+      for (const linha of fila) {
+        if (linha.ingestionId !== ingestionId) continue;
+        if (encontrados.length >= limite) break;
+        encontrados.push({
+          reference: externalNumber,
+          reason: 'cabecalho-ausente',
+          raw: linha.raw,
+        });
+      }
+    }
+    return Promise.resolve(encontrados);
   }
 
   /** Só para teste: quantos itens ainda esperam por este pedido. */

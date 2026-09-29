@@ -1,5 +1,5 @@
 import type { ClientId, PurchaseOrderStatus } from '../../domain/client.js';
-import type { StagedItem } from '../../domain/ingestion.js';
+import type { StagedItem, StagedRecord } from '../../domain/ingestion.js';
 import type { TaxId } from '../../domain/primitives.js';
 import type {
   NormalizedPurchaseOrder,
@@ -55,23 +55,48 @@ export interface PurchaseOrderRepository {
    * a tabela de espera é o acumulador (REVIEW-11).
    *
    * Reenviar a mesma linha do mesmo pedido substitui a anterior (ADR-008).
+   *
+   * `ingestionId` separa os dois papéis da tabela: acumular **desta** carga e
+   * guardar órfão de qualquer carga. Sem ele, duas cargas simultâneas do mesmo
+   * pedido consumiam uma a da outra (REVIEW-12, R12-02).
    */
   stageLooseItems(
     clientId: ClientId,
+    ingestionId: string,
     staged: readonly StagedItem[],
   ): Promise<void>;
 
   /**
    * Fecha um pedido cujos itens estavam esperando.
    *
-   * Se o pedido existe, **todos** os itens em espera dele entram num retrato
-   * só, sob um lock e uma transação, com um único incremento de versão; se
-   * não existe, continuam esperando. Devolve quantos itens foram aplicados.
+   * Se o pedido existe, os itens **desta carga** que esperavam por ele entram
+   * num retrato só, sob um lock e uma transação, com um único incremento de
+   * versão; se não existe, continuam esperando. Devolve quantos foram
+   * aplicados.
+   *
+   * Leva só o que é da própria carga: levar o que outra gravou fazia os dois
+   * relatórios mentirem. Órfão de carga anterior sai daqui pela reconciliação
+   * do cabeçalho, em `replaceSnapshot`.
    */
   consolidateStaged(
     clientId: ClientId,
+    ingestionId: string,
     externalNumber: string,
   ): Promise<number>;
+
+  /**
+   * Amostra do que **continua** esperando por conta desta carga.
+   *
+   * A amostra era montada antes da consolidação e filtrada depois, então podia
+   * sair vazia com total positivo: os cem primeiros candidatos podiam ter sido
+   * todos aplicados, escondendo justamente o que ficou (REVIEW-12, R12-05).
+   * Agora sai do estado que de fato sobrou.
+   */
+  sampleStaged(
+    clientId: ClientId,
+    ingestionId: string,
+    limite: number,
+  ): Promise<readonly StagedRecord[]>;
 
   findById(id: string): Promise<PurchaseOrder | null>;
   findByExternalNumber(

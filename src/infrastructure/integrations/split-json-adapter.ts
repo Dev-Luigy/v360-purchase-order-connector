@@ -72,10 +72,17 @@ export class SplitJsonAdapter implements SourceAdapter {
       );
     }
 
-    let rejected: RejectedRecord[] = [];
+    // Uma emissão só, que conta as três categorias juntas. Enquanto cada uma
+    // tinha o próprio controle, o lote final somava pedidos, recusas e espera
+    // sem conferir nada e passava do teto (REVIEW-12, R12-04).
+    const lote = new Lote(this.batchSize);
     const pendentes = new Map<string, Pending>();
     // Pedidos com cabeçalhos que discordam: nada é gravado para eles.
     const conflitantes = new Set<string>();
+    // Quantos itens órfãos por pedido, e quais passaram do teto. O teto é do
+    // agregado, e o caminho item-only não o consultava (REVIEW-12, R12-01).
+    const orfaosPorPedido = new Map<string, number>();
+    const orfaosEstourados = new Set<string>();
 
     if (temCabecalhos) {
       let index = 0;
@@ -86,46 +93,34 @@ export class SplitJsonAdapter implements SourceAdapter {
         try {
           const header = readOrderHeader(jsonFieldSource(raw), profile);
           const anterior = pendentes.get(header.externalNumber);
-          if (anterior !== undefined) {
+          if (anterior === undefined) {
+            pendentes.set(header.externalNumber, {
+              header,
+              // Sem a parte de itens, `null` diz "esta carga não trouxe os
+              // itens" e preserva os já conhecidos; `[]` os apagaria.
+              items: [],
+              failed: false,
+              overflow: false,
+            });
+          } else if (!sameHeader(anterior.header, header)) {
             // "Último vence" em silêncio escolhia um dos dois cabeçalhos sem
             // dizer nada. Duplicata idêntica é ignorada; conflito recusa o
             // pedido, como o Gama já faz (REVIEW-10, R10-04).
-            if (!sameHeader(anterior.header, header)) {
-              conflitantes.add(header.externalNumber);
-              rejected.push({
-                reference: header.externalNumber,
-                reason:
-                  'dois cabeçalhos do mesmo pedido discordam na carga; ' +
-                  'o pedido inteiro foi recusado para não gravar um dos dois',
-              });
-            }
-            index += 1;
-            if (rejected.length >= this.batchSize) {
-              yield { orders: [], rejected, staged: [] };
-              rejected = [];
-            }
-            continue;
+            conflitantes.add(header.externalNumber);
+            lote.recusar({
+              reference: header.externalNumber,
+              reason:
+                'dois cabeçalhos do mesmo pedido discordam na carga; ' +
+                'o pedido inteiro foi recusado para não gravar um dos dois',
+            });
           }
-          pendentes.set(header.externalNumber, {
-            header,
-            // Sem a parte de itens, `null` diz "esta carga não trouxe os
-            // itens" e preserva os já conhecidos; `[]` os apagaria.
-            items: [],
-            failed: false,
-            overflow: false,
-          });
         } catch (cause) {
-          rejected.push({
+          lote.recusar({
             reference: `cabeçalho #${String(index)}`,
             reason: reasonOf(cause),
           });
         }
-        if (rejected.length >= this.batchSize) {
-          // As recusas também escoam durante a leitura: um arquivo só de
-          // registros inválidos crescia sem teto (REVIEW-10, R10-03).
-          yield { orders: [], rejected, staged: [] };
-          rejected = [];
-        }
+        if (lote.cheio) yield lote.tirar();
         // Fora do `try`: estourar o teto encerra a carga inteira, não vira
         // recusa de um registro. Aceitar em parte gravaria pedidos sem os
         // itens que viriam depois (REVIEW-09, R09-05).
@@ -140,7 +135,6 @@ export class SplitJsonAdapter implements SourceAdapter {
       }
     }
 
-    let staged: StagedItem[] = [];
     if (temItens) {
       let index = 0;
       for await (const raw of streamArrayAtKey(
@@ -150,103 +144,146 @@ export class SplitJsonAdapter implements SourceAdapter {
         try {
           const numero = readItemOrderNumber(jsonFieldSource(raw), profile);
           const alvo = pendentes.get(numero);
-          if (alvo === undefined) {
-            // Item sem cabeçalho espera em staging com o conteúdo cru, para
-            // reconciliar quando o cabeçalho aparecer. Inventar um pedido a
-            // partir do item significaria inventar fornecedor, situação e
-            // data — e um pedido sem situação nunca poderia ser conferido,
-            // porque a regra 2 depende dela (ADR-008).
-            // O item é normalizado agora, com o perfil em mãos: quem
-            // reconcilia depois é o repositório, que não conhece o formato do
-            // cliente. O cru fica para auditoria.
+          if (alvo !== undefined) {
+            if (alvo.items.length >= maxItemsPerOrder) alvo.overflow = true;
+            else alvo.items.push(readItem(jsonFieldSource(raw), profile));
+          } else if (!orfaosEstourados.has(numero)) {
+            // Item sem cabeçalho espera com o conteúdo cru, para reconciliar
+            // quando o cabeçalho aparecer. Inventar um pedido a partir do item
+            // significaria inventar fornecedor, situação e data — e um pedido
+            // sem situação nunca poderia ser conferido (ADR-008).
             //
-            // E é **validado contra o contrato antes de esperar**: sem isso,
-            // material acima do limite entrava na espera e só estourava muito
-            // depois, fora do tratamento por registro (REVIEW-09, R09-04).
-            const item = readItem(jsonFieldSource(raw), profile);
-            const conferido = normalizedItemSchema.safeParse(item);
-            if (!conferido.success) {
-              throw new FieldError(
-                `item do pedido ${numero}`,
-                describeIssues(conferido.error),
+            // O teto vale aqui também: sem ele, dez mil e um itens de um
+            // pedido inexistente entravam na espera e depois montavam um
+            // retrato acima do limite (REVIEW-12, R12-01).
+            const jaEsperando = orfaosPorPedido.get(numero) ?? 0;
+            if (jaEsperando >= maxItemsPerOrder) {
+              orfaosEstourados.add(numero);
+              lote.recusar({
+                reference: numero,
+                reason:
+                  `mais de ${String(maxItemsPerOrder)} itens sem cabeçalho; ` +
+                  'o pedido inteiro foi recusado',
+              });
+            } else {
+              // Validado contra o contrato antes de esperar: sem isso,
+              // material acima do limite entrava e só estourava muito depois,
+              // fora do tratamento por registro (REVIEW-09, R09-04).
+              const conferido = normalizedItemSchema.safeParse(
+                readItem(jsonFieldSource(raw), profile),
               );
+              if (!conferido.success) {
+                throw new FieldError(
+                  `item do pedido ${numero}`,
+                  describeIssues(conferido.error),
+                );
+              }
+              orfaosPorPedido.set(numero, jaEsperando + 1);
+              lote.esperar({
+                reference: numero,
+                externalNumber: numero,
+                reason: 'cabecalho-ausente',
+                raw: JSON.stringify(raw).slice(0, maxStagedRawCharacters),
+                item: conferido.data,
+              });
             }
-            staged.push({
-              reference: numero,
-              externalNumber: numero,
-              reason: 'cabecalho-ausente',
-              raw: JSON.stringify(raw).slice(0, maxStagedRawCharacters),
-              item: conferido.data,
-            });
-            if (staged.length >= this.batchSize) {
-              // A espera sai em lotes: acumular tudo até o fim do arquivo
-              // contradiz "nada exige a carga inteira em memória" (R09-05).
-              yield { orders: [], rejected: [], staged };
-              staged = [];
-            }
-          } else if (alvo.items.length >= maxItemsPerOrder) {
-            alvo.overflow = true;
-          } else {
-            alvo.items.push(readItem(jsonFieldSource(raw), profile));
           }
         } catch (cause) {
-          rejected.push({
+          lote.recusar({
             reference: `item #${String(index)}`,
             reason: reasonOf(cause),
           });
           marcarFalha(raw, profile, pendentes);
         }
-        if (rejected.length >= this.batchSize) {
-          yield { orders: [], rejected, staged: [] };
-          rejected = [];
+        if (lote.cheio) yield lote.tirar();
+        if (orfaosPorPedido.size > this.maxIndexedHeaders) {
+          throw new FieldError(
+            splitJsonItemsPart,
+            `carga com mais de ${String(this.maxIndexedHeaders)} pedidos sem ` +
+              'cabeçalho; divida o arquivo ou aumente o teto do adaptador',
+          );
         }
         index += 1;
       }
     }
 
-    let orders: NormalizedPurchaseOrder[] = [];
-    let lote: RejectedRecord[] = rejected;
     for (const [numero, pendente] of pendentes) {
       // Cabeçalhos que discordam já foram recusados uma vez.
       if (conflitantes.has(numero)) continue;
 
       if (pendente.overflow) {
-        lote.push({
+        lote.recusar({
           reference: numero,
           reason: `pedido acima do teto de ${String(maxItemsPerOrder)} itens`,
         });
-        if (orders.length + lote.length >= this.batchSize) {
-          yield { orders, rejected: lote, staged: [] };
-          orders = [];
-          lote = [];
+      } else {
+        try {
+          lote.aceitar(
+            validateNormalizedOrder({
+              clientId: payload.clientId,
+              ...pendente.header,
+              // Sem a parte de itens, esta carga não afirma nada sobre eles.
+              // Com ela, uma linha recusada deixa o conjunto incerto, e `null`
+              // preserva o que já existe em vez de apagar.
+              items: !temItens || pendente.failed ? null : pendente.items,
+            }),
+          );
+        } catch (cause) {
+          lote.recusar({ reference: numero, reason: reasonOf(cause) });
         }
-        continue;
       }
-      try {
-        orders.push(
-          validateNormalizedOrder({
-            clientId: payload.clientId,
-            ...pendente.header,
-            // Sem a parte de itens, esta carga não afirma nada sobre eles.
-            // Com ela, uma linha recusada deixa o conjunto incerto, e `null`
-            // preserva o que já existe em vez de apagar.
-            items: !temItens || pendente.failed ? null : pendente.items,
-          }),
-        );
-      } catch (cause) {
-        lote.push({ reference: numero, reason: reasonOf(cause) });
-      }
-
-      if (orders.length + lote.length >= this.batchSize) {
-        yield { orders, rejected: lote, staged: [] };
-        orders = [];
-        lote = [];
-      }
+      if (lote.cheio) yield lote.tirar();
     }
 
-    if (orders.length > 0 || lote.length > 0 || staged.length > 0) {
-      yield { orders, rejected: lote, staged };
-    }
+    if (!lote.vazio) yield lote.tirar();
+  }
+}
+
+/**
+ * Acumula um lote e diz quando ele encheu, contando as três categorias
+ * juntas. Como a conferência acontece depois de **cada** inclusão, nenhuma
+ * emissão passa do teto — nem a última.
+ */
+class Lote {
+  private orders: NormalizedPurchaseOrder[] = [];
+  private rejected: RejectedRecord[] = [];
+  private staged: StagedItem[] = [];
+
+  constructor(private readonly teto: number) {}
+
+  aceitar(order: NormalizedPurchaseOrder): void {
+    this.orders.push(order);
+  }
+
+  recusar(record: RejectedRecord): void {
+    this.rejected.push(record);
+  }
+
+  esperar(item: StagedItem): void {
+    this.staged.push(item);
+  }
+
+  get cheio(): boolean {
+    return (
+      this.orders.length + this.rejected.length + this.staged.length >=
+      this.teto
+    );
+  }
+
+  get vazio(): boolean {
+    return this.orders.length + this.rejected.length + this.staged.length === 0;
+  }
+
+  tirar(): AdapterBatch {
+    const batch = {
+      orders: this.orders,
+      rejected: this.rejected,
+      staged: this.staged,
+    };
+    this.orders = [];
+    this.rejected = [];
+    this.staged = [];
+    return batch;
   }
 }
 

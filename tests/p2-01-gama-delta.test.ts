@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 
 import { checkInvoice } from '../src/domain/conference-rules.js';
-import { maxItemsPerOrder } from '../src/domain/limits.js';
+import { maxItemsPerOrder, maxStagedOrders } from '../src/domain/limits.js';
 import { Decimal, quantityScale } from '../src/domain/decimal.js';
 import {
   deltaProfile,
@@ -16,7 +16,10 @@ import { InMemoryClientProfiles } from '../src/infrastructure/integrations/clien
 import { buildAdapterRegistry } from '../src/infrastructure/integrations/adapter-registry.js';
 import { InMemoryPurchaseOrderRepository } from './support/in-memory-repositories.js';
 
-import type { AdapterBatch } from '../src/application/ports/source-adapter.js';
+import type {
+  AdapterBatch,
+  SourceAdapter,
+} from '../src/application/ports/source-adapter.js';
 import type {
   NormalizedPurchaseOrder,
   PurchaseOrder,
@@ -669,10 +672,14 @@ describe('REVIEW-10: o que a segunda revisão expôs', () => {
     await uso.execute(await partes(['orders', 'items']));
     const antes = await orders.findByExternalNumber('delta', 'DL-2026-0044');
 
-    const original = orders.replaceSnapshot.bind(orders);
-    orders.replaceSnapshot = () => Promise.reject(new Error('falha induzida'));
+    // A operação que aplica o grupo é a consolidação; é ela que precisa
+    // falhar sem deixar retrato pela metade. A atomicidade de verdade é
+    // provada contra PostgreSQL em `tests/integration/staging.test.ts`.
+    const original = orders.consolidateStaged.bind(orders);
+    orders.consolidateStaged = () =>
+      Promise.reject(new Error('falha induzida'));
     const relatorio = await uso.execute(await partes(['items']));
-    orders.replaceSnapshot = original;
+    orders.consolidateStaged = original;
 
     assert.ok(relatorio.rejectedTotal > 0, 'a falha não foi reportada');
     const depois = await orders.findByExternalNumber('delta', 'DL-2026-0044');
@@ -954,5 +961,231 @@ describe('REVIEW-11: o que ficou em aberto do FIX-11', () => {
     assert.equal(depois?.items.length, 5);
     assert.equal(relatorio.itemsAccepted, 5);
     assert.equal(relatorio.stagedTotal, 0);
+  });
+});
+
+describe('REVIEW-12: o que a espera como acumulador expôs', () => {
+  const item = (linha: number, pedido = 'DL-CAP') => ({
+    purchase_order: pedido,
+    created_at: '2026-09-02',
+    line: linha,
+    material: `M-${String(linha)}`,
+    description: 'D',
+    uom: 'UN',
+    quantity_ordered: 1,
+    quantity_received: 0,
+    unit_price: 1.0,
+  });
+  const cabecalhoDe = (pedido: string) => ({
+    po_number: pedido,
+    created_at: '2026-09-02',
+    status: 'open',
+    currency: 'BRL',
+    vendor: { tax_id: '67890123000145', name: 'Embalagens Norte Sul Ltda' },
+  });
+
+  const ler = async (partes: Record<string, unknown>, batchSize = 200) => {
+    const mapa = new Map<string, () => AsyncIterable<Uint8Array>>();
+    for (const [nome, conteudo] of Object.entries(partes)) {
+      // O array vai sob a chave do perfil, como o Delta entrega.
+      mapa.set(nome, () => bytes(JSON.stringify({ [nome]: conteudo })));
+    }
+    const tamanhos: number[] = [];
+    const total = { orders: 0, rejected: 0, staged: 0 };
+    for await (const lote of new SplitJsonAdapter(batchSize).read(
+      { clientId: 'delta', formatVersion: '1', parts: mapa },
+      deltaProfile,
+    )) {
+      tamanhos.push(
+        lote.orders.length + lote.rejected.length + lote.staged.length,
+      );
+      total.orders += lote.orders.length;
+      total.rejected += lote.rejected.length;
+      total.staged += lote.staged.length;
+    }
+    return { tamanhos, total };
+  };
+
+  it('R12-01: item-only respeita o teto de itens por pedido', async () => {
+    // O teto é do agregado; validar item a item não confere cardinalidade, e
+    // o caminho sem cabeçalho não o consultava.
+    const noLimite = await ler({
+      items: Array.from({ length: maxItemsPerOrder }, (_, i) => item(i + 1)),
+    });
+    assert.equal(noLimite.total.staged, maxItemsPerOrder);
+    assert.equal(noLimite.total.rejected, 0);
+
+    const acima = await ler({
+      items: Array.from({ length: maxItemsPerOrder + 1 }, (_, i) =>
+        item(i + 1),
+      ),
+    });
+    assert.equal(
+      acima.total.staged,
+      maxItemsPerOrder,
+      'passou do teto sem cabeçalho',
+    );
+    assert.equal(acima.total.rejected, 1);
+  });
+
+  it('R12-04: lote final misturando pedidos, recusas e espera respeita o teto', async () => {
+    const { tamanhos } = await ler(
+      {
+        orders: [cabecalhoDe('V-1'), cabecalhoDe('V-2')],
+        items: [item(10, 'V-1'), item(10, 'ORFAO-1'), item(20, 'ORFAO-2')],
+      },
+      3,
+    );
+    const estourados = tamanhos.filter((n) => n > 3);
+    assert.equal(
+      estourados.length,
+      0,
+      `lote misto acima do teto: ${JSON.stringify(tamanhos)}`,
+    );
+  });
+
+  it('R12-02: duas cargas do mesmo pedido relatam cada uma a sua', async () => {
+    const repositorio = new InMemoryPurchaseOrderRepository();
+    const uso = () =>
+      new IngestPurchaseOrders(
+        new InMemoryClientProfiles(),
+        buildAdapterRegistry(),
+        repositorio,
+      );
+    const carga = (partes: Record<string, unknown>) => {
+      const mapa = new Map<string, () => AsyncIterable<Uint8Array>>();
+      for (const [nome, conteudo] of Object.entries(partes)) {
+        mapa.set(nome, () => bytes(JSON.stringify({ [nome]: conteudo })));
+      }
+      return uso().execute({
+        clientId: 'delta',
+        formatVersion: '1',
+        parts: mapa,
+      });
+    };
+
+    await carga({ orders: [cabecalhoDe('DL-CONC')] });
+    const [a, b] = await Promise.all([
+      carga({ items: [item(10, 'DL-CONC')] }),
+      carga({ items: [item(20, 'DL-CONC')] }),
+    ]);
+
+    // Cada carga trouxe um item: cada relatório precisa dizer um.
+    assert.equal(a.itemsAccepted, 1, 'a primeira carga não relatou o seu item');
+    assert.equal(b.itemsAccepted, 1, 'a segunda carga não relatou o seu item');
+    assert.equal(a.stagedTotal + b.stagedTotal, 0, 'sobrou item em espera');
+
+    const salvo = await repositorio.findByExternalNumber('delta', 'DL-CONC');
+    assert.equal(salvo?.items.length, 2, 'um dos itens se perdeu');
+  });
+
+  it('R12-05: a amostra mostra o que sobrou, não um palpite anterior', async () => {
+    const repositorio = new InMemoryPurchaseOrderRepository();
+    const uso = new IngestPurchaseOrders(
+      new InMemoryClientProfiles(),
+      buildAdapterRegistry(),
+      repositorio,
+    );
+    const existente = 'DL-EXISTE';
+    await uso.execute({
+      clientId: 'delta',
+      formatVersion: '1',
+      parts: new Map([
+        [
+          'orders',
+          () => bytes(JSON.stringify({ orders: [cabecalhoDe(existente)] })),
+        ],
+      ]),
+    });
+
+    // Cento e um itens: os cem primeiros do pedido que existe, e o último de
+    // um pedido ausente. A amostra montada antes da decisão ficaria vazia.
+    const itens = [
+      ...Array.from({ length: 100 }, (_, i) => item(i + 1, existente)),
+      item(1, 'DL-SEM-CABECALHO'),
+    ];
+    const relatorio = await uso.execute({
+      clientId: 'delta',
+      formatVersion: '1',
+      parts: new Map([
+        ['items', () => bytes(JSON.stringify({ items: itens }))],
+      ]),
+    });
+
+    assert.equal(relatorio.stagedTotal, 1);
+    assert.equal(
+      relatorio.staged.length,
+      1,
+      'a amostra escondeu o único registro que ficou esperando',
+    );
+    assert.equal(relatorio.staged[0]?.reference, 'DL-SEM-CABECALHO');
+  });
+});
+
+describe('REVIEW-12: teto de pedidos em espera', () => {
+  it('R12-03: estourar o teto não deixa nenhuma linha escrita', async () => {
+    // O teto encerrava a requisição **depois** de gravar o lote ofensivo: a
+    // carga falhava e os dados excedentes ficavam no banco.
+    //
+    // O adaptador tem teto próprio, mais cedo; este teste isola o guarda do
+    // caso de uso com um adaptador que entrega o excesso de uma vez, sem
+    // gerar cem mil registros de JSON.
+    const excesso = maxStagedOrders + 1;
+    const adaptador: SourceAdapter = {
+      deliveryFormat: 'split-json',
+      async *read() {
+        yield {
+          orders: [],
+          rejected: [],
+          staged: Array.from({ length: excesso }, (_, i) => ({
+            reference: `ORFAO-${String(i)}`,
+            externalNumber: `ORFAO-${String(i)}`,
+            reason: 'cabecalho-ausente' as const,
+            raw: '{}',
+            item: {
+              externalLine: 10,
+              material: 'M',
+              description: 'D',
+              purchaseUnit: 'UN',
+              conversionFactor: '1.000000',
+              quantityOrdered: '1.000000',
+              quantityReceived: '0.000000',
+              unitPrice: '1.000000',
+              lineCreatedOn: null,
+            },
+          })),
+        };
+      },
+    };
+
+    let escritas = 0;
+    const repositorio = new InMemoryPurchaseOrderRepository();
+    const espiao = Object.create(repositorio) as typeof repositorio;
+    espiao.stageLooseItems = (clientId, ingestionId, itens) => {
+      escritas += itens.length;
+      return repositorio.stageLooseItems(clientId, ingestionId, itens);
+    };
+
+    const uso = new IngestPurchaseOrders(
+      new InMemoryClientProfiles(),
+      new Map([['split-json', adaptador]]),
+      espiao,
+    );
+
+    await assert.rejects(
+      () =>
+        uso.execute({
+          clientId: 'delta',
+          formatVersion: '1',
+          parts: new Map([['items', () => bytes('{}')]]),
+        }),
+      /pedidos em espera/,
+    );
+
+    assert.equal(
+      escritas,
+      0,
+      'o lote que excedeu o teto foi escrito antes da recusa',
+    );
   });
 });

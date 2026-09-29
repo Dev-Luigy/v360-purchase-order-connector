@@ -7,7 +7,6 @@ import type { ClientId, DeliveryFormat } from '../../domain/client.js';
 import type {
   IngestionReport,
   RejectedRecord,
-  StagedItem,
   StagedRecord,
 } from '../../domain/ingestion.js';
 import { maxReportedRecords, maxStagedOrders } from '../../domain/limits.js';
@@ -32,6 +31,10 @@ export class IngestPurchaseOrders {
 
   async execute(payload: SourcePayload): Promise<IngestionReport> {
     const startedAt = this.now();
+    // O identificador da carga nasce aqui, não no retorno: as linhas que ela
+    // grava na espera precisam dele para que outra carga não as consuma
+    // (REVIEW-12, R12-02).
+    const ingestionId = randomUUID();
     const profile = await this.profiles.find(payload.clientId);
     if (profile === null) {
       throw new UnknownClientError(payload.clientId);
@@ -46,10 +49,9 @@ export class IngestPurchaseOrders {
 
     const rejected = new Sample<RejectedRecord>();
     const staged = new Sample<StagedRecord>();
-    // Quantos itens esperam por pedido, e uma amostra limitada deles. Só os
-    // números de pedido ficam em memória; os itens estão na tabela de espera.
+    // Quantos itens esperam por pedido. Só os números ficam em memória; os
+    // itens estão na tabela de espera, que é o acumulador.
     const esperandoPorPedido = new Map<string, number>();
-    const amostraDaEspera: StagedItem[] = [];
     let ordersAccepted = 0;
     let itemsAccepted = 0;
 
@@ -84,36 +86,44 @@ export class IngestPurchaseOrders {
       // (REVIEW-11). A tabela de espera é o acumulador, então nada além dos
       // números de pedido fica em memória.
       if (batch.staged.length > 0) {
-        await this.orders.stageLooseItems(payload.clientId, batch.staged);
-        for (const item of batch.staged) {
-          const atual = esperandoPorPedido.get(item.externalNumber) ?? 0;
-          esperandoPorPedido.set(item.externalNumber, atual + 1);
-          if (amostraDaEspera.length < maxReportedRecords) {
-            amostraDaEspera.push(item);
-          }
-        }
-        if (esperandoPorPedido.size > maxStagedOrders) {
+        // O teto é conferido **antes** de escrever: conferir depois encerrava
+        // a requisição mas deixava no banco justamente as linhas que
+        // excederam o limite (REVIEW-12, R12-03).
+        const novos = new Set(
+          batch.staged
+            .map((item) => item.externalNumber)
+            .filter((numero) => !esperandoPorPedido.has(numero)),
+        );
+        if (esperandoPorPedido.size + novos.size > maxStagedOrders) {
           throw new RangeError(
             `carga com mais de ${String(maxStagedOrders)} pedidos em espera; ` +
               'divida o arquivo',
           );
         }
+
+        await this.orders.stageLooseItems(
+          payload.clientId,
+          ingestionId,
+          batch.staged,
+        );
+        for (const item of batch.staged) {
+          const atual = esperandoPorPedido.get(item.externalNumber) ?? 0;
+          esperandoPorPedido.set(item.externalNumber, atual + 1);
+        }
       }
     }
 
     // Uma transação por pedido, com todas as linhas que esperavam por ele.
-    const aindaEsperando = new Set<string>();
     for (const [externalNumber, total] of esperandoPorPedido) {
       try {
         const aplicados = await this.orders.consolidateStaged(
           payload.clientId,
+          ingestionId,
           externalNumber,
         );
         itemsAccepted += aplicados;
-        if (aplicados === 0) {
-          aindaEsperando.add(externalNumber);
-          staged.count(total);
-        }
+        // O que não foi aplicado continua esperando pelo cabeçalho.
+        staged.count(total - aplicados);
       } catch (cause) {
         rejected.add({
           reference: `itens do pedido ${externalNumber}`,
@@ -121,13 +131,22 @@ export class IngestPurchaseOrders {
         });
       }
     }
-    // A amostra do relatório só mostra o que de fato continua esperando.
-    for (const item of amostraDaEspera) {
-      if (aindaEsperando.has(item.externalNumber)) staged.keep(item);
+    // A amostra sai do estado que de fato sobrou. Montá-la antes da
+    // consolidação e filtrar depois podia devolver lista vazia com total
+    // positivo: os cem primeiros candidatos podiam ter sido todos aplicados,
+    // escondendo justamente o que ficou (REVIEW-12, R12-05).
+    if (staged.total > 0) {
+      for (const registro of await this.orders.sampleStaged(
+        payload.clientId,
+        ingestionId,
+        maxReportedRecords,
+      )) {
+        staged.keep(registro);
+      }
     }
 
     return {
-      ingestionId: randomUUID(),
+      ingestionId,
       clientId: payload.clientId,
       formatVersion: payload.formatVersion,
       startedAt: startedAt.toISOString(),
