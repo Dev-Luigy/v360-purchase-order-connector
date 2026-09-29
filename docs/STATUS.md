@@ -1,6 +1,6 @@
 # Estado do projeto
 
-Atualizado por Codex em 2026-09-29, após REVIEW-15.
+Atualizado por Codex em 2026-09-29, após REVIEW-16.
 
 ## Implementado
 
@@ -18,7 +18,7 @@ Atualizado por Codex em 2026-09-29, após REVIEW-15.
 
 ## Evidências e limitações
 
-- `npm run check`: **245 testes, 0 falhas** (229 rodam sem banco; 16 são pulados sem `DATABASE_URL`). `npm run test:integration`: **31 testes** contra PostgreSQL real. Cobertura por `npm run coverage`: **93,06% de linhas, 90,12% de branches** (sem banco; os repositórios PostgreSQL só são medidos com ele no ar). Gerado por `npm run evidence`, não digitado — os números derivaram três vezes quando eram manuais.
+- `npm run check`: **245 testes, 0 falhas** (229 rodam sem banco; 16 são pulados sem `DATABASE_URL`). `npm run test:integration`: **31 testes** contra PostgreSQL real. Cobertura por `npm run coverage`: **92,71% de linhas, 89,85% de branches e 87,88% de funções** (sem banco; os repositórios PostgreSQL só são medidos com ele no ar). REVIEW-16 mediu esses números diretamente após FIX-16; o marcador automatizado deve ser atualizado no próximo `npm run evidence`.
 - Imagem de runtime construída e inspecionada sem executar container: sem CLI do Prisma e sem `mysql2`, que entrava por peer opcional e trazia CVE de credencial para uma aplicação que só fala PostgreSQL.
 - Duas mil combinações aritméticas inteiras comparadas com `BigInt` passaram; `/health` e `/ready` foram exercitados via `inject` nos limites atuais.
 - Três revisões registradas — [REVIEW-01](handoffs/REVIEW-01-codex.md), [REVIEW-02](handoffs/REVIEW-02-claude.md) e [REVIEW-03](handoffs/REVIEW-03-codex.md) — e os defeitos inequívocos das três estão fechados em [FIX-01](handoffs/FIX-01-claude.md), [FIX-02](handoffs/FIX-02-claude.md) e [FIX-03](handoffs/FIX-03-claude.md), cada um com regressão. Nenhum achado era falso positivo; dois defeitos adicionais apareceram durante as correções.
@@ -28,7 +28,7 @@ Atualizado por Codex em 2026-09-29, após REVIEW-15.
 - Persistência de pedidos **e** do histórico de conferências após reinício do banco provada por `scripts/verify-persistence.mjs`.
 - Sem `DATABASE_URL`, os testes de integração são pulados: `npm run check` continua funcionando em máquina sem Docker.
 - **P2-01 integrou Gama e Delta sem mudar uma coluna** do contrato normalizado. A única migração da Parte 2, `0002_staging_de_itens_orfaos`, não foi para acomodar formato de cliente: fechou a promessa do ADR-008 de reconciliar o item que chega antes do cabeçalho, que estava escrita e não implementada. Detalhe em [P2-01](handoffs/P2-01-claude.md).
-- **A aceitação passa pela aplicação de verdade.** `npm run validate:http` roda 10 cenários por `fetch` contra a porta 3000 — concorrência com as mesmas linhas, duplicata, teto nos dois lados, falha do agregado e reconciliação —, afirmando status HTTP, corpo do relatório e estado pelas rotas de consulta. Os defeitos de REVIEW-13 existiam com a suíte inteira verde.
+- **A aceitação oficial passa pela aplicação de verdade.** `npm run validate:http` roda 14 cenários por `fetch` contra a porta 3000 — concorrência com as mesmas linhas, duplicata, teto nos dois lados, falha do agregado, reconciliação e payload truncado —, afirmando status HTTP, corpo do relatório e estado pelas rotas de consulta. REVIEW-16 acrescentou sondas adversariais fora dessa matriz e encontrou as duas lacunas abaixo.
 - **O validador do enunciado é repetível.** Ele dependia de banco recém-limpo e caía para 26/27 na segunda execução: afirmava contagens globais. Agora afirma sobre o conjunto que **ele mesmo** cria e compara o histórico contra uma linha de base. Verificado rodando três vezes seguidas e logo depois de outros scripts, sempre 30/30 (REVIEW-10, R10-05).
 - **A varredura é um retrato com fim próprio.** O cursor passou à versão 2 e carrega o teto fixado na primeira página: sem ele, uma varredura sob escrita contínua perseguia o que entrava e não tinha condição de término ([ADR-010](decisions/ADR-010-paginacao.md), atualização de FIX-15). Provado com o escritor ainda ativo depois do fim da varredura.
 - **A espera de uma carga em andamento é invisível para outra.** A migração `0007` deu ciclo de vida à linha: ela nasce não publicada e só vira visível quando a carga termina de ler. Sem isso, um cabeçalho concorrente consumia o prefixo de uma carga que depois recusaria o pedido inteiro.
@@ -39,13 +39,13 @@ Atualizado por Codex em 2026-09-29, após REVIEW-15.
 
 ## Ainda não implementado
 
-Pipeline de CI e política de exceção da auditoria npm. A espera de itens órfãos não tem expiração nem teto, e a política depende de dado de uso real ([ADR-008](decisions/ADR-008-ingestao.md)).
+Pipeline de CI e política de exceção da auditoria npm. A imagem final exclui os pacotes vulneráveis conhecidos, mas `npm audit --omit=dev --audit-level=high` ainda falha com quatro avisos altos trazidos pelo grafo de ferramentas do Prisma; isso precisa de política verificável, não de supressão informal.
 
-REVIEW-15 executou novamente toda a aceitação em banco recriado e encontrou duas lacunas no ciclo novo de publicação: falha estrutural depois de um lote deixa linhas não publicadas no banco, e um cabeçalho pode consumir uma linha já publicada antes de a carga dona consolidá-la, deixando o relatório dela incompleto. Evidência e critérios de aceite em [REVIEW-15](handoffs/REVIEW-15-validacao-integral-pos-fix-15-codex.md).
+FIX-16 fechou a limpeza de staging em payload Delta truncado, o código HTTP 422, a recuperação real pelo cabeçalho e a remoção no start de espera abandonada. REVIEW-16, porém, reproduziu duas lacunas restantes: payload Alfa truncado depois do primeiro lote responde 422 mas mantém 200 pedidos persistidos; e um cabeçalho que consome uma linha entre `finalizeStaged` e a contagem final faz a carga dona relatar 1.999 de 2.000 registros. Evidência e critérios de aceite em [REVIEW-16](handoffs/REVIEW-16-validacao-integral-pos-fix-16-codex.md).
 
 ## Próxima retomada
 
-**As features do enunciado estão completas para os quatro clientes.** A Parte 1 está marcada na tag `parte-1`; P2-01 integrou Gama e Delta, e `scripts/validate-case.mjs` verifica **30 exigências** contra o serviço no ar, e `npm run validate:http` **13 cenários** pelas rotas.
+**As features funcionais do enunciado passam para os quatro clientes**, mas a ingestão ainda tem as duas falhas de consistência de REVIEW-16. A Parte 1 está marcada na tag `parte-1`; P2-01 integrou Gama e Delta, `scripts/validate-case.mjs` verifica **30 exigências** contra o serviço no ar e `npm run validate:http` cobre **14 cenários** pelas rotas.
 
 O que falta não é produto: **pipeline de CI** e a **política de exceção da auditoria npm**, adiados pelo usuário desde o início e agora o único item aberto de peso.
 
