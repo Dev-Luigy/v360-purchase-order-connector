@@ -72,8 +72,10 @@ export class SplitJsonAdapter implements SourceAdapter {
       );
     }
 
-    const rejected: RejectedRecord[] = [];
+    let rejected: RejectedRecord[] = [];
     const pendentes = new Map<string, Pending>();
+    // Pedidos com cabeçalhos que discordam: nada é gravado para eles.
+    const conflitantes = new Set<string>();
 
     if (temCabecalhos) {
       let index = 0;
@@ -83,6 +85,23 @@ export class SplitJsonAdapter implements SourceAdapter {
       )) {
         try {
           const header = readOrderHeader(jsonFieldSource(raw), profile);
+          const anterior = pendentes.get(header.externalNumber);
+          if (anterior !== undefined) {
+            // "Último vence" em silêncio escolhia um dos dois cabeçalhos sem
+            // dizer nada. Duplicata idêntica é ignorada; conflito recusa o
+            // pedido, como o Gama já faz (REVIEW-10, R10-04).
+            if (!sameHeader(anterior.header, header)) {
+              conflitantes.add(header.externalNumber);
+              rejected.push({
+                reference: header.externalNumber,
+                reason:
+                  'dois cabeçalhos do mesmo pedido discordam na carga; ' +
+                  'o pedido inteiro foi recusado para não gravar um dos dois',
+              });
+            }
+            index += 1;
+            continue;
+          }
           pendentes.set(header.externalNumber, {
             header,
             // Sem a parte de itens, `null` diz "esta carga não trouxe os
@@ -96,6 +115,12 @@ export class SplitJsonAdapter implements SourceAdapter {
             reference: `cabeçalho #${String(index)}`,
             reason: reasonOf(cause),
           });
+        }
+        if (rejected.length >= this.batchSize) {
+          // As recusas também escoam durante a leitura: um arquivo só de
+          // registros inválidos crescia sem teto (REVIEW-10, R10-03).
+          yield { orders: [], rejected, staged: [] };
+          rejected = [];
         }
         // Fora do `try`: estourar o teto encerra a carga inteira, não vira
         // recusa de um registro. Aceitar em parte gravaria pedidos sem os
@@ -167,6 +192,10 @@ export class SplitJsonAdapter implements SourceAdapter {
           });
           marcarFalha(raw, profile, pendentes);
         }
+        if (rejected.length >= this.batchSize) {
+          yield { orders: [], rejected, staged: [] };
+          rejected = [];
+        }
         index += 1;
       }
     }
@@ -174,6 +203,8 @@ export class SplitJsonAdapter implements SourceAdapter {
     let orders: NormalizedPurchaseOrder[] = [];
     let lote: RejectedRecord[] = rejected;
     for (const [numero, pendente] of pendentes) {
+      // Cabeçalhos que discordam já foram recusados uma vez.
+      if (conflitantes.has(numero)) continue;
       if (pendente.overflow) {
         lote.push({
           reference: numero,
@@ -222,4 +253,20 @@ function marcarFalha(
   } catch {
     // Sem número de pedido não há a que atribuir: a recusa já foi registrada.
   }
+}
+
+/**
+ * Dois cabeçalhos do mesmo pedido são o mesmo? Comparados **depois** de
+ * normalizados: o que importa é o significado, não o texto de origem. É a
+ * mesma regra do Gama, pelo mesmo motivo.
+ */
+function sameHeader(a: OrderHeader, b: OrderHeader): boolean {
+  return (
+    a.externalNumber === b.externalNumber &&
+    a.supplier.taxId === b.supplier.taxId &&
+    a.supplier.name === b.supplier.name &&
+    a.currency === b.currency &&
+    a.status === b.status &&
+    a.issuedOn === b.issuedOn
+  );
 }

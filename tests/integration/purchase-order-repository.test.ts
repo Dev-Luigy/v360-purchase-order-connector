@@ -4,7 +4,7 @@ import test, { after, before, beforeEach } from 'node:test';
 import { PrismaPurchaseOrderRepository } from '../../src/infrastructure/database/purchase-order-repository.js';
 import type { DatabaseConnection } from '../../src/infrastructure/database/prisma-client.js';
 
-import { connect, limpar, pedido, semBanco } from './support.js';
+import { connect, gravar, limpar, pedido, semBanco } from './support.js';
 
 /** Plano da consulta, em texto, para as asserções de índice. */
 async function explicar(sql: string): Promise<string> {
@@ -42,7 +42,7 @@ test(
   'persiste o pedido com o decimal intacto',
   { skip: semBanco },
   async () => {
-    const salvo = await orders.replaceSnapshot(pedido());
+    const salvo = await gravar(orders, pedido());
 
     assert.equal(salvo.externalNumber, '4500001234');
     assert.equal(salvo.ingestionVersion, 1);
@@ -61,8 +61,9 @@ test(
   'reenvio preserva a identidade interna e incrementa a versão',
   { skip: semBanco },
   async () => {
-    const primeiro = await orders.replaceSnapshot(pedido());
-    const segundo = await orders.replaceSnapshot(
+    const primeiro = await gravar(orders, pedido());
+    const segundo = await gravar(
+      orders,
       pedido({
         items: [
           {
@@ -88,15 +89,16 @@ test(
   'items null preserva os itens conhecidos; lista vazia os remove',
   { skip: semBanco },
   async () => {
-    await orders.replaceSnapshot(pedido());
+    await gravar(orders, pedido());
 
-    const soCabecalho = await orders.replaceSnapshot(
+    const soCabecalho = await gravar(
+      orders,
       pedido({ status: 'bloqueado', items: null }),
     );
     assert.equal(soCabecalho.status, 'bloqueado', 'o cabeçalho foi aplicado');
     assert.equal(soCabecalho.items.length, 1, 'os itens sobreviveram');
 
-    const semItens = await orders.replaceSnapshot(pedido({ items: [] }));
+    const semItens = await gravar(orders, pedido({ items: [] }));
     assert.equal(semItens.items.length, 0);
     assert.equal(
       semItens.hasPendingBalance,
@@ -113,8 +115,8 @@ test(
     // Sem o lock, as duas transações não enxergam a linha uma da outra e ambas
     // tentam criar: o unique de (clientId, externalNumber) derruba uma delas.
     const resultados = await Promise.allSettled([
-      orders.replaceSnapshot(pedido()),
-      orders.replaceSnapshot(pedido()),
+      gravar(orders, pedido()),
+      gravar(orders, pedido()),
     ]);
 
     assert.deepEqual(
@@ -137,7 +139,7 @@ test(
   'os CHECK do banco recusam o que a aplicação também recusaria',
   { skip: semBanco },
   async () => {
-    const salvo = await orders.replaceSnapshot(pedido());
+    const salvo = await gravar(orders, pedido());
 
     // Fator zero fazia a conferência dividir por zero (REVIEW-05, achado 7).
     await assert.rejects(
@@ -180,7 +182,8 @@ test(
     // precisa de índice.
     for (const clientId of ['alfa', 'beta']) {
       for (let i = 0; i < 150; i += 1) {
-        await orders.replaceSnapshot(
+        await gravar(
+          orders,
           pedido({
             clientId,
             externalNumber: `PO-${clientId}-${String(i).padStart(5, '0')}`,
@@ -209,7 +212,8 @@ test(
   { skip: semBanco },
   async () => {
     for (let i = 0; i < 150; i += 1) {
-      await orders.replaceSnapshot(
+      await gravar(
+        orders,
         pedido({ externalNumber: `PO-${String(i).padStart(5, '0')}` }),
       );
     }
@@ -231,7 +235,8 @@ test(
   async () => {
     for (const taxId of ['23456789000101', '98765432000155']) {
       for (let i = 0; i < 120; i += 1) {
-        await orders.replaceSnapshot(
+        await gravar(
+          orders,
           pedido({
             externalNumber: `PO-${taxId}-${String(i).padStart(5, '0')}`,
             supplier: { taxId, name: 'Fornecedor' },
@@ -254,7 +259,8 @@ test(
   { skip: semBanco },
   async () => {
     for (let i = 0; i < 25; i += 1) {
-      await orders.replaceSnapshot(
+      await gravar(
+        orders,
         pedido({ externalNumber: `PO-${String(i).padStart(5, '0')}` }),
       );
     }
@@ -285,9 +291,7 @@ test(
   { skip: semBanco },
   async () => {
     for (let i = 0; i < 5; i += 1) {
-      await orders.replaceSnapshot(
-        pedido({ externalNumber: `PO-${String(i)}` }),
-      );
+      await gravar(orders, pedido({ externalNumber: `PO-${String(i)}` }));
     }
 
     const primeira = await orders.list(

@@ -41,7 +41,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado           |
 | P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                         |
 | P1-05     | Validar desafio e registrar marco parte-1                        | concluída                      | Claude      | 18/18 exigências verificadas no ar; tag depende de DOC-02                     |
-| FIX-11    | Fechar os sete achados de REVIEW-10                              | em andamento                   | Claude      | REVIEW-10; sete reproduzidos, R10-01 é regressão que introduzi em FIX-10      |
+| FIX-11    | Fechar os sete achados de REVIEW-10                              | concluída                      | Claude      | Sete fechados com regressão; validador agora é repetível                      |
 | FIX-10    | Fechar os nove achados de REVIEW-09                              | concluída                      | Claude      | Nove fechados com regressão, mais três de REVIEW-07 que seguiam abertos       |
 | P2-01     | Integrar Gama/Delta e documentar mudanças                        | concluída                      | Claude      | Os quatro clientes integrados; 27/27 exigências no ar                         |
 
@@ -230,10 +230,11 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## FIX-11 — os sete achados de REVIEW-10
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/application/ports/purchase-order-repository.ts`, `src/application/use-cases/ingest-purchase-orders.ts`, `src/infrastructure/database/purchase-order-repository.ts`, `src/infrastructure/integrations/split-json-adapter.ts`, `scripts/validate-case.mjs`, `tests/**`, `README.md`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-11-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `src/application/ports/purchase-order-repository.ts`, `src/application/use-cases/ingest-purchase-orders.ts`, `src/infrastructure/database/purchase-order-repository.ts`, `src/infrastructure/integrations/split-json-adapter.ts`, `scripts/validate-case.mjs`, `tests/**`, `README.md`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-11-claude.md`.
 - Escopo: os sete achados de [REVIEW-10](handoffs/REVIEW-10-pos-fix-10-codex.md), todos reproduzidos com sonda. **R10-01 é regressão que eu introduzi em FIX-10**: ao dar transação ao item avulso, quebrei a transação por pedido que o ADR-008 decide.
 - Dependências: FIX-10 concluída.
+- Evidência: [handoff FIX-11](handoffs/FIX-11-claude.md); sete fechados com regressão. `scripts/evidence.mjs` passou a gerar as contagens do STATUS, porque digitá-las falhou três vezes. O validador do enunciado é repetível: 27/27 em três execuções seguidas e logo após a suíte de integração.
 
 ## FIX-10 — os nove achados de REVIEW-09
 

@@ -1,6 +1,6 @@
 # Estado do projeto
 
-Atualizado por Claude em 2026-09-28, após FIX-10.
+Atualizado por Claude em 2026-09-29, após FIX-11.
 
 ## Implementado
 
@@ -18,7 +18,7 @@ Atualizado por Claude em 2026-09-28, após FIX-10.
 
 ## Evidências e limitações
 
-- `npm run check`: **218 testes, 0 falhas** (202 rodam sem banco; 16 são pulados sem `DATABASE_URL`). `npm run test:integration`: **24 testes** contra PostgreSQL real. Cobertura por `npm run coverage`: **94,63% de linhas, 89,65% de branches**. Estes são os números oficiais; o README aponta para cá em vez de repeti-los (REVIEW-09, R09-09).
+- `npm run check`: **225 testes, 0 falhas** (209 rodam sem banco; 16 são pulados sem `DATABASE_URL`). `npm run test:integration`: **27 testes** contra PostgreSQL real. Cobertura por `npm run coverage`: **94,66% de linhas, 89,98% de branches** (sem banco; os repositórios PostgreSQL só são medidos com ele no ar). Gerado por `npm run evidence`, não digitado — os números derivaram três vezes quando eram manuais (REVIEW-10, R10-06).
 - Imagem de runtime construída e inspecionada sem executar container: sem CLI do Prisma e sem `mysql2`, que entrava por peer opcional e trazia CVE de credencial para uma aplicação que só fala PostgreSQL.
 - Duas mil combinações aritméticas inteiras comparadas com `BigInt` passaram; `/health` e `/ready` foram exercitados via `inject` nos limites atuais.
 - Três revisões registradas — [REVIEW-01](handoffs/REVIEW-01-codex.md), [REVIEW-02](handoffs/REVIEW-02-claude.md) e [REVIEW-03](handoffs/REVIEW-03-codex.md) — e os defeitos inequívocos das três estão fechados em [FIX-01](handoffs/FIX-01-claude.md), [FIX-02](handoffs/FIX-02-claude.md) e [FIX-03](handoffs/FIX-03-claude.md), cada um com regressão. Nenhum achado era falso positivo; dois defeitos adicionais apareceram durante as correções.
@@ -28,6 +28,7 @@ Atualizado por Claude em 2026-09-28, após FIX-10.
 - Persistência de pedidos **e** do histórico de conferências após reinício do banco provada por `scripts/verify-persistence.mjs`.
 - Sem `DATABASE_URL`, os testes de integração são pulados: `npm run check` continua funcionando em máquina sem Docker.
 - **P2-01 integrou Gama e Delta sem mudar uma coluna** do contrato normalizado. A única migração da Parte 2, `0002_staging_de_itens_orfaos`, não foi para acomodar formato de cliente: fechou a promessa do ADR-008 de reconciliar o item que chega antes do cabeçalho, que estava escrita e não implementada. Detalhe em [P2-01](handoffs/P2-01-claude.md).
+- **O validador do enunciado é repetível.** Ele dependia de banco recém-limpo e caía para 26/27 na segunda execução: afirmava contagens globais. Agora afirma sobre o conjunto que **ele mesmo** cria e compara o histórico contra uma linha de base. Verificado rodando três vezes seguidas e logo depois da suíte de integração, sempre 27/27 (REVIEW-10, R10-05).
 - **A validação contra o enunciado é executável.** `node scripts/validate-case.mjs` faz uma asserção por exigência contra o stack no ar: **27/27**, cobrindo os quatro clientes.
 - **Volume medido, não suposto**: 50.000 pedidos e 150.000 itens carregados em 189,3s (264 pedidos/s); varredura de 500 páginas em 1,8s com **zero repetidos**; a última página custa 0,54× a primeira, o que prova o cursor contra `OFFSET`; memória plana em ~380MiB enquanto os pedidos iam de 5 mil a 50 mil.
 - Três defeitos encontrados e fechados com regressão: recusa do framework (429, 413) virava 500; o teto de 120 req/min estrangulava a varredura noturna do próprio enunciado; e `docs/API.md` errava **todos** os nomes de parte e o cabeçalho da ingestão, então quem seguisse a documentação não carregava nada.
@@ -53,4 +54,4 @@ COL-02 estruturou a memória compartilhada e a leitura sob demanda. Ambos entram
 
 ## Escolhas em discussão
 
-Confirmados pelo usuário: [PostgreSQL, ADR-001](decisions/ADR-001-postgresql.md), [TypeScript + Node.js, ADR-002](decisions/ADR-002-typescript-nodejs.md), [Fastify, ADR-003](decisions/ADR-003-fastify.md), [Prisma ORM 7, ADR-004](decisions/ADR-004-prisma-7.md) e as bibliotecas de P1-03 em [ADR-011](decisions/ADR-011-bibliotecas-p1-03.md). Prisma Migrate foi confirmado operacionalmente em ENV-03 e nas migrações `0001` e `0002`; os limites de campos e decimais estão em `src/domain/limits.ts`.
+Confirmados pelo usuário: [PostgreSQL, ADR-001](decisions/ADR-001-postgresql.md), [TypeScript + Node.js, ADR-002](decisions/ADR-002-typescript-nodejs.md), [Fastify, ADR-003](decisions/ADR-003-fastify.md), [Prisma ORM 7, ADR-004](decisions/ADR-004-prisma-7.md) e as bibliotecas de P1-03 em [ADR-011](decisions/ADR-011-bibliotecas-p1-03.md). Prisma Migrate foi confirmado operacionalmente em ENV-03 e nas migrações `0001`, `0002` e `0003`; os limites de campos e decimais estão em `src/domain/limits.ts`.

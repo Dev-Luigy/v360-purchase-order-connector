@@ -8,8 +8,23 @@ import type {
 } from '../../domain/purchase-order.js';
 import type { Page, PageRequest } from './pagination.js';
 
-/** O que aconteceu com um item que chegou sem o cabeçalho dele. */
+/** O que aconteceu com os itens que chegaram sem o cabeçalho deles. */
 export type LooseItemOutcome = 'aplicado' | 'em-espera';
+
+/**
+ * Quantos itens a gravação de fato aplicou, separados por origem.
+ *
+ * Somar `order.items.length` contava também os itens **preservados** de cargas
+ * anteriores, então uma carga só de cabeçalhos relatava itens que ela não
+ * trouxe (REVIEW-10, R10-02). Quem chama precisa distinguir as três origens.
+ */
+export interface SnapshotResult {
+  readonly order: PurchaseOrder;
+  /** Vieram nesta carga. Zero quando `items` é `null`. */
+  readonly fromLoad: number;
+  /** Estavam esperando pelo cabeçalho e entraram agora. */
+  readonly recovered: number;
+}
 
 export interface PurchaseOrderFilters {
   readonly clientId: ClientId | null;
@@ -32,19 +47,25 @@ export interface PurchaseOrderRepository {
    * eram consumidos antes, numa transação própria, e uma falha na gravação do
    * pedido os perdia para sempre (REVIEW-09, R09-01).
    */
-  replaceSnapshot(snapshot: NormalizedPurchaseOrder): Promise<PurchaseOrder>;
+  replaceSnapshot(snapshot: NormalizedPurchaseOrder): Promise<SnapshotResult>;
 
   /**
-   * Aplica um item que chegou sem o cabeçalho dele na mesma carga.
+   * Aplica **todos** os itens avulsos de um mesmo pedido de uma vez.
    *
-   * Se o pedido já existe, a linha é substituída; se não, o item fica
+   * Se o pedido já existe, as linhas são substituídas; se não, os itens ficam
    * esperando. Lock, leitura, decisão e escrita acontecem na mesma transação:
    * ler o pedido fora do lock deixava duas cargas simultâneas lerem o mesmo
    * retrato, e a segunda gravação perdia a primeira (REVIEW-09, R09-06).
+   *
+   * Recebe o grupo, e não uma linha por vez, porque uma transação por linha
+   * contradiz a transação por pedido do ADR-008: a versão avançava por linha,
+   * uma falha no meio deixava o retrato pela metade, e regravar o pedido
+   * inteiro a cada linha custava O(n²) (REVIEW-10, R10-01).
    */
-  applyLooseItem(
+  applyLooseItems(
     clientId: ClientId,
-    staged: StagedItem,
+    externalNumber: string,
+    staged: readonly StagedItem[],
   ): Promise<LooseItemOutcome>;
   findById(id: string): Promise<PurchaseOrder | null>;
   findByExternalNumber(

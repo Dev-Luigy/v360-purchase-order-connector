@@ -6,7 +6,7 @@ import type { DatabaseConnection } from '../../src/infrastructure/database/prism
 import type { StagedItem } from '../../src/domain/ingestion.js';
 import type { NormalizedPurchaseOrderItem } from '../../src/domain/purchase-order.js';
 
-import { connect, limpar, pedido, semBanco } from './support.js';
+import { connect, gravar, limpar, pedido, semBanco } from './support.js';
 
 /**
  * A espera de itens órfãos, contra PostgreSQL de verdade.
@@ -69,12 +69,15 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
   };
 
   it('item de pedido inexistente espera; o cabeçalho depois o recupera', async () => {
-    const destino = await orders.applyLooseItem('delta', orfao('DL-1'));
+    const destino = await orders.applyLooseItems('delta', 'DL-1', [
+      orfao('DL-1'),
+    ]);
     assert.equal(destino, 'em-espera');
     assert.equal(await emEspera('DL-1'), 1);
 
     // O cabeçalho chega sem itens: a espera é tudo o que se sabe sobre eles.
-    const salvo = await orders.replaceSnapshot(
+    const salvo = await gravar(
+      orders,
       pedido({ clientId: 'delta', externalNumber: 'DL-1', items: null }),
     );
     assert.equal(salvo.items.length, 1);
@@ -85,12 +88,13 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
   it('falha ao gravar o pedido desfaz o consumo da espera', async () => {
     // R09-01: `takeFor` apagava numa transação própria, então a falha da
     // gravação seguinte perdia o item para sempre.
-    await orders.applyLooseItem('delta', orfao('DL-2'));
+    await orders.applyLooseItems('delta', 'DL-2', [orfao('DL-2')]);
     assert.equal(await emEspera('DL-2'), 1);
 
     await assert.rejects(
       () =>
-        orders.replaceSnapshot(
+        gravar(
+          orders,
           pedido({
             clientId: 'delta',
             externalNumber: 'DL-2',
@@ -110,13 +114,10 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
   });
 
   it('item de pedido existente atualiza em vez de esperar', async () => {
-    await orders.replaceSnapshot(
-      pedido({ clientId: 'delta', externalNumber: 'DL-3' }),
-    );
-    const destino = await orders.applyLooseItem(
-      'delta',
+    await gravar(orders, pedido({ clientId: 'delta', externalNumber: 'DL-3' }));
+    const destino = await orders.applyLooseItems('delta', 'DL-3', [
       orfao('DL-3', { externalLine: 99, material: 'NOVO-1' }),
-    );
+    ]);
     assert.equal(destino, 'aplicado');
     assert.equal(await emEspera('DL-3'), 0);
 
@@ -128,25 +129,30 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
   });
 
   it('reenviar a mesma linha substitui a que esperava', async () => {
-    await orders.applyLooseItem('delta', orfao('DL-4'));
-    await orders.applyLooseItem(
-      'delta',
+    await orders.applyLooseItems('delta', 'DL-4', [orfao('DL-4')]);
+    await orders.applyLooseItems('delta', 'DL-4', [
       orfao('DL-4', { quantityOrdered: '777.000000' }),
-    );
+    ]);
     assert.equal(await emEspera('DL-4'), 1, 'duplicou em vez de substituir');
 
-    const salvo = await orders.replaceSnapshot(
+    const salvo = await gravar(
+      orders,
       pedido({ clientId: 'delta', externalNumber: 'DL-4', items: null }),
     );
     assert.equal(salvo.items[0]?.quantityOrdered, '777.000000');
   });
 
   it('a espera é isolada por cliente', async () => {
-    await orders.applyLooseItem('delta', orfao('MESMO-NUMERO'));
-    await orders.applyLooseItem('alfa', orfao('MESMO-NUMERO'));
+    await orders.applyLooseItems('delta', 'MESMO-NUMERO', [
+      orfao('MESMO-NUMERO'),
+    ]);
+    await orders.applyLooseItems('alfa', 'MESMO-NUMERO', [
+      orfao('MESMO-NUMERO'),
+    ]);
     assert.equal(await emEspera('MESMO-NUMERO'), 2);
 
-    const salvo = await orders.replaceSnapshot(
+    const salvo = await gravar(
+      orders,
       pedido({
         clientId: 'delta',
         externalNumber: 'MESMO-NUMERO',
@@ -160,12 +166,12 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
 
   it('itens recuperados entram na ordem da linha', async () => {
     for (const linha of [30, 10, 20]) {
-      await orders.applyLooseItem(
-        'delta',
+      await orders.applyLooseItems('delta', 'DL-5', [
         orfao('DL-5', { externalLine: linha, material: `M-${String(linha)}` }),
-      );
+      ]);
     }
-    const salvo = await orders.replaceSnapshot(
+    const salvo = await gravar(
+      orders,
       pedido({ clientId: 'delta', externalNumber: 'DL-5', items: null }),
     );
     assert.deepEqual(
@@ -186,7 +192,8 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
 
     await assert.rejects(
       () =>
-        orders.replaceSnapshot(
+        gravar(
+          orders,
           pedido({ clientId: 'delta', externalNumber: 'DL-6', items: null }),
         ),
       /não passou no contrato/,
@@ -194,22 +201,72 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     assert.equal(await emEspera('DL-6'), 1, 'a linha inválida foi consumida');
   });
 
+  it('grupo de itens avulsos entra numa transação e numa versão só', async () => {
+    // R10-01: uma transação por linha fazia a versão avançar por linha e
+    // regravava o retrato inteiro a cada uma, custando O(n²).
+    const antes = await gravar(
+      orders,
+      pedido({ clientId: 'delta', externalNumber: 'DL-8' }),
+    );
+    const grupo = [21, 22, 23, 24, 25].map((linha) =>
+      orfao('DL-8', { externalLine: linha, material: `G-${String(linha)}` }),
+    );
+    const destino = await orders.applyLooseItems('delta', 'DL-8', grupo);
+    assert.equal(destino, 'aplicado');
+
+    const depois = await orders.findByExternalNumber('delta', 'DL-8');
+    assert.equal(
+      (depois?.ingestionVersion ?? 0) - antes.ingestionVersion,
+      1,
+      'a versão avançou mais de uma vez para um grupo',
+    );
+    assert.equal(depois?.items.length, 6, 'o grupo não entrou inteiro');
+  });
+
+  it('grupo de um pedido inexistente espera inteiro, sem gravar nada', async () => {
+    const grupo = [10, 20].map((linha) =>
+      orfao('DL-9', { externalLine: linha, material: `E-${String(linha)}` }),
+    );
+    const destino = await orders.applyLooseItems('delta', 'DL-9', grupo);
+    assert.equal(destino, 'em-espera');
+    assert.equal(await emEspera('DL-9'), 2);
+    assert.equal(await orders.findByExternalNumber('delta', 'DL-9'), null);
+  });
+
+  it('falha no meio do grupo desfaz o grupo inteiro', async () => {
+    await gravar(
+      orders,
+      pedido({ clientId: 'delta', externalNumber: 'DL-10' }),
+    );
+    const grupo = [
+      orfao('DL-10', { externalLine: 21, material: 'OK' }),
+      // `CHECK` do banco recusa fator zero: falha depois da primeira linha.
+      orfao('DL-10', { externalLine: 22, conversionFactor: '0.000000' }),
+    ];
+    await assert.rejects(
+      () => orders.applyLooseItems('delta', 'DL-10', grupo),
+      /.*/,
+    );
+    const salvo = await orders.findByExternalNumber('delta', 'DL-10');
+    assert.equal(
+      salvo?.items.length,
+      1,
+      'a primeira linha do grupo ficou confirmada apesar da falha',
+    );
+  });
+
   it('duas aplicações concorrentes no mesmo pedido não perdem uma delas', async () => {
     // R09-06: a leitura acontecia fora do lock, então as duas liam o mesmo
     // retrato e a segunda gravação apagava a linha da primeira.
-    await orders.replaceSnapshot(
-      pedido({ clientId: 'delta', externalNumber: 'DL-7' }),
-    );
+    await gravar(orders, pedido({ clientId: 'delta', externalNumber: 'DL-7' }));
 
     await Promise.all([
-      orders.applyLooseItem(
-        'delta',
+      orders.applyLooseItems('delta', 'DL-7', [
         orfao('DL-7', { externalLine: 21, material: 'CONC-A' }),
-      ),
-      orders.applyLooseItem(
-        'delta',
+      ]),
+      orders.applyLooseItems('delta', 'DL-7', [
         orfao('DL-7', { externalLine: 22, material: 'CONC-B' }),
-      ),
+      ]),
     ]);
 
     const salvo = await orders.findByExternalNumber('delta', 'DL-7');

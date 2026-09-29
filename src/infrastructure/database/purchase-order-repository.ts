@@ -4,6 +4,7 @@ import type {
   LooseItemOutcome,
   PurchaseOrderFilters,
   PurchaseOrderRepository,
+  SnapshotResult,
 } from '../../application/ports/purchase-order-repository.js';
 import type { ClientId } from '../../domain/client.js';
 import { Decimal } from '../../domain/decimal.js';
@@ -43,11 +44,7 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
    * Serializa cargas do mesmo pedido com lock transacional. `FOR UPDATE` não
    * cobre um pedido que ainda não existe.
    */
-  /**
-   * Serializa cargas do mesmo pedido com lock transacional. `FOR UPDATE` não
-   * cobre um pedido que ainda não existe.
-   */
-  replaceSnapshot(snapshot: NormalizedPurchaseOrder): Promise<PurchaseOrder> {
+  replaceSnapshot(snapshot: NormalizedPurchaseOrder): Promise<SnapshotResult> {
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKeyFor(snapshot)}))`;
 
@@ -59,41 +56,48 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
         snapshot.clientId,
         snapshot.externalNumber,
       );
-      return persistSnapshot(tx, mergeWaitingItems(snapshot, esperando));
+      const completo = mergeWaitingItems(snapshot, esperando);
+      const order = await persistSnapshot(tx, completo);
+      return {
+        order,
+        // `items: null` não traz item nenhum, por mais que o pedido salvo
+        // tenha itens preservados de antes (REVIEW-10, R10-02).
+        fromLoad: snapshot.items?.length ?? 0,
+        recovered:
+          (completo.items?.length ?? 0) - (snapshot.items?.length ?? 0),
+      };
     });
   }
 
   /**
-   * Item que chegou sem o cabeçalho dele na mesma carga.
+   * Itens que chegaram sem o cabeçalho deles na mesma carga, **em grupo**.
    *
    * O adaptador só enxerga os cabeçalhos do payload atual, então o que ele
    * chama de órfão pode ser item de pedido que já existe — o caso de mandar só
    * a consulta de itens do Delta, que é uso normal. A decisão é aqui, sob o
    * lock: ler o pedido fora dele deixava duas cargas simultâneas lerem o mesmo
    * retrato, e a segunda gravação perdia a primeira (REVIEW-09, R09-06).
+   *
+   * O grupo inteiro entra numa transação só — uma por linha fazia a versão
+   * avançar por linha e deixava retrato parcial quando a segunda falhava
+   * (REVIEW-10, R10-01).
    */
-  applyLooseItem(
+  applyLooseItems(
     clientId: ClientId,
-    staged: StagedItem,
+    externalNumber: string,
+    staged: readonly StagedItem[],
   ): Promise<LooseItemOutcome> {
-    const chave = lockKeyFor({
-      clientId,
-      externalNumber: staged.externalNumber,
-    });
+    if (staged.length === 0) return Promise.resolve('aplicado');
+    const chave = lockKeyFor({ clientId, externalNumber });
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${chave}))`;
 
       const encontrado = await tx.purchaseOrder.findUnique({
-        where: {
-          clientId_externalNumber: {
-            clientId,
-            externalNumber: staged.externalNumber,
-          },
-        },
+        where: { clientId_externalNumber: { clientId, externalNumber } },
         select: { id: true },
       });
       if (encontrado === null) {
-        await stageItem(tx, clientId, staged);
+        for (const item of staged) await stageItem(tx, clientId, item);
         return 'em-espera';
       }
 
@@ -103,7 +107,20 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
           `pedido ${encontrado.id} desapareceu dentro da própria transação`,
         );
       }
-      await persistSnapshot(tx, applyItemToOrder(existente, staged.item));
+      // Um retrato só, com todas as linhas do grupo aplicadas.
+      let retrato = applyItemToOrder(existente, staged[0]?.item as never);
+      for (const outro of staged.slice(1)) {
+        retrato = {
+          ...retrato,
+          items: [
+            ...(retrato.items ?? []).filter(
+              (item) => item.externalLine !== outro.item.externalLine,
+            ),
+            outro.item,
+          ],
+        };
+      }
+      await persistSnapshot(tx, retrato);
       return 'aplicado';
     });
   }
