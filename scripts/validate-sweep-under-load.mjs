@@ -120,7 +120,10 @@ let lotesEscritos = 0;
 let lotesDepoisDaVarredura = 0;
 const escritor = (async () => {
   for (let lote = 0; lote < cargas; lote += 1) {
-    const numeros = Array.from({ length: 50 }, (_, n) =>
+    // Lotes bem pequenos: o que importa é a **frequência** da escrita durante
+    // a varredura, não o volume. Com lotes grandes, um único deles dura mais
+    // que a varredura inteira e a sobreposição vira uma amostra só.
+    const numeros = Array.from({ length: 10 }, (_, n) =>
       numeroDe(`NOVO${String(lote)}`, n),
     );
     const relatorio = await carregar(numeros);
@@ -136,6 +139,10 @@ const escritor = (async () => {
 
 console.log('varrendo por cursor enquanto as cargas entram…');
 const vistos = new Set();
+// Os números vistos saem da **própria** varredura: uma segunda passada só
+// para o veredito dobrava as requisições e batia no teto quando o script
+// rodava mais de uma vez seguida.
+const numerosVistos = new Set();
 let repetidos = 0;
 let paginas = 0;
 let cursor = null;
@@ -170,6 +177,7 @@ for (;;) {
   for (const pedido of pagina.data) {
     if (vistos.has(pedido.id)) repetidos += 1;
     vistos.add(pedido.id);
+    numerosVistos.add(pedido.externalNumber);
   }
   paginas += 1;
   cursor = pagina.page.nextCursor;
@@ -182,27 +190,9 @@ await escritor;
 
 // ----------------------------------------------------------- veredito
 
-// A varredura guardou ids; esta releitura casa id com número de pedido para
-// dizer quais do conjunto inicial apareceram nela.
-const numerosVistos = new Set();
-const restantes = [];
-let cursorFinal = null;
-for (;;) {
-  const url = new URL(`${base}/purchase-orders`);
-  url.searchParams.set('clientId', 'delta');
-  url.searchParams.set('limit', '100');
-  if (cursorFinal) url.searchParams.set('cursor', cursorFinal);
-  const pagina = await (await fetch(url)).json();
-  for (const p of pagina.data) {
-    numerosVistos.add(p.externalNumber);
-    if (vistos.has(p.id)) restantes.push(p.externalNumber);
-  }
-  cursorFinal = pagina.page.nextCursor;
-  if (!cursorFinal) break;
-}
-
-const perdidos = [...antes].filter((numero) => !numerosVistos.has(numero));
-const varridosDoInicio = restantes.filter((numero) => antes.has(numero));
+// Todo pedido do conjunto inicial tem saldo pendente e id menor que o teto
+// da varredura, então precisa ter aparecido nela.
+const naoVaridos = [...antes].filter((numero) => !numerosVistos.has(numero));
 
 console.log();
 console.log(
@@ -217,9 +207,8 @@ console.log(
   `  escrita continuou depois    ${String(lotesDepoisDaVarredura)} lotes`,
 );
 console.log(
-  `  do conjunto inicial         ${String(varridosDoInicio.length)} de ${String(antes.size)} apareceram`,
+  `  do conjunto inicial         ${String(antes.size - naoVaridos.length)} de ${String(antes.size)} apareceram`,
 );
-console.log(`  sumiram do banco            ${String(perdidos.length)}`);
 
 const problemas = [];
 if (lotesDepoisDaVarredura < 1) {
@@ -239,13 +228,10 @@ if (repetidos > 0) {
     `${String(repetidos)} pedidos apareceram duas vezes na varredura`,
   );
 }
-if (varridosDoInicio.length !== antes.size) {
+if (naoVaridos.length > 0) {
   problemas.push(
-    `a varredura pulou ${String(antes.size - varridosDoInicio.length)} pedidos que já existiam`,
+    `a varredura pulou ${String(naoVaridos.length)} pedidos que já existiam`,
   );
-}
-if (perdidos.length > 0) {
-  problemas.push(`${String(perdidos.length)} pedidos sumiram do banco`);
 }
 
 console.log();
