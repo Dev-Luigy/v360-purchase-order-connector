@@ -29,6 +29,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-11 | Verificar as correções de FIX-11                                 | concluída                      | Codex       | Quatro fechados, dois parciais e gerador de evidência inseguro                |
 | REVIEW-12 | Verificar as correções de FIX-12                                 | concluída                      | Codex       | Dois fechados, um parcial e cinco regressões/lacunas documentadas             |
 | REVIEW-13 | Verificar FIX-13 pelas rotas HTTP reais                          | concluída                      | Codex       | Três fechados, três parciais; quatro falhas reproduzidas via HTTP real        |
+| REVIEW-14 | Verificar FIX-14 e FINAL-01 pela aplicação real                  | concluída                      | Codex       | Falha de staging reproduzida; sweep finito passa, sem teto de snapshot        |
 | CLEAN-01  | Enxugar comentários do código estável                            | concluída                      | Codex       | 526 linhas removidas; arquivos ativos de P1-04 preservados                    |
 | P1-01     | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03          |
 | P1-02     | Implementar schema, migrações e repositórios                     | concluída                      | Claude      | Código pronto; validação contra PostgreSQL real é ENV-03                      |
@@ -44,6 +45,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado           |
 | P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                         |
 | P1-05     | Validar desafio e registrar marco parte-1                        | concluída                      | Claude      | 18/18 exigências verificadas no ar; tag depende de DOC-02                     |
+| FIX-15    | Fechar R14-01, R14-02 e R14-03                                   | em andamento                   | Claude      | REVIEW-14; R14-01 é defeito que introduzi em FINAL-01                         |
 | FINAL-01  | Fechar o enunciado inteiro e entregar a versão final             | concluída                      | Claude      | Seis lacunas fechadas; o dobro em memória não paginava de verdade             |
 | FIX-14    | Fechar REVIEW-13 e provar pela aplicação real                    | concluída                      | Claude      | Carga na identidade física; 10/10 cenários pelas rotas HTTP                   |
 | FIX-13    | Fechar os seis achados de REVIEW-12                              | concluída                      | Claude      | Identidade de carga na espera; emissão de lote centralizada                   |
@@ -162,6 +164,15 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Dependências: FIX-13 concluída; reservas de implementação liberadas.
 - Evidência: [handoff REVIEW-13](handoffs/REVIEW-13-pos-fix-13-http-real-codex.md); baseline 27/27 pelas rotas reais, mas concorrência na mesma linha, duplicata, teto e reconciliação reproduziram relatórios falsos e perda de item.
 
+## REVIEW-14 — verificação pós-FIX-14 e FINAL-01
+
+- Responsável: Codex.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `docs/TASKS.md` e `docs/handoffs/REVIEW-14-pos-fix-14-final-01-codex.md`.
+- Escopo: conferir os fechamentos de REVIEW-13 e as funcionalidades adicionadas em FINAL-01, executando checks, PostgreSQL, Compose e as rotas HTTP reais com fixtures e cenários adversariais; sem modificar código de produção.
+- Dependências: FIX-14 e FINAL-01 concluídas; reservas de implementação liberadas.
+- Evidência: [handoff REVIEW-14](handoffs/REVIEW-14-pos-fix-14-final-01-codex.md); check, 31 integrações, 30/30 do caso, 10/10 HTTP e sweep finito passaram, mas o limite deslocado regrava parte do pedido recusado e o cursor não congela o fim do conjunto.
+
 ## CLEAN-01 — limpeza de comentários
 
 - Responsável: Codex.
@@ -260,6 +271,18 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Evidência: [handoff ARCH-05](handoffs/ARCH-05-claude.md); `npm run check` verde; nada validado contra Grafana ou Prometheus reais, que não existem nesta máquina.
 - Escopo: registrar como a aplicação se conecta a Grafana e Prometheus, o consentimento de quem executa e a convenção de nomes e labels. Nenhuma dependência instalada, nenhum endpoint criado.
 - Dependências: nenhuma para o registro. A implementação depende de P1-01 e P1-03, porque os labels saem do contrato e dos adaptadores.
+
+## FIX-15 — os três achados técnicos de REVIEW-14
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `src/application/use-cases/ingest-purchase-orders.ts`, `src/application/ports/purchase-order-repository.ts`, `src/infrastructure/database/{purchase-order-repository,cursor}.ts`, `prisma/schema.prisma` (só a publicação da espera), `database/migrations/0007_*/**`, `src/infrastructure/database/migrations.ts`, `scripts/{validate-fix-14-http,validate-sweep-under-load}.mjs`, `tests/**`, `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FIX-15-claude.md`.
+- Escopo: os três achados de [REVIEW-14](handoffs/REVIEW-14-pos-fix-14-final-01-codex.md), reproduzidos antes de aceitar.
+  - **R14-01** é defeito que introduzi em FINAL-01: o estouro purga o que os lotes anteriores gravaram, mas os itens do mesmo pedido **já percorridos no lote atual** continuam em `aceitos` e são regravados logo depois. O meu validador não pegou porque 10.001 itens consecutivos com lote 200 põem o estouro numa fronteira; deslocar em uma posição quebra. Há também a corrida: um cabeçalho concorrente consome o prefixo antes do estouro.
+  - **R14-02**: o cursor só tem limite inferior, então a varredura pode perseguir escrita contínua e não tem condição própria de término. Meu script não prova o contrário, porque o escritor dele é finito.
+  - **R14-03**: `recovered` sai da cardinalidade final do retrato e conta itens antigos como recuperados.
+- Aceitação: por HTTP real, incluindo o deslocamento determinístico do lote e a corrida com cabeçalho.
+- Dependências: FINAL-01 concluída.
 
 ## FINAL-01 — fechar o enunciado inteiro
 
