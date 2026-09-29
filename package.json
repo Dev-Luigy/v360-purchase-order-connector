@@ -28,7 +28,8 @@
     "schema:check": "prisma format --check",
     "coverage": "node --import tsx --test --experimental-test-coverage \"tests/**/*.test.ts\"",
     "test:integration": "node --env-file=.env --import tsx --test --test-concurrency=1 \"tests/integration/**/*.test.ts\"",
-    "evidence": "node scripts/evidence.mjs"
+    "evidence": "node scripts/evidence.mjs",
+    "validate:http": "node scripts/validate-fix-14-http.mjs"
   },
   "dependencies": {
     "@fastify/multipart": "10.1.2",

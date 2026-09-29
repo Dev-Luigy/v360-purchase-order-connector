@@ -144,9 +144,10 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     assert.deepEqual(linhas, [10, 99], 'a linha nova não entrou junto');
   });
 
-  it('reenviar a mesma linha substitui a que esperava', async () => {
-    await avulsos('delta', 'DL-4', [orfao('DL-4')]);
-    await avulsos('delta', 'DL-4', [
+  it('dentro da mesma carga, reenviar a linha substitui a anterior', async () => {
+    const carga = randomUUID();
+    await orders.stageLooseItems('delta', carga, [orfao('DL-4')]);
+    await orders.stageLooseItems('delta', carga, [
       orfao('DL-4', { quantityOrdered: '777.000000' }),
     ]);
     assert.equal(await emEspera('DL-4'), 1, 'duplicou em vez de substituir');
@@ -155,6 +156,28 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
       orders,
       pedido({ clientId: 'delta', externalNumber: 'DL-4', items: null }),
     );
+    assert.equal(salvo.items[0]?.quantityOrdered, '777.000000');
+  });
+
+  it('cargas diferentes coexistem na espera; a última prevalece', async () => {
+    // A carga faz parte da identidade, então as duas linhas convivem: é o que
+    // impede uma carga de tomar a linha da outra (REVIEW-13, R13-01). Na
+    // reconciliação, "prevalece a última carga aceita" decide (ADR-008).
+    await orders.stageLooseItems('delta', randomUUID(), [orfao('DL-14')]);
+    await orders.stageLooseItems('delta', randomUUID(), [
+      orfao('DL-14', { quantityOrdered: '777.000000' }),
+    ]);
+    assert.equal(
+      await emEspera('DL-14'),
+      2,
+      'uma carga tomou a linha da outra',
+    );
+
+    const salvo = await gravar(
+      orders,
+      pedido({ clientId: 'delta', externalNumber: 'DL-14', items: null }),
+    );
+    assert.equal(salvo.items.length, 1, 'a mesma linha entrou duas vezes');
     assert.equal(salvo.items[0]?.quantityOrdered, '777.000000');
   });
 
@@ -197,8 +220,10 @@ describe('espera de itens órfãos no PostgreSQL', { skip: semBanco }, () => {
     // passa. O que sai da espera entra num pedido de verdade.
     await database.pool.query(
       `INSERT INTO ingestion_staging
-         (id, client_id, external_number, external_line, item, raw, staged_at)
-       VALUES (gen_random_uuid(), 'delta', 'DL-6', 10, $1::jsonb, '{}', now())`,
+         (id, client_id, ingestion_id, external_number, external_line,
+          item, raw, staged_at)
+       VALUES (gen_random_uuid(), 'delta', gen_random_uuid(), 'DL-6', 10,
+               $1::jsonb, '{}', now())`,
       [JSON.stringify({ ...item(), material: 'M'.repeat(129) })],
     );
 

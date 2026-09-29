@@ -15,7 +15,10 @@ import {
   type StagedItem,
   type StagedRecord,
 } from '../../src/domain/ingestion.js';
-import { normalizedItemSchema } from '../../src/domain/schemas.js';
+import {
+  normalizedItemSchema,
+  normalizedOrderSchema,
+} from '../../src/domain/schemas.js';
 import type {
   NormalizedPurchaseOrder,
   NormalizedPurchaseOrderItem,
@@ -42,24 +45,48 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
   // PostgreSQL: consumir a espera e gravar o pedido é uma operação só.
   private readonly waiting = new Map<
     string,
-    { ingestionId: string; item: NormalizedPurchaseOrderItem; raw: string }[]
+    {
+      ingestionId: string;
+      item: NormalizedPurchaseOrderItem;
+      raw: string;
+      em: number;
+    }[]
   >();
+  private relogio = 0;
   private sequence = 0;
 
   replaceSnapshot(snapshot: NormalizedPurchaseOrder): Promise<SnapshotResult> {
     const key = `${snapshot.clientId}:${snapshot.externalNumber}`;
     // A reconciliação pelo cabeçalho leva **tudo** o que esperava, de
     // qualquer carga: é a promessa do ADR-008.
-    const esperando = (this.waiting.get(key) ?? []).map((linha) => linha.item);
+    const porLinhaEsperando = new Map<number, NormalizedPurchaseOrderItem>();
+    for (const linha of [...(this.waiting.get(key) ?? [])].sort(
+      (a, b) => a.em - b.em,
+    )) {
+      porLinhaEsperando.set(linha.item.externalLine, linha.item);
+    }
+    const esperando = [...porLinhaEsperando.values()];
     this.waiting.delete(key);
     // O test double revalida como o repositório real: era a ausência disso
     // que deixava R09-04 passar verde nos testes (REVIEW-09).
     for (const item of esperando) normalizedItemSchema.parse(item);
-    const completo = mergeWaitingItems(snapshot, esperando);
+    // Com `items: null`, a base é o que está gravado, não o retrato recebido:
+    // mesclar sobre ele fazia a espera substituir o anterior (R13-04).
+    const anterior = this.byKey.get(key);
+    const base =
+      snapshot.items === null && esperando.length > 0
+        ? {
+            ...snapshot,
+            items: anterior === undefined ? [] : [...semPersistencia(anterior)],
+          }
+        : snapshot;
+    const completo = normalizedOrderSchema.parse(
+      mergeWaitingItems(base, esperando),
+    ) as NormalizedPurchaseOrder;
     return Promise.resolve({
       order: this.gravar(completo),
       fromLoad: snapshot.items?.length ?? 0,
-      recovered: (completo.items?.length ?? 0) - (snapshot.items?.length ?? 0),
+      recovered: esperando.length,
     });
   }
 
@@ -115,14 +142,41 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
       normalizedItemSchema.parse(item.item);
       const key = `${clientId}:${item.externalNumber}`;
       const fila = this.waiting.get(key) ?? [];
+      // A carga faz parte da identidade: duas podem ter a mesma linha do
+      // mesmo pedido esperando, cada uma dona da sua (REVIEW-13, R13-01).
       this.waiting.set(key, [
         ...fila.filter(
-          (atual) => atual.item.externalLine !== item.item.externalLine,
+          (atual) =>
+            atual.ingestionId !== ingestionId ||
+            atual.item.externalLine !== item.item.externalLine,
         ),
-        { ingestionId, item: item.item, raw: item.raw },
+        { ingestionId, item: item.item, raw: item.raw, em: this.relogio++ },
       ]);
     }
     return Promise.resolve();
+  }
+
+  purgeStaged(
+    clientId: ClientId,
+    ingestionId: string,
+    externalNumber: string,
+  ): Promise<void> {
+    const key = `${clientId}:${externalNumber}`;
+    const fila = this.waiting.get(key) ?? [];
+    this.waiting.set(
+      key,
+      fila.filter((linha) => linha.ingestionId !== ingestionId),
+    );
+    return Promise.resolve();
+  }
+
+  countStaged(clientId: ClientId, ingestionId: string): Promise<number> {
+    let total = 0;
+    for (const [key, fila] of this.waiting) {
+      if (!key.startsWith(`${clientId}:`)) continue;
+      total += fila.filter((l) => l.ingestionId === ingestionId).length;
+    }
+    return Promise.resolve(total);
   }
 
   consolidateStaged(
@@ -134,20 +188,16 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
     const existing = this.byKey.get(key);
     if (existing === undefined) return Promise.resolve(0);
     const fila = this.waiting.get(key) ?? [];
-    // Só o que é desta carga: levar o que outra gravou faria os dois
-    // relatórios mentirem (REVIEW-12, R12-02).
     const meus = fila.filter((linha) => linha.ingestionId === ingestionId);
     if (meus.length === 0) return Promise.resolve(0);
-    this.waiting.set(
-      key,
-      fila.filter((linha) => linha.ingestionId !== ingestionId),
-    );
 
     const porLinha = new Map(
       semPersistencia(existing).map((item) => [item.externalLine, item]),
     );
     for (const linha of meus) porLinha.set(linha.item.externalLine, linha.item);
-    this.gravar({
+    // O agregado inteiro atravessa o contrato antes de gravar; se falhar, a
+    // espera desta carga continua intacta (REVIEW-13, R13-04).
+    const completo = normalizedOrderSchema.parse({
       clientId: existing.clientId,
       externalNumber: existing.externalNumber,
       supplier: existing.supplier,
@@ -155,7 +205,13 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
       status: existing.status,
       issuedOn: existing.issuedOn,
       items: [...porLinha.values()],
-    });
+    }) as NormalizedPurchaseOrder;
+
+    this.waiting.set(
+      key,
+      fila.filter((linha) => linha.ingestionId !== ingestionId),
+    );
+    this.gravar(completo);
     return Promise.resolve(meus.length);
   }
 

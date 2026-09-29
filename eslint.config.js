@@ -30,6 +30,7 @@ export default tseslint.config(
     files: ['scripts/**/*.mjs'],
     languageOptions: {
       globals: {
+        Blob: 'readonly',
         Buffer: 'readonly',
         console: 'readonly',
         fetch: 'readonly',

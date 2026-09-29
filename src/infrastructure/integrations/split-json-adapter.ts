@@ -79,10 +79,8 @@ export class SplitJsonAdapter implements SourceAdapter {
     const pendentes = new Map<string, Pending>();
     // Pedidos com cabeçalhos que discordam: nada é gravado para eles.
     const conflitantes = new Set<string>();
-    // Quantos itens órfãos por pedido, e quais passaram do teto. O teto é do
-    // agregado, e o caminho item-only não o consultava (REVIEW-12, R12-01).
-    const orfaosPorPedido = new Map<string, number>();
-    const orfaosEstourados = new Set<string>();
+    // Pedidos órfãos distintos, só como guarda de memória do índice.
+    const orfaosPorPedido = new Set<string>();
 
     if (temCabecalhos) {
       let index = 0;
@@ -147,46 +145,36 @@ export class SplitJsonAdapter implements SourceAdapter {
           if (alvo !== undefined) {
             if (alvo.items.length >= maxItemsPerOrder) alvo.overflow = true;
             else alvo.items.push(readItem(jsonFieldSource(raw), profile));
-          } else if (!orfaosEstourados.has(numero)) {
+          } else {
             // Item sem cabeçalho espera com o conteúdo cru, para reconciliar
             // quando o cabeçalho aparecer. Inventar um pedido a partir do item
             // significaria inventar fornecedor, situação e data — e um pedido
             // sem situação nunca poderia ser conferido (ADR-008).
             //
-            // O teto vale aqui também: sem ele, dez mil e um itens de um
-            // pedido inexistente entravam na espera e depois montavam um
-            // retrato acima do limite (REVIEW-12, R12-01).
-            const jaEsperando = orfaosPorPedido.get(numero) ?? 0;
-            if (jaEsperando >= maxItemsPerOrder) {
-              orfaosEstourados.add(numero);
-              lote.recusar({
-                reference: numero,
-                reason:
-                  `mais de ${String(maxItemsPerOrder)} itens sem cabeçalho; ` +
-                  'o pedido inteiro foi recusado',
-              });
-            } else {
-              // Validado contra o contrato antes de esperar: sem isso,
-              // material acima do limite entrava e só estourava muito depois,
-              // fora do tratamento por registro (REVIEW-09, R09-04).
-              const conferido = normalizedItemSchema.safeParse(
-                readItem(jsonFieldSource(raw), profile),
+            // O teto de itens por pedido é do agregado e vive no caso de
+            // uso, que enxerga a soma entre lotes e sabe desfazer o que já
+            // foi escrito. Conferir aqui também produziria recusa dupla.
+            //
+            // Validado contra o contrato antes de esperar: sem isso, material
+            // acima do limite entrava e só estourava muito depois, fora do
+            // tratamento por registro (REVIEW-09, R09-04).
+            const conferido = normalizedItemSchema.safeParse(
+              readItem(jsonFieldSource(raw), profile),
+            );
+            if (!conferido.success) {
+              throw new FieldError(
+                `item do pedido ${numero}`,
+                describeIssues(conferido.error),
               );
-              if (!conferido.success) {
-                throw new FieldError(
-                  `item do pedido ${numero}`,
-                  describeIssues(conferido.error),
-                );
-              }
-              orfaosPorPedido.set(numero, jaEsperando + 1);
-              lote.esperar({
-                reference: numero,
-                externalNumber: numero,
-                reason: 'cabecalho-ausente',
-                raw: JSON.stringify(raw).slice(0, maxStagedRawCharacters),
-                item: conferido.data,
-              });
             }
+            orfaosPorPedido.add(numero);
+            lote.esperar({
+              reference: numero,
+              externalNumber: numero,
+              reason: 'cabecalho-ausente',
+              raw: JSON.stringify(raw).slice(0, maxStagedRawCharacters),
+              item: conferido.data,
+            });
           }
         } catch (cause) {
           lote.recusar({
