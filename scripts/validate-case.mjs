@@ -255,12 +255,14 @@ await exige(
   'Req 1',
   'detalhe traz o que já foi recebido e o que falta em cada item',
   async () => {
+    // Pelo número do pedido, não por posição: `data[0]` é outro pedido assim
+    // que o banco tem mais de um do mesmo cliente.
     const { corpo: lista } = await pegar(
-      '/purchase-orders?clientId=alfa&limit=10',
+      '/purchase-orders?clientId=alfa&limit=100',
     );
-    const { status, corpo } = await pegar(
-      `/purchase-orders/${lista.data[0].id}`,
-    );
+    const daAmostra = lista.data.find((p) => p.externalNumber === '4500001234');
+    confere(daAmostra !== undefined, 'o pedido da amostra sumiu da consulta');
+    const { status, corpo } = await pegar(`/purchase-orders/${daAmostra.id}`);
     confere(status === 200, `detalhe respondeu ${status}`);
     const item = corpo.items.find((i) => i.material === 'MAT-1001');
     confere(
@@ -393,27 +395,34 @@ await exige(
   'Banco',
   'reenvio de pedido que mudou atualiza no lugar e recalcula o saldo',
   async () => {
-    const { corpo: antes } = await pegar(
-      '/purchase-orders?clientId=alfa&limit=10',
-    );
-    const versaoAntes = antes.data[0].ingestionVersion;
+    // Afirma sobre **o pedido da amostra**, não sobre a contagem do cliente:
+    // qualquer outro pedido alfa no banco — de outro script, de outra carga —
+    // fazia a contagem global mentir sobre duplicação (REVIEW-10, R10-05).
+    const numero = '4500001234';
+    const daAmostra = async () => {
+      const { corpo } = await pegar('/purchase-orders?clientId=alfa&limit=100');
+      const achados = corpo.data.filter((p) => p.externalNumber === numero);
+      confere(
+        achados.length === 1,
+        `reenvio duplicou: ${achados.length} pedidos com o número ${numero}`,
+      );
+      return achados[0];
+    };
+
+    const antes = await daAmostra();
     await carregar('alfa', {
       orders: 'tests/fixtures/alfa/purchase-orders.json',
     });
-    const { corpo: depois } = await pegar(
-      '/purchase-orders?clientId=alfa&limit=10',
+    const depois = await daAmostra();
+
+    confere(depois.id === antes.id, 'reenvio trocou a identidade interna');
+    confere(
+      depois.ingestionVersion === antes.ingestionVersion + 1,
+      `versão foi de ${antes.ingestionVersion} para ${depois.ingestionVersion}`,
     );
     confere(
-      depois.data.length === 1,
-      `reenvio duplicou: ${depois.data.length} pedidos`,
-    );
-    confere(
-      depois.data[0].id === antes.data[0].id,
-      'reenvio trocou a identidade interna',
-    );
-    confere(
-      depois.data[0].ingestionVersion === versaoAntes + 1,
-      'versão não avançou',
+      depois.pendingItemCount === antes.pendingItemCount,
+      'o saldo mudou sem o dado ter mudado',
     );
   },
 );
