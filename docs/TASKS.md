@@ -44,6 +44,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | FIX-05    | Congelar presets e perfis exportados                             | concluída                      | Claude      | Preset de pool era mutável por referência; deepFreeze compartilhado           |
 | P1-04     | Integrar API, conferência e relatório paginado                   | concluída                      | Claude      | Seis rotas; validação contra PostgreSQL real é ENV-03                         |
 | P1-05     | Validar desafio e registrar marco parte-1                        | concluída                      | Claude      | 18/18 exigências verificadas no ar; tag depende de DOC-02                     |
+| FINAL-01  | Fechar o enunciado inteiro e entregar a versão final             | em andamento                   | Claude      | Seis lacunas do enunciado sem prova; pedido explícito do usuário              |
 | FIX-14    | Fechar REVIEW-13 e provar pela aplicação real                    | concluída                      | Claude      | Carga na identidade física; 10/10 cenários pelas rotas HTTP                   |
 | FIX-13    | Fechar os seis achados de REVIEW-12                              | concluída                      | Claude      | Identidade de carga na espera; emissão de lote centralizada                   |
 | FIX-12    | Fechar os três achados de REVIEW-11                              | concluída                      | Claude      | Guardar e decidir separados; invariante de lote; gerador fail-closed          |
@@ -259,6 +260,21 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Evidência: [handoff ARCH-05](handoffs/ARCH-05-claude.md); `npm run check` verde; nada validado contra Grafana ou Prometheus reais, que não existem nesta máquina.
 - Escopo: registrar como a aplicação se conecta a Grafana e Prometheus, o consentimento de quem executa e a convenção de nomes e labels. Nenhuma dependência instalada, nenhum endpoint criado.
 - Dependências: nenhuma para o registro. A implementação depende de P1-01 e P1-03, porque os labels saem do contrato e dos adaptadores.
+
+## FINAL-01 — fechar o enunciado inteiro
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `scripts/**`, `tests/**`, `src/infrastructure/integrations/client-profiles.ts` (se o vocabulário do Beta exigir), `docs/STATUS.md`, `docs/TASKS.md`, `docs/handoffs/FINAL-01-claude.md`, `README.md`.
+- Escopo: seis exigências do enunciado que **nenhum teste prova hoje**, encontradas relendo `docs/CASE.md` linha a linha em vez de confiar na minha lista:
+  1. varredura em lote **enquanto novas cargas entram** — o cenário está escrito no requisito 1 e nunca foi exercitado;
+  2. CSV do Beta em Windows-1252 com CRLF, ponta a ponta — o enunciado diz que "uma fixture de variante deveria provar isso" e não existe fixture;
+  3. situação `ENCERRADO` do Beta e valor fora do vocabulário, que é suposição nossa registrada;
+  4. volume nos formatos do Gama e do Delta — "o serviço deve funcionar para qualquer volume nesses formatos", e só o Beta foi medido;
+  5. situações `closed` e `blocked` do Alfa, que a fixture não tem;
+  6. robustez dos próprios validadores contra dados de outros scripts.
+- Regra desta tarefa, pedida pelo usuário: a cada correção, examinar a vizinhança antes de seguir.
+- Dependências: FIX-14 concluída.
 
 ## FIX-14 — REVIEW-13, com aceitação pela aplicação real
 
