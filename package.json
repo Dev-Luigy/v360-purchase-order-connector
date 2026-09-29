@@ -29,7 +29,9 @@
     "coverage": "node --import tsx --test --experimental-test-coverage \"tests/**/*.test.ts\"",
     "test:integration": "node --env-file=.env --import tsx --test --test-concurrency=1 \"tests/integration/**/*.test.ts\"",
     "evidence": "node scripts/evidence.mjs",
-    "validate:http": "node scripts/validate-fix-14-http.mjs"
+    "validate:http": "node scripts/validate-fix-14-http.mjs",
+    "validate:sweep": "node scripts/validate-sweep-under-load.mjs",
+    "validate:volume": "node scripts/volume-check.mjs"
   },
   "dependencies": {
     "@fastify/multipart": "10.1.2",

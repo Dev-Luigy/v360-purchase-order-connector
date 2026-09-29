@@ -8,6 +8,12 @@ import type {
   SnapshotResult,
 } from '../../src/application/ports/purchase-order-repository.js';
 import type { ClientId } from '../../src/domain/client.js';
+import {
+  decodeCursor,
+  encodeCursor,
+  fingerprintOf,
+} from '../../src/infrastructure/database/cursor.js';
+import { assertPageLimit } from '../../src/infrastructure/database/purchase-order-repository.js';
 import { Decimal, quantityScale } from '../../src/domain/decimal.js';
 import {
   mergeWaitingItems,
@@ -53,6 +59,22 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
     }[]
   >();
   private relogio = 0;
+  private contador = 0;
+
+  /**
+   * Identificador no formato e na ordem do real: UUID v7, monotônico.
+   *
+   * O dobro usava `order-1`, `order-2`… e por isso o codec de cursor recusava
+   * a posição — o que só aparecia quando o dobro passou a paginar de verdade.
+   * Ids que não são UUID também ordenariam errado: `order-10` vem antes de
+   * `order-2` numa comparação de texto.
+   */
+  private proximoId(): string {
+    this.contador += 1;
+    const ms = Date.now().toString(16).padStart(12, '0').slice(-12);
+    const seq = this.contador.toString(16).padStart(6, '0').slice(-6);
+    return `${ms.slice(0, 8)}-${ms.slice(8, 12)}-7${seq.slice(0, 3)}-8${seq.slice(3, 6)}-${seq.padStart(12, '0')}`;
+  }
   private sequence = 0;
 
   replaceSnapshot(snapshot: NormalizedPurchaseOrder): Promise<SnapshotResult> {
@@ -105,9 +127,9 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
     const items =
       completo.items === null
         ? (existing?.items ?? [])
-        : completo.items.map((item, index): PurchaseOrderItem => ({
+        : completo.items.map((item): PurchaseOrderItem => ({
             ...item,
-            id: `item-${String(this.sequence)}-${String(index)}`,
+            id: this.proximoId(),
             quantityPending: Decimal.parse(item.quantityOrdered)
               .subtract(Decimal.parse(item.quantityReceived))
               .toText(quantityScale),
@@ -115,7 +137,7 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
 
     this.sequence += 1;
     const saved: PurchaseOrder = {
-      id: existing?.id ?? `order-${String(this.sequence)}`,
+      id: existing?.id ?? this.proximoId(),
       clientId: completo.clientId,
       externalNumber: completo.externalNumber,
       supplier: completo.supplier,
@@ -261,18 +283,41 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
     filters: PurchaseOrderFilters,
     page: PageRequest,
   ): Promise<Page<PurchaseOrderSummary>> {
+    assertPageLimit(page.limit);
+
+    // O cursor usa o **mesmo codec** do repositório real, e não uma imitação:
+    // este dobro devolvia `nextCursor: null` sempre e ignorava o cursor
+    // recebido, então todo teste de paginação na borda HTTP era vazio — e
+    // ainda produzia `hasMore: true` com `nextCursor: null`, que o repositório
+    // real nunca produz.
+    const fingerprint = fingerprintOf({
+      clientId: filters.clientId,
+      externalNumber: filters.externalNumber,
+      supplierTaxId: filters.supplierTaxId,
+      status: filters.status,
+      onlyPending: filters.onlyPending,
+    });
+    const after =
+      page.cursor === null ? null : decodeCursor(page.cursor, fingerprint);
+
     const todos = [...this.byKey.values()]
       .filter(
         (order) =>
           (filters.clientId === null || order.clientId === filters.clientId) &&
+          (filters.externalNumber === null ||
+            order.externalNumber === filters.externalNumber) &&
           (filters.supplierTaxId === null ||
             order.supplier.taxId === filters.supplierTaxId) &&
           (filters.status === null || order.status === filters.status) &&
-          (!filters.onlyPending || order.hasPendingBalance),
+          (!filters.onlyPending || order.hasPendingBalance) &&
+          (after === null || order.id > after),
       )
       .sort((a, b) => a.id.localeCompare(b.id));
 
     const visible = todos.slice(0, page.limit);
+    const hasMore = todos.length > page.limit;
+    const ultimo = visible.at(-1);
+
     return Promise.resolve({
       data: visible.map((order): PurchaseOrderSummary => ({
         id: order.id,
@@ -292,8 +337,11 @@ export class InMemoryPurchaseOrderRepository implements PurchaseOrderRepository 
       page: {
         limit: page.limit,
         cursor: page.cursor,
-        nextCursor: null,
-        hasMore: todos.length > page.limit,
+        nextCursor:
+          hasMore && ultimo !== undefined
+            ? encodeCursor(ultimo.id, fingerprint)
+            : null,
+        hasMore,
       },
     });
   }

@@ -221,8 +221,11 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
   ): Promise<Page<PurchaseOrderSummary>> {
     assertPageLimit(page.limit);
 
+    // Todo filtro entra na impressão digital: um que ficasse de fora deixaria
+    // um cursor de outra consulta ser aceito em silêncio.
     const fingerprint = fingerprintOf({
       clientId: filters.clientId,
+      externalNumber: filters.externalNumber,
       supplierTaxId: filters.supplierTaxId,
       status: filters.status,
       onlyPending: filters.onlyPending,
@@ -233,6 +236,9 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
     const rows = await this.prisma.purchaseOrder.findMany({
       where: {
         ...(filters.clientId === null ? {} : { clientId: filters.clientId }),
+        ...(filters.externalNumber === null
+          ? {}
+          : { externalNumber: filters.externalNumber }),
         ...(filters.supplierTaxId === null
           ? {}
           : { supplierTaxId: filters.supplierTaxId }),

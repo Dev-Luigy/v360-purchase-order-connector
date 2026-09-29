@@ -48,6 +48,27 @@ const postar = async (caminho, payload) => {
   return { status: resposta.status, corpo: await resposta.json() };
 };
 
+async function carregarTexto(clientId, partes) {
+  const corpo = new FormData();
+  for (const [nome, texto] of Object.entries(partes)) {
+    corpo.append(
+      nome,
+      new Blob([texto], { type: 'application/json' }),
+      `${nome}.json`,
+    );
+  }
+  const resposta = await fetch(`${base}/clients/${clientId}/ingestions`, {
+    method: 'POST',
+    headers: { 'x-format-version': '1' },
+    body: corpo,
+  });
+  const relatorio = await resposta.json();
+  if (!resposta.ok) {
+    throw new Error(`carga ${clientId}: ${JSON.stringify(relatorio)}`);
+  }
+  return relatorio;
+}
+
 async function carregar(clientId, partes) {
   const corpo = new FormData();
   for (const [nome, caminho] of Object.entries(partes)) {
@@ -62,6 +83,21 @@ async function carregar(clientId, partes) {
   if (!resposta.ok)
     throw new Error(`carga ${clientId}: ${JSON.stringify(relatorio)}`);
   return relatorio;
+}
+
+/**
+ * Um pedido específico de um cliente, buscado pelo filtro dele.
+ *
+ * Ler a primeira página e procurar ali passava por acidente de ordenação: os
+ * cem primeiros são os mais antigos, então um cliente carregado depois nunca
+ * aparecia e a asserção não provava o que dizia.
+ */
+async function pedidoDe(clientId, externalNumber) {
+  const { corpo } = await pegar(
+    `/purchase-orders?clientId=${clientId}` +
+      `&externalNumber=${encodeURIComponent(externalNumber)}`,
+  );
+  return corpo.data[0] ?? null;
 }
 
 /** Percorre todas as páginas de uma consulta, pelo cursor. */
@@ -140,21 +176,17 @@ await exige(
   'Req 1',
   'consulta unificada devolve os dois clientes no mesmo contrato',
   async () => {
-    const { corpo } = await pegar('/purchase-orders?limit=100');
-    const clientes = new Set(corpo.data.map((p) => p.clientId));
-    confere(
-      clientes.has('alfa') && clientes.has('beta'),
-      `clientes: ${[...clientes].join(',')}`,
-    );
+    const a = await pedidoDe('alfa', '4500001234');
+    const b = await pedidoDe('beta', '20260088412');
+    confere(a !== null, 'o pedido do alfa não veio na consulta');
+    confere(b !== null, 'o pedido do beta não veio na consulta');
     // "Formato único" só vale se os campos forem os mesmos para os dois.
-    const chaves = corpo.data.map((p) => Object.keys(p).sort().join(','));
     confere(
-      new Set(chaves).size === 1,
+      Object.keys(a).sort().join(',') === Object.keys(b).sort().join(','),
       'clientes diferentes devolveram campos diferentes',
     );
     // O Beta veio com vírgula decimal, ponto de milhar, CNPJ com máscara e
     // data dd/mm/aaaa; se a normalização falhasse, apareceria aqui.
-    const b = corpo.data.find((p) => p.externalNumber === '20260088412');
     confere(
       b.supplier.taxId === '12345678000190',
       `CNPJ não normalizado: ${b.supplier.taxId}`,
@@ -495,13 +527,21 @@ await exige(
   'Parte 2',
   'os quatro clientes aparecem no mesmo contrato',
   async () => {
-    const { corpo } = await pegar('/purchase-orders?limit=100');
-    const clientes = [...new Set(corpo.data.map((p) => p.clientId))].sort();
-    confere(
-      clientes.join(',') === 'alfa,beta,delta,gama',
-      `clientes: ${clientes.join(',')}`,
-    );
-    const chaves = corpo.data.map((p) => Object.keys(p).sort().join(','));
+    // Um pedido conhecido de cada um, pelo filtro do próprio cliente: ler a
+    // primeira página passava por acidente de ordenação.
+    const amostras = Object.entries({
+      alfa: '4500001234',
+      beta: '20260088412',
+      gama: 'GL-778',
+      delta: 'DL-2026-0044',
+    });
+    const encontrados = [];
+    for (const [cliente, numero] of amostras) {
+      const pedido = await pedidoDe(cliente, numero);
+      confere(pedido !== null, `${cliente}: ${numero} não veio na consulta`);
+      encontrados.push(pedido);
+    }
+    const chaves = encontrados.map((p) => Object.keys(p).sort().join(','));
     confere(
       new Set(chaves).size === 1,
       'clientes diferentes devolveram campos diferentes',
@@ -651,6 +691,133 @@ await exige('Delta', 'cada item guarda a própria data de criação', async () =
     `datas: ${linhas.join(',')}`,
   );
 });
+
+// -------------------------------- o que o enunciado deixa em aberto
+
+await exige(
+  'Em aberto',
+  'as três situações do Alfa viram o vocabulário do contrato',
+  async () => {
+    // A amostra só traz `open`; o enunciado diz que também existem `closed` e
+    // `blocked`, e as três precisam ter tradução.
+    const payload = {
+      purchase_orders: ['open', 'closed', 'blocked'].map((situacao, i) => ({
+        po_number: `VOCAB-${situacao.toUpperCase()}`,
+        created_at: '2026-08-05',
+        status: situacao,
+        currency: 'BRL',
+        vendor: { tax_id: '23456789000101', name: 'Metalúrgica São Jorge' },
+        items: [
+          {
+            line: 10,
+            material: `VOC-${String(i)}`,
+            description: 'Item de vocabulário',
+            uom: 'UN',
+            quantity_ordered: 10,
+            quantity_received: 0,
+            unit_price: 1.5,
+          },
+        ],
+      })),
+    };
+    const relatorio = await carregarTexto('alfa', {
+      orders: JSON.stringify(payload),
+    });
+    confere(
+      relatorio.ordersAccepted === 3,
+      `aceitos: ${relatorio.ordersAccepted}`,
+    );
+
+    for (const [origem, esperado] of Object.entries({
+      OPEN: 'aberto',
+      CLOSED: 'encerrado',
+      BLOCKED: 'bloqueado',
+    })) {
+      const pedido = await pedidoDe('alfa', `VOCAB-${origem}`);
+      confere(pedido !== null, `VOCAB-${origem} não entrou`);
+      confere(
+        pedido.status === esperado,
+        `${origem} virou ${pedido.status}, esperado ${esperado}`,
+      );
+    }
+  },
+);
+
+await exige(
+  'Em aberto',
+  'situação fora do vocabulário é recusada, não interpretada',
+  async () => {
+    // O enunciado registra que o termo para "encerrado" do Beta é suposição
+    // nossa. A consequência assumida: valor desconhecido é recusado, em vez de
+    // virar um palpite que grava a situação errada.
+    const payload = {
+      purchase_orders: [
+        {
+          po_number: 'VOCAB-DESCONHECIDO',
+          created_at: '2026-08-05',
+          status: 'suspended',
+          currency: 'BRL',
+          vendor: { tax_id: '23456789000101', name: 'Metalúrgica São Jorge' },
+          items: [],
+        },
+      ],
+    };
+    const relatorio = await carregarTexto('alfa', {
+      orders: JSON.stringify(payload),
+    });
+    confere(relatorio.ordersAccepted === 0, 'aceitou situação desconhecida');
+    confere(
+      relatorio.rejectedTotal === 1,
+      `recusas: ${relatorio.rejectedTotal}`,
+    );
+    confere(
+      (await pedidoDe('alfa', 'VOCAB-DESCONHECIDO')) === null,
+      'o pedido com situação desconhecida foi gravado',
+    );
+  },
+);
+
+await exige(
+  'Em aberto',
+  'CSV do Beta em Windows-1252 com CRLF entra sem perder acento',
+  async () => {
+    // O enunciado diz que o encoding e o fim de linha não são especificados, e
+    // que "uma fixture de variante deveria provar isso". Esta é a fixture.
+    const relatorio = await carregar('beta-erp', {
+      headers: 'tests/fixtures/beta-erp/cabecalho.csv',
+      items: 'tests/fixtures/beta-erp/itens.csv',
+    });
+    confere(
+      relatorio.ordersAccepted === 3,
+      `aceitos: ${relatorio.ordersAccepted}`,
+    );
+    confere(
+      relatorio.rejectedTotal === 0,
+      `recusas: ${relatorio.rejectedTotal}`,
+    );
+
+    const aberto = await pedidoDe('beta-erp', '20260099001');
+    confere(aberto !== null, 'o pedido da variante não entrou');
+    confere(aberto.supplier.taxId === '12345678000190', 'CNPJ não normalizado');
+    confere(aberto.issuedOn === '2026-08-15', `data: ${aberto.issuedOn}`);
+
+    // `ENCERRADO` é o termo que o enunciado diz não aparecer nas amostras.
+    const encerrado = await pedidoDe('beta-erp', '20260099002');
+    confere(
+      encerrado.status === 'encerrado',
+      `ENCERRADO virou ${encerrado.status}`,
+    );
+    confere(encerrado.hasPendingBalance === false, 'encerrado com saldo');
+
+    // Acento vindo de Windows-1252 precisa atravessar o banco intacto.
+    const { corpo } = await pegar(`/purchase-orders/${aberto.id}`);
+    const oleo = corpo.items.find((i) => i.externalLine === 1);
+    confere(
+      oleo.description === 'Óleo de soja 900ml',
+      `acento corrompido: ${oleo.description}`,
+    );
+  },
+);
 
 // ------------------------------------------------------------- veredito
 

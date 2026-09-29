@@ -79,3 +79,33 @@ export async function gravar(
 ): Promise<PurchaseOrder> {
   return (await repository.replaceSnapshot(snapshot)).order;
 }
+
+/**
+ * Recusa rodar com a API do Compose ativa.
+ *
+ * A suíte dá `TRUNCATE` nas tabelas de negócio, então assume acesso exclusivo.
+ * Com a API no ar, o que acontece é uma dúzia de falhas sem relação aparente
+ * entre si — e já aconteceu mais de uma vez de eu perder tempo procurando um
+ * defeito de código que era ambiente. Uma mensagem vale mais que trinta
+ * falhas.
+ */
+export async function exigirBancoExclusivo(
+  database: DatabaseConnection,
+): Promise<void> {
+  const { rows } = await database.pool.query<{ outros: string }>(
+    `SELECT count(*)::text AS outros
+       FROM pg_stat_activity
+      WHERE datname = current_database()
+        AND pid <> pg_backend_pid()
+        AND application_name NOT LIKE '%psql%'
+        AND state IS NOT NULL`,
+  );
+  const outros = Number(rows[0]?.outros ?? '0');
+  if (outros > 0) {
+    throw new Error(
+      `há ${String(outros)} conexão(ões) de outro processo neste banco. ` +
+        'A suíte de integração dá TRUNCATE e precisa de acesso exclusivo: ' +
+        'pare a API com `docker compose stop api` antes de rodar.',
+    );
+  }
+}

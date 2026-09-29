@@ -18,6 +18,7 @@ import type {
  */
 export interface PurchaseOrderQuery {
   readonly clientId?: string | undefined;
+  readonly externalNumber?: string | undefined;
   readonly supplierTaxId?: string | undefined;
   readonly status?: PurchaseOrderStatus | undefined;
   readonly pending?: boolean | undefined;
@@ -31,6 +32,7 @@ export class ListPurchaseOrders {
   execute(query: PurchaseOrderQuery): Promise<Page<PurchaseOrderSummary>> {
     const filters: PurchaseOrderFilters = {
       clientId: query.clientId ?? null,
+      externalNumber: query.externalNumber ?? null,
       supplierTaxId: query.supplierTaxId ?? null,
       status: query.status ?? null,
       // Ausente é "não filtrar", não "filtrar por falso": um pedido sem saldo

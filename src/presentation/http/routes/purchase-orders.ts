@@ -7,7 +7,11 @@ import type {
   GetPurchaseOrder,
   ListPurchaseOrders,
 } from '../../../application/use-cases/query-purchase-orders.js';
-import { maxClientIdLength, maxCursorLength } from '../../../domain/limits.js';
+import {
+  maxClientIdLength,
+  maxCursorLength,
+  maxExternalNumberLength,
+} from '../../../domain/limits.js';
 import {
   purchaseOrderStatusSchema,
   taxIdSchema,
@@ -31,6 +35,8 @@ import {
 
 const listQuerySchema = z.object({
   clientId: z.string().min(1).max(maxClientIdLength).optional(),
+  /** Número do pedido no sistema do cliente, como a plataforma o conhece. */
+  externalNumber: z.string().min(1).max(maxExternalNumberLength).optional(),
   supplierTaxId: taxIdSchema.optional(),
   status: purchaseOrderStatusSchema.optional(),
   /** `?pending=true` devolve só pedidos com algum item com saldo. */
