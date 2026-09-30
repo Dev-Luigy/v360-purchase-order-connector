@@ -1,0 +1,40 @@
+{
+  "revisadoEm": "2026-09-30",
+  "politica": "Exceção é temporária, nomeada e verificada. Cada entrada declara por onde o pacote entra, por que não foi atualizado, qual a mitigação e quando a exceção vence. `npm run audit:policy` recusa aviso alto que não esteja aqui, exceção vencida e exceção que ninguém usa mais.",
+  "excecoes": [
+    {
+      "pacote": "mysql2",
+      "gravidade": "high",
+      "chegaPor": "@prisma/client > prisma > mysql2",
+      "avisos": ["GHSA-3f6p-5ww8-9rcr", "GHSA-rgwj-5xj2-c3m3"],
+      "porque": "Driver de MySQL que o CLI do Prisma carrega para outros bancos. Este serviço só fala PostgreSQL, pelo @prisma/adapter-pg, e nenhuma linha do código abre conexão MySQL. Corrigir exige `npm audit fix --force`, que rebaixa para prisma@6.19.3 e quebra o contrato do Prisma 7.",
+      "mitigacao": "Removido da imagem de runtime pelo Dockerfile.",
+      "expiraEm": "2026-12-31"
+    },
+    {
+      "pacote": "deepmerge-ts",
+      "gravidade": "high",
+      "chegaPor": "@prisma/client > prisma > @prisma/config > deepmerge-ts",
+      "porque": "Usado pelo @prisma/config para mesclar configuração do CLI, em tempo de migração. Não participa de nenhum caminho de requisição.",
+      "mitigacao": "Removido da imagem de runtime pelo Dockerfile.",
+      "expiraEm": "2026-12-31"
+    },
+    {
+      "pacote": "@prisma/config",
+      "gravidade": "high",
+      "chegaPor": "@prisma/client > prisma > @prisma/config",
+      "porque": "Herda o aviso de deepmerge-ts. Só é lido pelo CLI ao aplicar migração.",
+      "mitigacao": "Removido da imagem de runtime pelo Dockerfile.",
+      "expiraEm": "2026-12-31"
+    },
+    {
+      "pacote": "prisma",
+      "gravidade": "high",
+      "chegaPor": "@prisma/client > prisma",
+      "porque": "É o CLI. Está na árvore de produção porque @prisma/client declara dependência dele, não porque o serviço o execute. Herda os avisos dos dois acima.",
+      "mitigacao": "Removido da imagem de runtime pelo Dockerfile; as migrações rodam no serviço `migrate` do Compose, com a sua própria imagem.",
+      "expiraEm": "2026-12-31"
+    }
+  ],
+  "ausentesDaImagem": ["prisma", "@prisma/config", "deepmerge-ts", "mysql2"]
+}
