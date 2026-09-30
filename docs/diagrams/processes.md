@@ -35,6 +35,7 @@ flowchart TD
     moreOrders -->|Sim| closeStaging
     moreOrders -->|Nao| response[Responde aceitos, rejeitados e espera restante]
     response --> cleanupRequest[Remove arquivos temporarios]
+    discard --> cleanupRequest
 
     read -.->|Falha durante leitura| discard
     closeStaging -.->|Falha ao finalizar| discardUnpublished[Descarta itens desta carga ainda nao publicados]

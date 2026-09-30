@@ -59,6 +59,12 @@ export function registerConferenceRoutes(
     '/conferences/summary',
     {
       schema: {
+        tags: ['conferências'],
+        summary: 'Relatório das conferências feitas',
+        description:
+          'Quantas notas passaram, quantas travaram e por quais motivos. A ' +
+          'soma por código **não** fecha com o total de reprovadas: uma nota ' +
+          'reprovada pode ter várias divergências.',
         querystring: reportQuerySchema,
         response: { 200: conferenceSummarySchema, ...commonProblems },
       },
@@ -76,6 +82,12 @@ export function registerConferenceRoutes(
     '/conferences',
     {
       schema: {
+        tags: ['conferências'],
+        summary: 'Histórico de conferências',
+        description:
+          'Paginado e filtrável. Cada registro guarda a nota como ela foi ' +
+          'conferida e a versão do pedido naquele instante, para o histórico ' +
+          'não mudar de sentido quando o pedido for recarregado.',
         querystring: reportQuerySchema,
         response: {
           200: pagedSchema(conferenceRecordSchema),
@@ -105,6 +117,15 @@ export function registerConferenceRoutes(
     '/conferences',
     {
       schema: {
+        tags: ['conferências'],
+        summary: 'Conferir uma nota fiscal contra um pedido',
+        description:
+          'Responde se a nota está conforme o pedido e, quando não está, diz ' +
+          'exatamente o que não bate, com código estruturado.\n\n' +
+          'A nota informa quantidade em unidade de consumo; o pedido pode ' +
+          'estar em caixa. O fator de conversão faz a ponte, e a comparação é ' +
+          'decimal exata — nada de ponto flutuante em dinheiro.\n\n' +
+          '`201` porque a conferência **cria** um registro no histórico.',
         body: invoiceCheckRequestSchema,
         response: { 201: conferenceRecordSchema, ...commonProblems },
       },

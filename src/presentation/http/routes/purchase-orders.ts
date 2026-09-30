@@ -58,6 +58,15 @@ export function registerPurchaseOrderRoutes(
     '/purchase-orders',
     {
       schema: {
+        tags: ['pedidos'],
+        summary: 'Consultar pedidos de todos os clientes',
+        description:
+          'Contrato único sobre os quatro clientes. Os filtros combinam entre ' +
+          'si e convivem com a paginação.\n\n' +
+          'A paginação é por cursor, e o cursor carrega o recorte: trocar um ' +
+          'filtro no meio da varredura é recusado com `cursor_invalido`. O ' +
+          'teto da varredura é fixado na primeira página, então uma leitura ' +
+          'sob escrita contínua termina em vez de perseguir o que entra.',
         querystring: listQuerySchema,
         response: {
           200: pagedSchema(purchaseOrderSummarySchema),
@@ -81,6 +90,12 @@ export function registerPurchaseOrderRoutes(
     '/purchase-orders/:id',
     {
       schema: {
+        tags: ['pedidos'],
+        summary: 'Detalhe de um pedido',
+        description:
+          'Traz item a item o que já foi recebido e o que ainda falta. ' +
+          'Pedido inexistente é 404, e não lista vazia: a plataforma precisa ' +
+          'distinguir "não existe" de "existe e está vazio".',
         params: detailParamsSchema,
         response: { 200: purchaseOrderDetailSchema, ...commonProblems },
       },

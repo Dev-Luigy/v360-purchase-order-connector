@@ -18,7 +18,8 @@ Atualizado por Codex em 2026-09-30, após DOC-04.
 
 ## Evidências e limitações
 
-- `npm run check`: **247 testes, 0 falhas** (231 rodam sem banco; 16 são pulados sem `DATABASE_URL`). `npm run test:integration`: **33 testes** contra PostgreSQL real. _(não medida nesta geração)_. Cobertura por `npm run coverage`: **92,45% de linhas, 89,86% de branches** (sem banco; os repositórios PostgreSQL só são medidos com ele no ar). Gerado por `npm run evidence`, não digitado — os números derivaram três vezes quando eram manuais.
+- Validação mais recente nesta tarefa: `npm run check` passou com 28 testes do runner, tipagem, lint, formatação e build; `npm run test:integration` passou 34/34 contra PostgreSQL descartável ([TEST-RECOVERY-01](handoffs/TEST-RECOVERY-01-codex.md)). Cobertura anterior de 92,45% de linhas e 89,86% de branches é histórica; não foi recalculada nesta tarefa.
+- `npm run check`: evidência gerada anteriormente: **247 testes, 0 falhas** (231 rodam sem banco; 16 são pulados sem `DATABASE_URL`). `npm run test:integration`: **33 testes** contra PostgreSQL real. _(não medida nesta geração)_. Cobertura histórica por `npm run coverage`: **92,45% de linhas, 89,86% de branches**; esses números não foram recalculados nesta tarefa.
 - Imagem de runtime construída e inspecionada sem executar container: sem CLI do Prisma e sem `mysql2`, que entrava por peer opcional e trazia CVE de credencial para uma aplicação que só fala PostgreSQL.
 - Duas mil combinações aritméticas inteiras comparadas com `BigInt` passaram; `/health` e `/ready` foram exercitados via `inject` nos limites atuais.
 - Três revisões registradas — [REVIEW-01](handoffs/REVIEW-01-codex.md), [REVIEW-02](handoffs/REVIEW-02-claude.md) e [REVIEW-03](handoffs/REVIEW-03-codex.md) — e os defeitos inequívocos das três estão fechados em [FIX-01](handoffs/FIX-01-claude.md), [FIX-02](handoffs/FIX-02-claude.md) e [FIX-03](handoffs/FIX-03-claude.md), cada um com regressão. Nenhum achado era falso positivo; dois defeitos adicionais apareceram durante as correções.
@@ -55,11 +56,9 @@ FIX-17 fechou R16-01 e R16-02. REVIEW-17 encontrou R17-01 no caminho em que o fe
 
 **As exigências funcionais do enunciado passam para os quatro clientes**: `scripts/validate-case.mjs` ficou em **30/30** e `npm run validate:http` em **17/17**. A Parte 1 está marcada na tag `parte-1`; P2-01 integrou Gama e Delta. R17-01 foi fechado por FIX-18 e confirmado nesta revisão ([REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md), [FIX-18](handoffs/FIX-18-claude.md), [REVIEW-18](handoffs/REVIEW-18-validacao-integral-codex.md)).
 
-**CI e auditoria:** OPS-01 adicionou workflow e política de exceções verificável. Os comandos foram exercitados localmente, mas o workflow ainda não foi executado por GitHub Actions; o handoff registra que o repositório não tinha remoto configurado. A política não remove os quatro avisos altos subjacentes — nomeia exceções temporárias e testa a mitigação na imagem final.
-
 Limitações que P1-05 revelou e deixou abertas: a carga de 50.000 pedidos é uma requisição HTTP de 3,2 minutos, que qualquer balanceador com tempo limite padrão derruba sem retomada; o teto de requisições é por origem e não por identidade, porque não há autenticação; e o teto de página é por origem. Windows-1252 com CRLF **passou a ter fixture ponta a ponta** em FINAL-01 (`tests/fixtures/beta-erp/`).
 
-Limitações operacionais a considerar: workflow ainda sem execução em um remoto GitHub; separação de credenciais DDL/DML fora do ambiente local; carga síncrona longa e ausência de retomada após timeout do cliente. Consulte o quadro antes de reservar trabalho.
+Limitação operacional adicional: separação de credenciais DDL/DML fora do ambiente local. Consulte o quadro antes de reservar trabalho.
 
 ## Colaboração
 
