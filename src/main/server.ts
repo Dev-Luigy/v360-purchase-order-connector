@@ -29,12 +29,18 @@ const database = connectDatabase(env.DATABASE_URL, 'request');
 const ingestionDatabase = connectDatabase(env.DATABASE_URL, 'ingestion');
 const profiles = new InMemoryClientProfiles();
 
-const orderRepository = new PrismaPurchaseOrderRepository(database.prisma);
+const orderRepository = new PrismaPurchaseOrderRepository(
+  database.prisma,
+  'request',
+);
 const conferenceRepository = new PrismaConferenceRepository(database.prisma);
 // A carga grava pelo pool dela; consulta e conferência continuam no de
-// requisição, onde o tempo limite curto é proteção e não estorvo.
+// requisição, onde o tempo limite curto é proteção e não estorvo. O propósito
+// viaja junto porque decide também o teto da transação, que é mecanismo
+// separado dos tempos do PostgreSQL (ADR-012).
 const ingestionOrderRepository = new PrismaPurchaseOrderRepository(
   ingestionDatabase.prisma,
+  'ingestion',
 );
 
 const app = await buildApp({
