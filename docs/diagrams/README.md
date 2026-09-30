@@ -1,15 +1,23 @@
 # Diagramas
 
-Representações do contrato definido em [P1-01](../handoffs/P1-01-claude.md). A fonte `.puml` é versionada e o `.svg` ao lado é o render, para ler o diagrama sem rede e para o diff mostrar o que mudou.
+Diagramas derivados do código. O [guia do projeto](../PROJECT-GUIDE.md) explica
+como navegar por eles e pelo restante da implementação.
 
-| Diagrama                                               | Responde                                                               |
-| ------------------------------------------------------ | ---------------------------------------------------------------------- |
-| [contrato-normalizado.puml](contrato-normalizado.puml) | Quais objetos existem, o que cada um carrega e como se ligam.          |
-| [portas-e-consumo.puml](portas-e-consumo.puml)         | Quem produz e quem consome cada objeto, e quem vai cumprir cada porta. |
+| Diagrama                                               | Responde                                                                                             |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| [classes.mmd](classes.mmd)                             | Quais são os principais tipos do domínio, casos de uso, portas e adaptadores e como se relacionam.   |
+| [ingestion-process.mmd](ingestion-process.mmd)         | Como inicialização/recuperação, ingestão, reconciliação, conferência e consulta percorrem o sistema. |
+| [contrato-normalizado.puml](contrato-normalizado.puml) | Quais objetos do contrato normalizado existem, seus campos e cardinalidades.                         |
+| [portas-e-consumo.puml](portas-e-consumo.puml)         | Quem produz e consome objetos do contrato e quais componentes cumprem as portas.                     |
 
 **O diagrama é derivado do código, não o contrário.** A fonte da verdade é `src/domain/**` e `src/application/ports/**`; as decisões estão em [docs/decisions](../decisions/README.md). Divergiu do código, o código está certo: corrija o `.puml` e renderize de novo, no mesmo commit que mudou o contrato.
 
-## Renderizar
+## Renderizar e visualizar
+
+Arquivos `.mmd` usam Mermaid e podem ser visualizados por GitHub e editores com
+preview Mermaid. A fonte permanece no repositório e é o artefato editável.
+
+Os arquivos `.puml` têm SVG versionado ao lado. Para renderizá-los:
 
 Não há PlantUML, Java ou Graphviz nesta máquina, e instalar ferramenta de sistema é do usuário ([AGENTS.md](../../AGENTS.md)). A renderização usa o servidor público de <https://plantuml.com/>:
 

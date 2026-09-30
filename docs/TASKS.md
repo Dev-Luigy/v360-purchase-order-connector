@@ -40,7 +40,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-19        | Comparar fixtures de entrada com pedidos realmente persistidos    | concluída                      | Codex       | 8 cabeçalhos e 11 itens conferidos; órfão Delta corresponde ao staging                               |
 | PORTFOLIO-01     | Documentar contribuição real do responsável pelo projeto          | concluída                      | Codex       | Decisões, critérios de aceite e revisão visíveis no README; autoria de implementação preservada      |
 | TEST-RECOVERY-01 | Gerar cenários em escala para queda, reenvio e cabeçalho ausente  | concluída                      | Codex       | 250 pedidos, 766 linhas e 1.532 itens comparados; PostgreSQL isolado, integração 34/34               |
-| DOC-04           | Criar guia de leitura do projeto e diagramas de classes/processos | em andamento                   | Codex       | Guia orientado pelo código; Mermaid no repositório, sem duplicar API, ADRs ou diagramas de contrato  |
+| DOC-04           | Criar guia de leitura do projeto e diagramas de classes/processos | concluída                      | Codex       | Guia orientado pelo código; Mermaid no repositório, sem duplicar API, ADRs ou diagramas de contrato  |
 | FIX-18           | Fechar R17-01: espera invisível após falha ao fechar pedido       | concluída                      | Claude      | Invariante: carga terminada não deixa linha não publicada                                            |
 | CLEAN-01         | Enxugar comentários do código estável                             | concluída                      | Codex       | 526 linhas removidas; arquivos ativos de P1-04 preservados                                           |
 | P1-01            | Definir contrato normalizado e decisões de negócio                | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03                                 |
@@ -274,11 +274,11 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## DOC-04 — guia de leitura e diagramas de engenharia
 
 - Responsável: Codex.
-- Estado: em andamento.
-- Arquivos reservados: `docs/ENGINEERING.md`, `docs/PROJECT-GUIDE.md`, `docs/diagrams/classes.mmd`, `docs/diagrams/ingestion-process.mmd`, `docs/diagrams/README.md`, `README.md`, `docs/TASKS.md`, `docs/STATUS.md` e `docs/handoffs/DOC-04-codex.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `docs/ENGINEERING.md`, `docs/PROJECT-GUIDE.md`, `docs/diagrams/classes.mmd`, `docs/diagrams/ingestion-process.mmd`, `docs/diagrams/README.md`, `README.md`, `docs/API.md`, `docs/TASKS.md`, `docs/STATUS.md` e `docs/handoffs/DOC-04-codex.md`.
 - Escopo: explicar como navegar pelo projeto, separar visão de domínio/arquitetura, contrato HTTP, decisões e operação; produzir diagrama fiel ao modelo de classes/interfaces e fluxo de ingestão, incluindo o caso Delta sem cabeçalho e recuperação documentada.
 - Dependências: código atual, `docs/API.md`, ADRs e testes de integração existentes.
-- Critério de aceite: documentação não afirmar comportamento ausente, mapas apontarem para fontes de verdade e `npm run check`/`git diff --check` aprovados.
+- Evidência: [handoff DOC-04](handoffs/DOC-04-codex.md); relações conferidas contra domínio, portas, casos de uso, rotas, composição e integração de recuperação. `npm run check` e `git diff --check` aprovados.
 
 ## FIX-18 — espera sem aparecer no relatório após falha
 

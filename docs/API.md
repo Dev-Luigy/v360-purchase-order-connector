@@ -13,7 +13,7 @@ GET  /health
 GET  /ready
 ```
 
-O que **não** foi validado: nada rodou contra PostgreSQL real. Os testes de rota usam repositório em memória; transação, advisory lock, `CHECK` e plano de consulta dependem de ENV-03.
+Os testes de rota usam repositório em memória; transações, locks, constraints e consultas PostgreSQL são cobertos separadamente pela suíte de integração. A validação mais recente e o escopo do banco descartável estão registrados em [STATUS](STATUS.md) e nos handoffs de teste.
 
 ## Convenções
 

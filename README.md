@@ -30,6 +30,8 @@ node scripts/validate-case.mjs    # 30 asserções, uma por exigência do enunci
 
 Desenvolvimento local: `cp .env.example .env && npm ci && npm run db:up && npm run dev`. `npm run check` roda geração do cliente Prisma, tipagem, lint, formatação, a suíte completa e o build, **sem exigir banco**; `npm run test:integration` roda o que exige PostgreSQL real. O contrato completo das rotas está em [docs/API.md](docs/API.md).
 
+Para entender a arquitetura e seguir uma leitura guiada do código, comece pelo [índice de engenharia](docs/ENGINEERING.md) e pelo [guia do projeto](docs/PROJECT-GUIDE.md). Os [diagramas](docs/diagrams/README.md) incluem relações de classes/contratos e o fluxo dos processos.
+
 ---
 
 # As decisões, e por que
@@ -158,6 +160,7 @@ As demais escolhas: [TypeScript e Node](docs/decisions/ADR-002-typescript-nodejs
 | varredura sob carga             | `npm run validate:sweep` — o cenário que o requisito 1 descreve                                                                         |
 | a aplicação, pelas rotas        | `npm run validate:http` — 17 cenários por `fetch`, sem `app.inject`                                                                     |
 | o gravado é igual ao que entrou | `npm run audit:fidelity` — 156 campos das amostras do enunciado contra o PostgreSQL                                                     |
+| exceções de dependências e imagem | `npm run audit:policy` — falha para aviso não listado, exceção vencida ou mitigação ausente na imagem                                  |
 
 Contagens de teste e cobertura ficam em [docs/STATUS.md](docs/STATUS.md), **geradas por `npm run evidence`** e não digitadas: escritas à mão elas derivaram três vezes, mesmo depois de eu concentrá-las num documento só. O 30/30 acima é exceção porque está atado à lista fixa de exigências do enunciado, não ao código.
 

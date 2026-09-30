@@ -1,6 +1,6 @@
 # Estado do projeto
 
-Atualizado por Codex em 2026-09-30, após REVIEW-19 e TEST-RECOVERY-01.
+Atualizado por Codex em 2026-09-30, após DOC-04.
 
 ## Implementado
 
@@ -43,21 +43,23 @@ Pipeline de CI e política de exceção da auditoria npm. A imagem final exclui 
 
 FIX-17 fechou R16-01 e R16-02. REVIEW-17 encontrou R17-01 no caminho em que o fechamento falhava por exceder o limite agregado; FIX-18 passou a descartar essas linhas e mantém o invariante de zero staging não publicado ao fim de uma carga. REVIEW-18 confirmou a correção na integração PostgreSQL e pela rota HTTP ([REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md), [FIX-18](handoffs/FIX-18-claude.md), [REVIEW-18](handoffs/REVIEW-18-validacao-integral-codex.md)).
 
-**Atualização REVIEW-18:** FIX-18 e CLEAN-02 foram verificados. A integração isolada passou 33/33, incluindo recusa acima de 10.000 itens sem linha não publicada; as rotas passaram 17/17, inclusive esse cenário e o rollback do snapshot anterior. `npm run validate:sweep` percorreu 20.000 pedidos com escrita concorrente sem repetição; os quatro formatos passaram com 20.000 pedidos e 60.000 itens cada. Reiniciar o PostgreSQL descartável preservou os dados; `docker compose config --quiet` e `docker compose build` passaram. Detalhes, limites medidos e escopo dos dados em [REVIEW-18](handoffs/REVIEW-18-validacao-integral-codex.md). A auditoria continua pendente: quatro avisos altos no grafo de ferramentas do Prisma, removidos da imagem final pelo Dockerfile, mas sem política de exceção aprovada.
+**Atualização REVIEW-18:** FIX-18 e CLEAN-02 foram verificados. A integração isolada passou 33/33, incluindo recusa acima de 10.000 itens sem linha não publicada; as rotas passaram 17/17, inclusive esse cenário e o rollback do snapshot anterior. `npm run validate:sweep` percorreu 20.000 pedidos com escrita concorrente sem repetição; os quatro formatos passaram com 20.000 pedidos e 60.000 itens cada. Reiniciar o PostgreSQL descartável preservou os dados; `docker compose config --quiet` e `docker compose build` passaram. Detalhes, limites medidos e escopo dos dados em [REVIEW-18](handoffs/REVIEW-18-validacao-integral-codex.md). Naquele momento faltava política para os quatro avisos altos do grafo Prisma; o fechamento posterior está em [OPS-01](handoffs/OPS-01-claude.md).
 
 **Atualização REVIEW-19 — fidelidade das fixtures:** reenviei os exemplos pelos endpoints de ingestão e conferi o detalhe persistido via consulta da aplicação e SQL direto. Os oito pedidos (Alfa 1, Beta 2, Gama 2 e Delta 3) e seus 11 itens bateram em fornecedor, situação, datas, materiais, unidade, fator, quantidades, saldo pendente e preço decimal. O item Delta sem cabeçalho (`DL-2026-0099`) não virou pedido; foi aceito como staging com os mesmos dados da linha de origem. Havia cinco linhas físicas idênticas dessa referência sob IDs de cargas diferentes, comportamento esperado pelo contrato de coexistência do staging; os testes confirmam que, quando chegar o cabeçalho, a última carga prevalece sem duplicar a linha. Evidência campo a campo em [REVIEW-19](handoffs/REVIEW-19-igualdade-fixtures-banco-codex.md).
 
 **Atualização TEST-RECOVERY-01 — queda e pedidos sem cabeçalho em escala:** a nova integração gera 250 pedidos Delta (766 linhas), mata a API durante staging não publicado, reinicia o processo, confere a limpeza seletiva, reenvia os órfãos e concilia 500 cabeçalhos. O teste compara no PostgreSQL os 1.532 itens resultantes, sem perda ou duplicação. A suíte completa passou 34/34 em banco descartável; detalhes e limites em [TEST-RECOVERY-01](handoffs/TEST-RECOVERY-01-codex.md).
 
+**Atualização DOC-04 — documentação de engenharia:** índice de documentos e guia de leitura adicionados, com diagramas Mermaid de classes/contratos e processos. O guia aponta para as fontes detalhadas existentes sem duplicar contrato HTTP, decisões ADR ou estado das tarefas; veja [DOC-04](handoffs/DOC-04-codex.md).
+
 ## Próxima retomada
 
 **As exigências funcionais do enunciado passam para os quatro clientes**: `scripts/validate-case.mjs` ficou em **30/30** e `npm run validate:http` em **17/17**. A Parte 1 está marcada na tag `parte-1`; P2-01 integrou Gama e Delta. R17-01 foi fechado por FIX-18 e confirmado nesta revisão ([REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md), [FIX-18](handoffs/FIX-18-claude.md), [REVIEW-18](handoffs/REVIEW-18-validacao-integral-codex.md)).
 
-O que falta não é produto: **pipeline de CI** e a **política de exceção da auditoria npm**, adiados pelo usuário desde o início e agora o único item aberto de peso.
+**CI e auditoria:** OPS-01 adicionou workflow e política de exceções verificável. Os comandos foram exercitados localmente, mas o workflow ainda não foi executado por GitHub Actions; o handoff registra que o repositório não tinha remoto configurado. A política não remove os quatro avisos altos subjacentes — nomeia exceções temporárias e testa a mitigação na imagem final.
 
 Limitações que P1-05 revelou e deixou abertas: a carga de 50.000 pedidos é uma requisição HTTP de 3,2 minutos, que qualquer balanceador com tempo limite padrão derruba sem retomada; o teto de requisições é por origem e não por identidade, porque não há autenticação; e o teto de página é por origem. Windows-1252 com CRLF **passou a ter fixture ponta a ponta** em FINAL-01 (`tests/fixtures/beta-erp/`).
 
-Seguem sem tarefa: pipeline de CI, política de exceção da auditoria npm e separação de credenciais DDL/DML fora do ambiente local. Consultar o quadro antes de reservar arquivos.
+Limitações operacionais a considerar: workflow ainda sem execução em um remoto GitHub; separação de credenciais DDL/DML fora do ambiente local; carga síncrona longa e ausência de retomada após timeout do cliente. Consulte o quadro antes de reservar trabalho.
 
 ## Colaboração
 

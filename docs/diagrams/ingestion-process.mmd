@@ -1,0 +1,45 @@
+flowchart TD
+    start([Servidor inicia]) --> cleanupSpool[Remove restos do spool temporario]
+    cleanupSpool --> cleanupStaging[Remove staging nao publicado e abandonado]
+    cleanupStaging --> ready[API pronta]
+
+    ready --> request{Requisicao recebida}
+    request -->|Ingestao| identify[Valida cliente, versao e partes]
+    identify --> spool[Grava arquivos multipart no spool]
+    spool --> adapter[Seleciona perfil e adaptador pelo formato]
+    adapter --> structure{Estrutura completa e valida?}
+    structure -->|Nao| discard[Descarta dados desta carga e responde erro]
+    structure -->|Sim| read[Le em fluxo e normaliza lotes]
+    read --> invalid{Registro valido?}
+    invalid -->|Nao| reportRejected[Acumula rejeicao com referencia]
+    reportRejected --> nextBatch
+    invalid -->|Sim| kind{Lote contem cabecalho?}
+    kind -->|Sim| snapshot[Substitui retrato em transacao]
+    snapshot --> recoverWaiting[Aplica itens publicados que aguardavam este pedido]
+    recoverWaiting --> nextBatch{Ha outro lote?}
+    kind -->|Itens sem cabecalho| stage[Grava itens no staging nao publicado]
+    stage --> nextBatch
+    nextBatch -->|Sim| read
+    nextBatch -->|Nao| closeStaging[Fecha cada pedido desta carga sob lock]
+    closeStaging --> orderExists{Pedido existe?}
+    orderExists -->|Sim| applyItems[Aplica itens no pedido em transacao]
+    orderExists -->|Nao| publishItems[Publica itens como espera por cabecalho]
+    applyItems --> moreOrders{Outro pedido no staging?}
+    publishItems --> moreOrders
+    moreOrders -->|Sim| closeStaging
+    moreOrders -->|Nao| response[Responde aceitos, rejeitados e espera restante]
+    response --> cleanupRequest[Remove arquivos temporarios]
+
+    read -.->|Falha durante leitura| discard
+    closeStaging -.->|Falha ao finalizar| discardUnpublished[Descarta itens desta carga ainda nao publicados]
+    discardUnpublished --> response
+
+    ready -->|Nota fiscal| invoice[Valida nota e identifica pedido]
+    invoice --> loadOrder[Carrega pedido por cliente e numero externo]
+    loadOrder --> compare[Aplica regras puras de conferencia]
+    compare --> saveRecord[Persiste resultado e versao do pedido usada]
+    saveRecord --> invoiceResponse[Retorna conferencia; nao consome saldo]
+
+    ready -->|Consulta ou relatorio| query[Valida filtros e cursor]
+    query --> pagedRead[Executa leitura paginada no repositorio]
+    pagedRead --> queryResponse[Retorna pagina ou resumo]
