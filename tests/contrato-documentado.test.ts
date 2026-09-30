@@ -6,6 +6,11 @@ import {
   defaultPageLimit,
   maxPageLimit,
 } from '../src/application/ports/pagination.js';
+import {
+  conferenceRecordSchema,
+  conferenceSummarySchema,
+  ingestionReportSchema,
+} from '../src/domain/schemas.js';
 
 /**
  * `docs/API.md` é contrato publicado: o avaliador lê a documentação e espera
@@ -20,6 +25,18 @@ const api = await readFile(new URL('../docs/API.md', import.meta.url), 'utf-8');
 const rota = await readFile(
   new URL('../src/presentation/http/routes/ingestions.ts', import.meta.url),
   'utf-8',
+);
+const problema = await readFile(
+  new URL('../src/presentation/http/problem.ts', import.meta.url),
+  'utf-8',
+);
+const rotasDeNegocio = await Promise.all(
+  ['conferences', 'ingestions', 'purchase-orders'].map((nome) =>
+    readFile(
+      new URL(`../src/presentation/http/routes/${nome}.ts`, import.meta.url),
+      'utf-8',
+    ),
+  ),
 );
 
 describe('a documentação e o código concordam', () => {
@@ -52,6 +69,105 @@ describe('a documentação e o código concordam', () => {
         `docs/API.md não documenta a parte "${parte}"`,
       );
     }
+  });
+
+  it('todo código de erro que o serviço emite está documentado', () => {
+    // A doc anunciava `{ "error": { "code": "CURSOR_INVALIDO" } }` e o serviço
+    // responde `{ "error": "cursor_invalido" }`: forma diferente e caixa
+    // diferente. Quem integrasse lendo a documentação escreveria
+    // `err.error.code` e receberia `undefined` em toda recusa — e dois dos seis
+    // códigos listados nem existiam no código.
+    //
+    // Mesma classe do cabeçalho e dos nomes de parte: duas fontes de verdade
+    // que ninguém obrigava a concordar.
+    const emitidos = new Set(
+      [...problema.matchAll(/error: '([a-z_]+)'/g)].map((m) => m[1]),
+      // `frameworkCode` devolve os códigos por `return`, não por `error:`.
+    );
+    for (const achado of problema.matchAll(/return '([a-z_]+)';/g)) {
+      emitidos.add(achado[1]);
+    }
+    for (const arquivo of rotasDeNegocio) {
+      for (const achado of arquivo.matchAll(/error: '([a-z_]+)'/g)) {
+        emitidos.add(achado[1]);
+      }
+    }
+    assert.ok(emitidos.size >= 10, `poucos códigos lidos: ${emitidos.size}`);
+
+    const documentados = new Set(
+      [...api.matchAll(/^\| `([a-z_]+)`\s*\|/gm)].map((m) => m[1]),
+    );
+    const faltando = [...emitidos].filter((c) => !documentados.has(c)).sort();
+    assert.deepEqual(
+      faltando,
+      [],
+      `o serviço emite código que docs/API.md não documenta: ${faltando.join(', ')}`,
+    );
+
+    // E o contrário: a doc não pode anunciar código que não existe.
+    const inventados = [...documentados].filter((c) => !emitidos.has(c)).sort();
+    assert.deepEqual(
+      inventados,
+      [],
+      `docs/API.md documenta código que o serviço não emite: ${inventados.join(', ')}`,
+    );
+  });
+
+  it('os exemplos publicados têm os campos que o schema declara', () => {
+    // Não basta a lista de rotas e os códigos baterem: o exemplo é o que um
+    // integrador copia. O relatório de carga estava publicado sem
+    // `rejectedTotal`/`stagedTotal` — quem lesse acharia que `rejected.length`
+    // é o total, quando a lista tem teto de 100 — e a conferência aparecia sem
+    // `invoice`, que é justamente o que o histórico existe para guardar.
+    const blocos = [...api.matchAll(/```json\n([\s\S]*?)```/g)]
+      .map((achado) => achado[1])
+      .filter((bruto): bruto is string => bruto !== undefined)
+      .map((bruto): unknown => {
+        try {
+          return JSON.parse(bruto);
+        } catch {
+          return null;
+        }
+      })
+      .filter((valor): valor is Record<string, unknown> => valor !== null);
+
+    const casos = [
+      ['relatório de carga', ingestionReportSchema, 'ingestionId'],
+      ['conferência', conferenceRecordSchema, 'checkedAt'],
+      ['resumo de conferências', conferenceSummarySchema, 'divergencesByCode'],
+    ] as const;
+
+    for (const [nome, schema, marcador] of casos) {
+      // O exemplo é reconhecido por um campo que só ele tem.
+      const exemplo = blocos.find((b) => marcador in b);
+      assert.ok(exemplo, `docs/API.md não publica exemplo de ${nome}`);
+
+      const doSchema = Object.keys(schema.shape).sort();
+      const doExemplo = Object.keys(exemplo).sort();
+      assert.deepEqual(
+        doExemplo,
+        doSchema,
+        `o exemplo de ${nome} em docs/API.md não tem os campos da resposta`,
+      );
+    }
+  });
+
+  it('a forma do erro documentada é a que o schema declara', () => {
+    // `problemSchema` é plano. Se a doc voltar a mostrar `error` como objeto,
+    // o exemplo publicado deixa de corresponder à resposta.
+    assert.match(
+      problema,
+      /error: z\.string\(\)/,
+      'problemSchema deixou de ter `error` como string',
+    );
+    const exemplo = /```json\n(\{\n\s+"error":[\s\S]*?)```/.exec(api)?.[1];
+    assert.ok(exemplo, 'não achei o exemplo de erro em docs/API.md');
+    const corpo: unknown = JSON.parse(exemplo);
+    assert.equal(
+      typeof (corpo as { error: unknown }).error,
+      'string',
+      'o exemplo de erro publicado não é plano como o schema',
+    );
   });
 
   it('os limites de página documentados são os que o código aplica', () => {
