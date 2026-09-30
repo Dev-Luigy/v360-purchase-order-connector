@@ -19,25 +19,34 @@ Os testes de rota usam repositório em memória; transações, locks, constraint
 
 JSON em UTF-8. Datas de calendário em `YYYY-MM-DD`, instantes em ISO 8601 UTC. **Todo decimal viaja como string** — `"45.90"`, não `45.9` — porque número JSON é ponto flutuante e dinheiro não sobrevive a isso (ADR-007). CNPJ com 14 dígitos, sem máscara.
 
-Erro sempre na mesma forma:
+Erro sempre na mesma forma, **plana**: `error` é código estável, para a plataforma decidir sem interpretar texto; `message` é para gente ler.
 
 ```json
 {
-  "error": {
-    "code": "CURSOR_INVALIDO",
-    "message": "O cursor não corresponde aos filtros desta consulta."
-  }
+  "error": "cursor_invalido",
+  "message": "o cursor não corresponde aos filtros desta consulta"
 }
 ```
 
-| Código                  | HTTP | Quando                                                   |
-| ----------------------- | ---- | -------------------------------------------------------- |
-| `REQUISICAO_INVALIDA`   | 400  | corpo ou parâmetro fora do contrato                      |
-| `LIMITE_ACIMA_DO_TETO`  | 400  | `limit` maior que 100 (ADR-010)                          |
-| `CURSOR_INVALIDO`       | 400  | cursor malformado ou com filtros diferentes              |
-| `CLIENTE_DESCONHECIDO`  | 404  | `clientId` sem perfil registrado                         |
-| `PEDIDO_NAO_ENCONTRADO` | 404  | conferência ou detalhe de pedido inexistente             |
-| `FORMATO_INESPERADO`    | 422  | payload não corresponde ao formato declarado pelo perfil |
+| Código                     | HTTP | Quando                                                                       |
+| -------------------------- | ---- | ---------------------------------------------------------------------------- |
+| `requisicao_invalida`      | 400  | corpo ou parâmetro fora do contrato, incluindo `limit` acima do teto         |
+| `cursor_invalido`          | 400  | cursor malformado ou com filtros diferentes dos da primeira página           |
+| `carga_invalida`           | 400  | multipart que não dá para ler: parte repetida, nome fora da allowlist        |
+| `partes_ausentes`          | 400  | nenhuma parte reconhecida para a forma de entrega do cliente                 |
+| `pedido_nao_encontrado`    | 404  | conferência ou detalhe de pedido inexistente                                 |
+| `cliente_desconhecido`     | 404  | `clientId` sem perfil registrado                                             |
+| `carga_acima_do_limite`    | 413  | corpo maior que o teto da borda                                              |
+| `tipo_nao_suportado`       | 415  | `Content-Type` que a rota não aceita                                         |
+| `payload_incompativel`     | 422  | payload não corresponde ao formato declarado pelo perfil, ou chegou truncado |
+| `limite_de_requisicoes`    | 429  | acima do teto por origem e minuto                                            |
+| `requisicao_recusada`      | 4xx  | outra recusa que o framework já classificou                                  |
+| `forma_nao_suportada`      | 501  | perfil declara forma de entrega sem adaptador registrado                     |
+| `erro_interno`             | 500  | defeito nosso, sem detalhe de infraestrutura na resposta                     |
+| `resposta_invalida`        | 500  | a resposta não corresponde ao schema declarado — defeito nosso               |
+| `dependencia_indisponivel` | 503  | o banco de dados não está acessível                                          |
+
+Os códigos são minúsculos com `_`, e a lista acima é conferida contra `src/presentation/http/problem.ts` por `tests/contrato-documentado.test.ts`: código novo no serviço sem linha aqui reprova a suíte.
 
 ## Ingestão
 
@@ -70,13 +79,17 @@ Resposta `200`:
       "reason": "SITUACAO fora do vocabulário do perfil: \"SUSPENSO\""
     }
   ],
+  "rejectedTotal": 1,
   "staged": [
     { "reference": "DL-2026-0099", "reason": "cabecalho-ausente", "raw": "{…}" }
-  ]
+  ],
+  "stagedTotal": 1
 }
 ```
 
 Um registro inválido não rejeita a carga: o resto entra e o rejeitado volta aqui com referência e motivo.
+
+`rejected` e `staged` são **amostra**, com teto de 100; `rejectedTotal` e `stagedTotal` trazem o número inteiro. Uma carga com dez mil recusas não pode virar uma resposta sem teto, e nada fica escondido porque o total vem separado.
 
 ## Consulta de pedidos
 
@@ -109,7 +122,7 @@ Todos os filtros são combináveis e convivem com a paginação. `pending=true` 
   "page": {
     "limit": 50,
     "cursor": null,
-    "nextCursor": "eyJ2IjoxLCJhZnRlciI6…",
+    "nextCursor": "eyJ2IjoyLCJhZnRlciI6…",
     "hasMore": true
   }
 }
@@ -145,7 +158,7 @@ Traz o que já foi recebido e o que ainda falta em cada item. Quantidades na uni
       "material": "MAT-1001",
       "description": "Chapa de aço 2mm",
       "purchaseUnit": "UN",
-      "conversionFactor": "1",
+      "conversionFactor": "1.000000",
       "quantityOrdered": "100.000000",
       "quantityReceived": "60.000000",
       "quantityPending": "40.000000",
@@ -186,9 +199,19 @@ Resposta `201`, aprovada:
   "clientId": "alfa",
   "checkedAt": "2026-09-27T12:10:00.000Z",
   "outcome": "aprovada",
+  "invoice": {
+    "clientId": "alfa",
+    "purchaseOrderNumber": "4500001234",
+    "supplierTaxId": "23456789000101",
+    "lines": [
+      { "material": "MAT-1001", "quantity": "40", "totalValue": "1836.00" }
+    ]
+  },
   "divergences": []
 }
 ```
+
+A nota volta dentro do registro, e é gravada assim: o histórico precisa dizer **o que** foi conferido, não só o resultado. `purchaseOrderIngestionVersion` é a versão do pedido naquele instante, para uma recarga posterior não mudar o sentido de uma conferência antiga.
 
 Reprovada — 50 unidades contra saldo de 40:
 
