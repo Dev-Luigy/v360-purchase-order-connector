@@ -28,6 +28,7 @@
     "schema:check": "prisma format --check",
     "coverage": "node --import tsx --test --experimental-test-coverage \"tests/**/*.test.ts\"",
     "test:integration": "node --env-file=.env --import tsx --test --test-concurrency=1 \"tests/integration/**/*.test.ts\"",
+    "audit:fidelity": "node scripts/audit-fidelity.mjs",
     "evidence": "node scripts/evidence.mjs",
     "validate:http": "node scripts/validate-fix-14-http.mjs",
     "validate:sweep": "node scripts/validate-sweep-under-load.mjs",

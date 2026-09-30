@@ -34,7 +34,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-15        | Validar FIX-15 do zero contra todo o enunciado                   | concluída                      | Codex       | Aceitação passa; falha fatal vaza staging e publicação perde contabilidade                      |
 | REVIEW-16        | Validar FIX-16 integralmente do zero                             | concluída                      | Codex       | Duas falhas residuais reproduzidas; ver handoff                                                 |
 | REVIEW-17        | Verificar FIX-17 e repetir regressões de REVIEW-16               | concluída                      | Codex       | R16-01/02 fechados; falha nova de relatório registrada para FIX-18                              |
-| AUDIT-01         | Provar que o gravado no banco é igual à entrada do enunciado     | em andamento                   | Claude      | Comparação campo a campo, esperado derivado do arquivo cru sem usar `src/`                      |
+| AUDIT-01         | Provar que o gravado no banco é igual à entrada do enunciado     | concluída                      | Claude      | 156/156 campos batem; Gama recusa data divergente e a nota em jsonb não ganha nem perde campo   |
 | REVIEW-18        | Revalidar FIX-18, limpeza e matriz completa de testes            | concluída                      | Codex       | Integração isolada; limites, falhas, volume e persistência aprovados                            |
 | REVIEW-19        | Comparar fixtures de entrada com pedidos realmente persistidos   | concluída                      | Codex       | 8 cabeçalhos e 11 itens conferidos; órfão Delta corresponde ao staging                          |
 | PORTFOLIO-01     | Documentar contribuição real do responsável pelo projeto         | concluída                      | Codex       | Decisões, critérios de aceite e revisão visíveis no README; autoria de implementação preservada |
@@ -215,8 +215,8 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## AUDIT-01 — fidelidade entre a entrada e o banco
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `scripts/audit-fidelity.mjs`, `package.json` (uma linha de script), `docs/TASKS.md`, `docs/handoffs/AUDIT-01-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `scripts/audit-fidelity.mjs`, `package.json` (uma linha de script), `docs/TASKS.md`, `docs/handoffs/AUDIT-01-claude.md`.
 - Escopo: carregar as quatro amostras do enunciado pelas rotas reais e comparar **campo a campo** o que ficou no PostgreSQL contra o arquivo de entrada. O esperado é derivado à mão do arquivo cru, aplicando as regras escritas em `docs/CASE.md`; nada de `src/` é importado, senão a comparação seria circular. O lido vem por `psql`, não pela API.
 - Por que não estava coberto: `validate-case.mjs` prova que cada exigência do enunciado é atendida, e a suíte de integração prova o comportamento do repositório. Nenhuma das duas percorre todos os campos de todos os registros afirmando "este valor é o mesmo que entrou".
 - Dependências: Compose ativo.
