@@ -28,7 +28,7 @@
     "schema:check": "prisma format --check",
     "coverage": "node --import tsx --test --experimental-test-coverage \"tests/**/*.test.ts\"",
     "coverage:db": "node --env-file=.env --import tsx --test --test-concurrency=1 --experimental-test-coverage \"tests/**/*.test.ts\"",
-    "test:integration": "node --env-file=.env --import tsx --test --test-concurrency=1 \"tests/integration/**/*.test.ts\"",
+    "test:integration": "node --env-file-if-exists=.env --import tsx --test --test-concurrency=1 \"tests/integration/**/*.test.ts\"",
     "audit:fidelity": "node scripts/audit-fidelity.mjs",
     "audit:policy": "node scripts/audit-policy.mjs",
     "evidence": "node scripts/evidence.mjs",

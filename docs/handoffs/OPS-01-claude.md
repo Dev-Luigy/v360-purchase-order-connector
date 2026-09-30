@@ -80,7 +80,12 @@ O job de aceitação guarda o log da API como artefato quando falha, porque um `
 
 ## Limites honestos
 
-- **O pipeline nunca rodou.** Este repositório não tem remoto (`git remote -v` é vazio), então não há onde o GitHub Actions o dispare. O que eu verifiquei foi: YAML válido por `js-yaml`, e cada comando dos quatro jobs executado à mão nesta máquina com o resultado esperado. Não afirmo "CI verde"; afirmo "o pipeline descreve passos que passam aqui".
+- **O pipeline rodou depois, e achou um defeito que eu não tinha achado.** Quando escrevi isto o repositório não tinha remoto, e eu registrei que só podia afirmar "os passos passam aqui". Um remoto apareceu, houve push, e a execução reprovou: três jobs verdes e `integração em PostgreSQL` com `exit code 9`, `node: .env: not found`.
+
+  A causa é que `test:integration` usava `--env-file=.env`, e `.env` é gitignored — num checkout limpo o Node aborta antes de rodar teste nenhum. Em CI o `DATABASE_URL` vem do bloco `env:` do job, então o arquivo nem era necessário. Corrigido para `--env-file-if-exists`, e reproduzido localmente nos dois sentidos: `exit 9` com o arquivo ausente, 34/34 depois.
+
+  Vale a lição: rodar cada comando à mão **não** é equivalente a rodar o pipeline. A diferença que pegou foi o checkout limpo, que a minha máquina nunca é.
+
 - A versão do runner (`ubuntu-latest`) e a do Docker dele podem divergir das locais; a primeira execução real é a prova.
 - Ficou de fora uma linha na tabela "Como isto está validado" do README apontando `npm run audit:policy`: o `README.md` está reservado pelo DOC-04 do Codex, em andamento. Larguei o arquivo em vez de atropelar.
 

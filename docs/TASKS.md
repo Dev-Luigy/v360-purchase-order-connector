@@ -264,6 +264,7 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Critério: a política falha se aparecer aviso novo fora da lista, se uma exceção vencer, ou se a mitigação deixar de valer — ela **confere** a ausência dos pacotes na imagem em vez de afirmar.
 - Dependências: nenhuma.
 - Evidência: [handoff OPS-01](handoffs/OPS-01-claude.md); os quatro modos de recusa da política foram exercitados, incluindo apontá-la para a imagem de migração, que **tem** os pacotes — sem isso a checagem de imagem passaria por não olhar nada.
+- **Correção posterior (2026-09-30):** o pipeline passou a existir num remoto e rodou. Três dos quatro jobs passaram; `integração em PostgreSQL` falhou com `exit code 9` e `node: .env: not found`. O `test:integration` usava `--env-file=.env`, e `.env` é gitignored: num checkout limpo o Node aborta antes de rodar teste nenhum. Em CI o `DATABASE_URL` vem do bloco `env:` do job, então o arquivo nem é necessário. Passou a `--env-file-if-exists`, como o `coverage`. Reproduzido localmente — sem `.env` e com a variável no ambiente — dando `exit 9` antes e 34/34 depois.
 
 ## AUDIT-01 — fidelidade entre a entrada e o banco
 
