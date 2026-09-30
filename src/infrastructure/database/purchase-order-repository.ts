@@ -40,11 +40,31 @@ import {
   optionalDateToIsoDate,
   pendingOf,
 } from './mapping.js';
+import { transactionTimeoutMs, type PoolPurpose } from './pool.js';
 
 type Transaction = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
 
 export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
-  constructor(private readonly prisma: PrismaClient) {}
+  /**
+   * `transacao` reúne as opções que toda escrita usa.
+   *
+   * O teto de duração precisa ser declarado: o padrão do Prisma é de 5s, e um
+   * pedido no limite de itens chega perto disso. Quem grava é o repositório do
+   * pool de carga, então o padrão aqui é o da ingestão (ADR-012).
+   */
+  private readonly transacao: {
+    readonly timeout: number;
+    readonly maxWait: number;
+  };
+
+  constructor(
+    private readonly prisma: PrismaClient,
+    purpose: PoolPurpose = 'ingestion',
+  ) {
+    const timeout = transactionTimeoutMs[purpose];
+    // Esperar por conexão livre não é trabalho: cabe um teto curto e próprio.
+    this.transacao = { timeout, maxWait: Math.min(timeout, 10_000) };
+  }
 
   /**
    * Serializa cargas do mesmo pedido com lock transacional. `FOR UPDATE` não
@@ -82,7 +102,7 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
         // estava gravado antes.
         recovered: esperando.length,
       };
-    });
+    }, this.transacao);
   }
 
   /**
@@ -104,7 +124,7 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
       for (const item of staged) {
         await stageItem(tx, clientId, ingestionId, item);
       }
-    });
+    }, this.transacao);
   }
 
   finalizeStaged(
@@ -185,7 +205,7 @@ export class PrismaPurchaseOrderRepository implements PurchaseOrderRepository {
         }),
       );
       return { applied: esperando.length, waiting: 0, sample: [] };
-    });
+    }, this.transacao);
   }
 
   async discardIngestion(
