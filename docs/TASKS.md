@@ -34,6 +34,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-15        | Validar FIX-15 do zero contra todo o enunciado                   | concluída                      | Codex       | Aceitação passa; falha fatal vaza staging e publicação perde contabilidade                      |
 | REVIEW-16        | Validar FIX-16 integralmente do zero                             | concluída                      | Codex       | Duas falhas residuais reproduzidas; ver handoff                                                 |
 | REVIEW-17        | Verificar FIX-17 e repetir regressões de REVIEW-16               | concluída                      | Codex       | R16-01/02 fechados; falha nova de relatório registrada para FIX-18                              |
+| OPS-01           | Pipeline de CI e política de exceção da auditoria npm            | em andamento                   | Claude      | Último item aberto; adiado pelo usuário desde o início                                          |
 | AUDIT-01         | Provar que o gravado no banco é igual à entrada do enunciado     | concluída                      | Claude      | 156/156 campos batem; Gama recusa data divergente e a nota em jsonb não ganha nem perde campo   |
 | REVIEW-18        | Revalidar FIX-18, limpeza e matriz completa de testes            | concluída                      | Codex       | Integração isolada; limites, falhas, volume e persistência aprovados                            |
 | REVIEW-19        | Comparar fixtures de entrada com pedidos realmente persistidos   | concluída                      | Codex       | 8 cabeçalhos e 11 itens conferidos; órfão Delta corresponde ao staging                          |
@@ -211,6 +212,16 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: conferir FIX-17 e repetir `npm run check`, integração PostgreSQL, 30 requisitos, cenários HTTP e reproduções independentes de R16-01/R16-02. Reexecutar varredura concorrente e volume se a versão compilada ou o ambiente tiver mudado. Preservar dados existentes e deixar claro o estado final.
 - Dependências: FIX-17 concluída; PostgreSQL/Compose disponível.
 - Evidência: [handoff REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md); check e cobertura passaram, 31/31 integrações, 30/30 requisitos, 16/16 rotas, sweep e quatro volumes passaram; R16-01/02 foram reproduzidos como fechados e R17-01 foi reproduzido no PostgreSQL.
+
+## OPS-01 — CI e política de exceção da auditoria
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `.github/workflows/ci.yml`, `scripts/audit-policy.mjs`, `security/audit-exceptions.json`, `package.json` (uma linha de script), `README.md` (uma seção), `docs/TASKS.md`, `docs/handoffs/OPS-01-claude.md`.
+- Escopo: o único item de peso que faltava, adiado pelo usuário desde o início. Duas entregas: um pipeline que roda o que hoje é rodado à mão, e uma política de auditoria **verificável**, não supressão informal.
+- Fato que orienta a política: os quatro avisos altos chegam por `@prisma/client > prisma > {@prisma/config > deepmerge-ts, mysql2}`. `prisma` está na árvore de produção porque `@prisma/client` depende dele, então não é só devDependency. `npm audit fix --force` rebaixaria para `prisma@6.19.3`, quebra de contrato. A imagem final já remove os quatro; conferido com `docker run` contra a imagem construída.
+- Critério: a política falha se aparecer aviso novo fora da lista, se uma exceção vencer, ou se a mitigação deixar de valer — ela **confere** a ausência dos pacotes na imagem em vez de afirmar.
+- Dependências: nenhuma.
 
 ## AUDIT-01 — fidelidade entre a entrada e o banco
 
