@@ -34,6 +34,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-15        | Validar FIX-15 do zero contra todo o enunciado                    | concluída                      | Codex       | Aceitação passa; falha fatal vaza staging e publicação perde contabilidade                           |
 | REVIEW-16        | Validar FIX-16 integralmente do zero                              | concluída                      | Codex       | Duas falhas residuais reproduzidas; ver handoff                                                      |
 | REVIEW-17        | Verificar FIX-17 e repetir regressões de REVIEW-16                | concluída                      | Codex       | R16-01/02 fechados; falha nova de relatório registrada para FIX-18                                   |
+| DOC-05           | Publicar a API navegável a partir dos schemas Zod das rotas       | em andamento                   | Claude      | Pedido do usuário; Swagger UI escolhido com ele, documento gerado do código                          |
 | OPS-01           | Pipeline de CI e política de exceção da auditoria npm             | concluída                      | Claude      | CI em quatro estágios; política que recusa aviso novo, prazo vencido e mitigação que deixou de valer |
 | AUDIT-01         | Provar que o gravado no banco é igual à entrada do enunciado      | concluída                      | Claude      | 156/156 campos batem; Gama recusa data divergente e a nota em jsonb não ganha nem perde campo        |
 | REVIEW-18        | Revalidar FIX-18, limpeza e matriz completa de testes             | concluída                      | Codex       | Integração isolada; limites, falhas, volume e persistência aprovados                                 |
@@ -213,6 +214,16 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: conferir FIX-17 e repetir `npm run check`, integração PostgreSQL, 30 requisitos, cenários HTTP e reproduções independentes de R16-01/R16-02. Reexecutar varredura concorrente e volume se a versão compilada ou o ambiente tiver mudado. Preservar dados existentes e deixar claro o estado final.
 - Dependências: FIX-17 concluída; PostgreSQL/Compose disponível.
 - Evidência: [handoff REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md); check e cobertura passaram, 31/31 integrações, 30/30 requisitos, 16/16 rotas, sweep e quatro volumes passaram; R16-01/02 foram reproduzidos como fechados e R17-01 foi reproduzido no PostgreSQL.
+
+## DOC-05 — API navegável gerada dos schemas das rotas
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `src/presentation/http/app.ts`, `src/presentation/http/routes/**`, `src/infrastructure/config/env.ts` (se precisar), `package.json`, `package-lock.json`, `Dockerfile` (se a poda alcançar a interface), `tests/openapi.test.ts`, `docs/decisions/ADR-014-documentacao-da-api.md`, `docs/TASKS.md`, `docs/handoffs/DOC-05-claude.md`.
+- Escopo: pedido do usuário — uma biblioteca de visualização para mostrar rotas, objetos e como o serviço funciona. Escolha fechada **com o usuário**, não sozinho no código: `@fastify/swagger` + `@fastify/swagger-ui`, servido sempre, inclusive em produção.
+- O fato que decidiu a forma: toda rota já declara schema Zod de querystring, params e de **todas** as respostas, inclusive os erros. Então o documento OpenAPI é gerado do código pelo `jsonSchemaTransform` que o `@fastify/type-provider-zod` já exporta. Documentação escrita à mão é a classe de defeito que mais apareceu nesta entrega: duas fontes de verdade que ninguém obriga a concordar.
+- Critério: um teste que falhe se alguma rota registrada não aparecer no documento, senão a página nasce podendo mentir.
+- Dependências: nenhuma.
 
 ## OPS-01 — CI e política de exceção da auditoria
 
