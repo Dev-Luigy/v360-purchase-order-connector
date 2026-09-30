@@ -34,6 +34,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-15        | Validar FIX-15 do zero contra todo o enunciado                    | concluída                      | Codex       | Aceitação passa; falha fatal vaza staging e publicação perde contabilidade                           |
 | REVIEW-16        | Validar FIX-16 integralmente do zero                              | concluída                      | Codex       | Duas falhas residuais reproduzidas; ver handoff                                                      |
 | REVIEW-17        | Verificar FIX-17 e repetir regressões de REVIEW-16                | concluída                      | Codex       | R16-01/02 fechados; falha nova de relatório registrada para FIX-18                                   |
+| FIX-19           | Corrigir o contrato de erro publicado e travar a deriva do API.md | em andamento                   | Claude      | `API.md` anunciava erro aninhado em maiúsculas; o serviço responde plano em minúsculas               |
 | DOC-05           | Publicar a API navegável a partir dos schemas Zod das rotas       | concluída                      | Claude      | `/docs` no ar; 8 rotas e 11 objetos, com teste que falha se uma rota registrada sumir do documento   |
 | OPS-01           | Pipeline de CI e política de exceção da auditoria npm             | concluída                      | Claude      | CI em quatro estágios; política que recusa aviso novo, prazo vencido e mitigação que deixou de valer |
 | AUDIT-01         | Provar que o gravado no banco é igual à entrada do enunciado      | concluída                      | Claude      | 156/156 campos batem; Gama recusa data divergente e a nota em jsonb não ganha nem perde campo        |
@@ -214,6 +215,17 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: conferir FIX-17 e repetir `npm run check`, integração PostgreSQL, 30 requisitos, cenários HTTP e reproduções independentes de R16-01/R16-02. Reexecutar varredura concorrente e volume se a versão compilada ou o ambiente tiver mudado. Preservar dados existentes e deixar claro o estado final.
 - Dependências: FIX-17 concluída; PostgreSQL/Compose disponível.
 - Evidência: [handoff REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md); check e cobertura passaram, 31/31 integrações, 30/30 requisitos, 16/16 rotas, sweep e quatro volumes passaram; R16-01/02 foram reproduzidos como fechados e R17-01 foi reproduzido no PostgreSQL.
+
+## FIX-19 — o contrato de erro publicado não era o do serviço
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `docs/API.md`, `tests/contrato-documentado.test.ts`, `docs/TASKS.md`, `docs/handoffs/FIX-19-claude.md`.
+- Origem: pergunta do usuário — está certo, entregamos tudo, temos todos os filtros e rotas? Rotas e filtros estavam completos; o contrato de erro publicado, não.
+- Achado: `docs/API.md` documentava `{"error": {"code": "CURSOR_INVALIDO", "message": ...}}`. O serviço responde `{"error": "cursor_invalido", "message": ...}` — forma diferente e caixa diferente. Quem integrasse pela documentação escreveria `err.error.code` e receberia `undefined` em toda recusa. Dos seis códigos listados, dois não existiam no código, e nove dos quinze emitidos não estavam documentados.
+- Também: o exemplo do relatório de carga omitia `rejectedTotal` e `stagedTotal`, que são o que sustenta "a lista é amostra com teto de 100"; e o da conferência omitia `invoice`, que é o que o histórico existe para guardar.
+- Por que passou: `tests/contrato-documentado.test.ts` já obrigava doc e código a concordarem no cabeçalho, nos nomes de parte e nos limites de página — as três derivas anteriores. Não cobria erro nem forma de resposta.
+- Dependências: nenhuma.
 
 ## DOC-05 — API navegável gerada dos schemas das rotas
 
