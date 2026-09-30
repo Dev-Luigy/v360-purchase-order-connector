@@ -8,20 +8,22 @@
 
 Não estava. Estava perto, e três coisas reais apareceram: uma de **método** (a cobertura era medida errado), uma de **borda latente** (um teto de transação que o ADR prometia e ninguém tinha declarado) e uma de **cobertura** (dois limites sem teste nenhum). As três foram corrigidas e provadas.
 
-## Achado 1 — a cobertura era medida sem banco
+## Achado 1 — ninguém nunca tinha medido a cobertura com banco
 
-`npm run coverage` não carregava `.env`, então a suíte de integração era pulada. O efeito é que os repositórios PostgreSQL apareciam assim:
+Sejamos precisos, porque na primeira redação eu exagerei: a linha publicada **sempre disse** "sem banco; os repositórios PostgreSQL só são medidos com ele no ar". A medição não mentia. O que não existia era o outro número — ninguém tinha rodado a cobertura com o banco no ar, então a cobertura real do projeto era desconhecida.
+
+`npm run coverage` não carrega `.env`, então a suíte de integração é pulada. O efeito é que os repositórios PostgreSQL aparecem assim:
 
 ```text
 purchase-order-repository.ts   linhas 54,68
 conference-repository.ts       linhas 55,91
 ```
 
-Não porque não fossem testados — são, por 34 testes de integração — mas porque a medição não os executava. O número publicado no STATUS, 92,45%, descrevia uma execução parcial.
+Não porque não fossem testados — são, por 34 testes de integração — mas porque a medição não os executava.
 
 Medido com banco, com a mesma suíte: **97,38% de linhas, 88,98% de branches, 94,77% de funções**, com 278 testes e nenhum pulado.
 
-Corrigido: o script passou a usar `--env-file-if-exists=.env` e `--test-concurrency=1`. Em máquina sem banco continua funcionando, pulando integração como antes.
+Corrigido com dois scripts em vez de um. Primeiro mudei o `coverage` para carregar `.env`, e isso **quebrou o `npm run evidence`**: a suíte de integração dá `TRUNCATE` e exige a API parada, então o gerador de evidência deixou de rodar desassistido. Desfiz. `coverage` continua sem banco, rápido e sem exigir exclusividade; `coverage:db` é o que mede com ele. O STATUS passou a registrar os dois números, dizendo qual é qual.
 
 ## Achado 2 — o ADR-012 prometia transação longa e o Prisma cortava em 5s
 
