@@ -6,6 +6,14 @@ Desafio [Case — Engenheiro SAP Junior](https://docs.google.com/document/d/1nbI
 
 **Os quatro clientes estão integrados e validados.** A Parte 1 (Alfa e Beta) está marcada na tag `parte-1`; Gama e Delta entraram na Parte 2.
 
+## Minha contribuição no projeto
+
+Atuei como responsável pelas decisões e pelo aceite do produto. Escolhi e confirmei a stack — TypeScript/Node.js pela familiaridade e manutenção, PostgreSQL, Fastify e Prisma 7 — decisões registradas nos [ADRs 001–004](docs/decisions/README.md). Também aprovei as bibliotecas usadas para precisão decimal, leitura em fluxo e validação no [ADR-011](docs/decisions/ADR-011-bibliotecas-p1-03.md).
+
+Conduzi a priorização e defini o padrão de aceite: revisar as entregas, cobrar regressões nos limites e falhas, testar a aplicação pelas rotas reais e conferir persistência contra o PostgreSQL. As evidências incluem os ciclos de revisão e correção no [quadro de tarefas](docs/TASKS.md), os [testes de recuperação após queda](docs/handoffs/TEST-RECOVERY-01-codex.md) e a [comparação das fixtures com os registros persistidos](docs/handoffs/REVIEW-19-igualdade-fixtures-banco-codex.md).
+
+O desenvolvimento foi feito com assistência de Claude e Codex: os registros de tarefa e handoffs identificam quem implementou, quem verificou e o que eu aprovei. Não atribuo a mim código escrito pelos agentes; minha contribuição foi orientar as escolhas, exigir evidência verificável e aceitar o resultado com base nela.
+
 ## Executar
 
 ```sh
@@ -140,15 +148,15 @@ As demais escolhas: [TypeScript e Node](docs/decisions/ADR-002-typescript-nodejs
 
 ## Como isto está validado
 
-| O quê                       | Como                                                                      |
-| --------------------------- | ------------------------------------------------------------------------- |
-| cada exigência do enunciado | `scripts/validate-case.mjs` — uma asserção por exigência, **30/30** no ar |
-| domínio, adaptadores, rotas | `npm run check` — a suíte completa, sem exigir banco                      |
-| transação, locks, índices   | `npm run test:integration` — contra PostgreSQL real                       |
-| persistência após queda     | `scripts/verify-persistence.mjs` — reinicia o banco e reconta             |
-| volume, nos quatro formatos | `npm run validate:volume -- 20000 3 <cliente>`                            |
-| varredura sob carga         | `npm run validate:sweep` — o cenário que o requisito 1 descreve           |
-| a aplicação, pelas rotas    | `npm run validate:http` — 14 cenários por `fetch`, sem `app.inject`       |
+| O quê                       | Como                                                                                                                                    |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| cada exigência do enunciado | `scripts/validate-case.mjs` — uma asserção por exigência, **30/30** no ar                                                               |
+| domínio, adaptadores, rotas | `npm run check` — a suíte completa, sem exigir banco                                                                                    |
+| transação, locks, índices   | `npm run test:integration` — contra PostgreSQL real                                                                                     |
+| persistência após queda     | `scripts/verify-persistence.mjs` e `tests/integration/recovery.test.ts` — processo reiniciado e centenas de pedidos Delta reconciliados |
+| volume, nos quatro formatos | `npm run validate:volume -- 20000 3 <cliente>`                                                                                          |
+| varredura sob carga         | `npm run validate:sweep` — o cenário que o requisito 1 descreve                                                                         |
+| a aplicação, pelas rotas    | `npm run validate:http` — 14 cenários por `fetch`, sem `app.inject`                                                                     |
 
 Contagens de teste e cobertura ficam em [docs/STATUS.md](docs/STATUS.md), **geradas por `npm run evidence`** e não digitadas: escritas à mão elas derivaram três vezes, mesmo depois de eu concentrá-las num documento só. O 30/30 acima é exceção porque está atado à lista fixa de exigências do enunciado, não ao código.
 

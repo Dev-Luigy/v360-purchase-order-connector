@@ -38,7 +38,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-18        | Revalidar FIX-18, limpeza e matriz completa de testes            | concluída                      | Codex       | Integração isolada; limites, falhas, volume e persistência aprovados                            |
 | REVIEW-19        | Comparar fixtures de entrada com pedidos realmente persistidos   | concluída                      | Codex       | 8 cabeçalhos e 11 itens conferidos; órfão Delta corresponde ao staging                          |
 | PORTFOLIO-01     | Documentar contribuição real do responsável pelo projeto         | concluída                      | Codex       | Decisões, critérios de aceite e revisão visíveis no README; autoria de implementação preservada |
-| TEST-RECOVERY-01 | Gerar cenários em escala para queda, reenvio e cabeçalho ausente | em andamento                   | Codex       | 250 pedidos determinísticos; teste de reinício real somente em PostgreSQL isolado               |
+| TEST-RECOVERY-01 | Gerar cenários em escala para queda, reenvio e cabeçalho ausente | concluída                      | Codex       | 250 pedidos, 766 linhas e 1.532 itens comparados; PostgreSQL isolado, integração 34/34          |
 | FIX-18           | Fechar R17-01: espera invisível após falha ao fechar pedido      | concluída                      | Claude      | Invariante: carga terminada não deixa linha não publicada                                       |
 | CLEAN-01         | Enxugar comentários do código estável                            | concluída                      | Codex       | 526 linhas removidas; arquivos ativos de P1-04 preservados                                      |
 | P1-01            | Definir contrato normalizado e decisões de negócio               | concluída                      | Claude      | ADR-006 a ADR-010, docs/API.md, tipos e portas; libera P1-02 e P1-03                            |
@@ -251,11 +251,11 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## TEST-RECOVERY-01 — recuperação e pedidos sem cabeçalho em escala
 
 - Responsável: Codex.
-- Estado: em andamento.
-- Arquivos reservados: `tests/integration/recovery.test.ts`, `README.md`, `docs/COLLABORATION.md`, `docs/TASKS.md`, `docs/STATUS.md`, `docs/handoffs/TEST-RECOVERY-01-codex.md` e `docs/handoffs/PORTFOLIO-01-contribuicoes-codex.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `tests/integration/recovery.test.ts`, `README.md`, `docs/COLLABORATION.md`, `docs/TASKS.md`, `docs/STATUS.md`, `docs/handoffs/TEST-RECOVERY-01-codex.md` e `docs/handoffs/PORTFOLIO-01-contribuicoes-codex.md`.
 - Escopo: cobrir 250 pedidos Delta gerados com itens sem cabeçalho, morte abrupta e reinício do servidor, remoção de staging não publicado abandonado, preservação da espera publicada, reenvio e reconciliação sem duplicata; comparar todos os itens gerados diretamente no PostgreSQL.
 - Dependências: API TypeScript e migrações atuais; rodar integração somente num banco descartável.
-- Critério de aceite: teste reproduzível com seed fixa; `npm run check` verde; suíte PostgreSQL green em ambiente isolado; sem truncar ou limpar o banco persistente da aplicação.
+- Evidência: [handoff TEST-RECOVERY-01](handoffs/TEST-RECOVERY-01-codex.md); seed fixa `20260930`, morte abrupta (`SIGKILL`) e reinício da API, retenção/expurgo corretos, comparação de 500 cabeçalhos e 1.532 itens no banco. `npm run check` e integração PostgreSQL descartável 34/34 aprovados; banco persistente não usado.
 
 ## FIX-18 — espera sem aparecer no relatório após falha
 

@@ -10,6 +10,10 @@
 
 Essa divisão é ajustável e não representa tarefas já aceitas. O quadro `TASKS.md` registra a posse real. Nenhum agente deve iniciar a implementação de negócio apenas por ler esta proposta.
 
+## Papel do responsável pelo projeto
+
+O responsável pelo projeto decide ou confirma tecnologias, escopo e prioridades; define critérios de aceite; revisa as evidências; e aceita ou devolve cada entrega. Essas decisões ficam registradas nos ADRs e nas tarefas. Claude e Codex podem implementar e executar verificações, mas seus handoffs devem nomear quem fez cada atividade. A assistência de IA não deve ser apresentada como autoria humana do código.
+
 ## Fluxo
 
 1. Ler o estado e as mudanças existentes. Com Git disponível, conferir `git status --short` e `git diff`.
