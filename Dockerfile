@@ -28,9 +28,11 @@ RUN rm -rf \
       node_modules/@prisma/config \
       node_modules/mysql2 \
       node_modules/deepmerge-ts
-# Falha o build caso a poda remova uma dependência necessária.
+# Falha o build caso a poda remova uma dependência necessária. A borda HTTP
+# entra junto porque é ela que carrega multipart, rate-limit e a documentação
+# navegável: importar só o cliente do banco não alcançaria essas.
 RUN node --input-type=module \
-      -e "await import('/app/dist/infrastructure/database/prisma-client.js'); console.log('dependencias de runtime ok');"
+      -e "await import('/app/dist/infrastructure/database/prisma-client.js'); await import('/app/dist/presentation/http/app.js'); console.log('dependencias de runtime ok');"
 
 FROM node:24.21.0-bookworm-slim AS runtime
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000

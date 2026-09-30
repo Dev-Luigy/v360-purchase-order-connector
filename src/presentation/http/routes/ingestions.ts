@@ -59,6 +59,19 @@ export function registerIngestionRoutes(
     '/clients/:clientId/ingestions',
     {
       schema: {
+        tags: ['cargas'],
+        summary: 'Carregar pedidos de um cliente',
+        description:
+          'O mesmo endpoint para os quatro formatos: o perfil do cliente diz ' +
+          'como ler as partes enviadas. Aceitação é por pedido — um registro ' +
+          'inválido não derruba a carga, e o relatório devolve cada recusa ' +
+          'com referência e motivo.\n\n' +
+          'As partes vão como `multipart/form-data`. Os nomes dependem do ' +
+          'formato: `orders` no Alfa; `headers` e `items` no Beta; `lines` no ' +
+          'Gama; `orders` e `items` no Delta.\n\n' +
+          'Item que chega sem o cabeçalho dele espera pela carga que o traga, ' +
+          'em vez de virar pedido inventado.',
+        consumes: ['multipart/form-data'],
         params: paramsSchema,
         headers: headersSchema,
         response: {

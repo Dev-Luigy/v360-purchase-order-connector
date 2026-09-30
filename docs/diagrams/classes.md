@@ -1,3 +1,10 @@
+# Classes e contratos
+
+Visão simplificada dos tipos centrais, casos de uso e portas. Este é um mapa de
+leitura, não uma declaração de que todas as interfaces TypeScript são classes
+concretas. A fonte da verdade é `src/domain/` e `src/application/ports/`.
+
+```mermaid
 classDiagram
 direction LR
 
@@ -91,6 +98,23 @@ class SourceAdapter {
   read(payload, profile)
 }
 
+class ClientProfile {
+  <<configuration>>
+  clientId: ClientId
+  deliveryFormat: DeliveryFormat
+  formatVersion: string
+  dateFormat: DateFormat
+}
+
+class ClientProfiles {
+  <<interface>>
+  find(clientId)
+}
+
+class InMemoryClientProfiles {
+  <<adapter>>
+}
+
 class IngestPurchaseOrders {
   <<use case>>
   execute(payload)
@@ -153,7 +177,9 @@ PurchaseOrderSummary ..> PurchaseOrder : projection
 
 SourceAdapter ..> NormalizedPurchaseOrder : produces
 SourceAdapter ..> NormalizedPurchaseOrderItem : stages
+ClientProfiles ..> ClientProfile : provides
 IngestPurchaseOrders --> SourceAdapter : reads
+IngestPurchaseOrders --> ClientProfiles : finds profile
 IngestPurchaseOrders --> PurchaseOrderRepository : persists
 CheckInvoice --> PurchaseOrderRepository : loads order
 CheckInvoice --> ConferenceRepository : saves result
@@ -163,3 +189,5 @@ NestedJsonAdapter ..|> SourceAdapter : implements
 PairedCsvAdapter ..|> SourceAdapter : implements
 FlatJsonAdapter ..|> SourceAdapter : implements
 SplitJsonAdapter ..|> SourceAdapter : implements
+InMemoryClientProfiles ..|> ClientProfiles : implements
+```

@@ -1,10 +1,16 @@
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import {
+  jsonSchemaTransform,
+  jsonSchemaTransformObject,
   serializerCompiler,
   validatorCompiler,
+  type ZodTypeProvider,
 } from '@fastify/type-provider-zod';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { z } from 'zod';
 
 import type { CheckReadiness } from '../../application/use-cases/check-readiness.js';
 import type { CheckInvoice } from '../../application/use-cases/check-invoice.js';
@@ -18,6 +24,11 @@ import type {
   ListPurchaseOrders,
 } from '../../application/use-cases/query-purchase-orders.js';
 
+import {
+  docsPrefix,
+  openapiDocument,
+  registrarNomesDosObjetos,
+} from './openapi.js';
 import { toProblem } from './problem.js';
 import { registerConferenceRoutes } from './routes/conferences.js';
 import { registerIngestionRoutes } from './routes/ingestions.js';
@@ -99,6 +110,21 @@ export async function buildApp(
   await app.register(multipart, { limits: httpLimits.multipart });
   await app.register(rateLimit, dependencies.rateLimit ?? httpLimits.rateLimit);
 
+  // O documento OpenAPI é **gerado** dos mesmos schemas Zod que validam a
+  // requisição: `jsonSchemaTransform` lê o que a rota já declara. Documentação
+  // escrita à parte seria mais uma fonte de verdade que ninguém obriga a
+  // concordar com o código, e um teste falha se alguma rota ficar de fora.
+  registrarNomesDosObjetos();
+  await app.register(swagger, {
+    openapi: openapiDocument,
+    transform: jsonSchemaTransform,
+    transformObject: jsonSchemaTransformObject,
+  });
+  await app.register(swaggerUi, {
+    routePrefix: docsPrefix,
+    uiConfig: { docExpansion: 'list', deepLinking: true },
+  });
+
   app.setErrorHandler((error, request, reply) => {
     const problem = toProblem(error);
     // O erro inteiro vai para o log, nunca para a resposta: detalhe de banco ou
@@ -114,13 +140,45 @@ export async function buildApp(
     return reply.code(problem.status).send(problem.body);
   });
 
-  app.get('/health', () => ({ status: 'ok' }));
-  app.get('/ready', async (_request, reply) => {
-    const ready = await dependencies.readiness.execute();
-    return reply
-      .code(ready ? 200 : 503)
-      .send({ status: ready ? 'ready' : 'unavailable' });
-  });
+  const typed = app.withTypeProvider<ZodTypeProvider>();
+
+  typed.get(
+    '/health',
+    {
+      schema: {
+        tags: ['operação'],
+        summary: 'O processo está de pé',
+        description:
+          'Não olha o banco de propósito: um serviço vivo com banco fora ' +
+          'precisa ser reiniciado? Não. Quem responde isso é `/ready`.',
+        response: { 200: z.object({ status: z.literal('ok') }) },
+      },
+    },
+    () => ({ status: 'ok' as const }),
+  );
+  typed.get(
+    '/ready',
+    {
+      schema: {
+        tags: ['operação'],
+        summary: 'O serviço pode receber tráfego',
+        description:
+          'Olha o estado das migrações, não só a conexão: banco vazio ' +
+          'respondendo 200 faz o healthcheck do Compose mentir.',
+        response: {
+          200: z.object({ status: z.literal('ready') }),
+          503: z.object({ status: z.literal('unavailable') }),
+        },
+      },
+    },
+    async (_request, reply) => {
+      const ready = await dependencies.readiness.execute();
+      // Dois retornos em vez de um ternário: cada status tem o seu schema, e
+      // o ternário alargaria o literal para `string`.
+      if (!ready) return reply.code(503).send({ status: 'unavailable' });
+      return reply.code(200).send({ status: 'ready' });
+    },
+  );
 
   registerIngestionRoutes(
     app,
