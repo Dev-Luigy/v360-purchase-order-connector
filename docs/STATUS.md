@@ -10,7 +10,7 @@ Atualizado por Codex em 2026-09-30, após DOC-04.
 - Dockerfile, Compose com PostgreSQL 17 e volume persistente.
 - Scripts de desenvolvimento, build, testes, lint e formatação; lockfile presente.
 - Contrato normalizado, aritmética decimal e regras puras de conferência.
-- Leitura em fluxo e adaptadores Alfa (`nested-json`) e Beta (`paired-csv`), com perfis em código.
+- Leitura em fluxo e adaptadores Alfa, Beta, Gama e Delta (`nested-json`, `paired-csv`, `flat-json` e `split-json`), com perfis em código.
 - Schema Prisma, migração inicial com índices parciais, repositórios de pedido e conferência, prontidão pelo estado das migrações e migração como etapa própria do Compose.
 - As seis rotas de negócio: ingestão multipart com spool, consulta com filtros e paginação, detalhe do pedido, conferência e relatório. Contrato em [API.md](API.md).
 - Node 24.21.0, dependências npm instaladas e `.env` local criado.
@@ -22,7 +22,7 @@ Atualizado por Codex em 2026-09-30, após DOC-04.
 - Imagem de runtime construída e inspecionada sem executar container: sem CLI do Prisma e sem `mysql2`, que entrava por peer opcional e trazia CVE de credencial para uma aplicação que só fala PostgreSQL.
 - Duas mil combinações aritméticas inteiras comparadas com `BigInt` passaram; `/health` e `/ready` foram exercitados via `inject` nos limites atuais.
 - Três revisões registradas — [REVIEW-01](handoffs/REVIEW-01-codex.md), [REVIEW-02](handoffs/REVIEW-02-claude.md) e [REVIEW-03](handoffs/REVIEW-03-codex.md) — e os defeitos inequívocos das três estão fechados em [FIX-01](handoffs/FIX-01-claude.md), [FIX-02](handoffs/FIX-02-claude.md) e [FIX-03](handoffs/FIX-03-claude.md), cada um com regressão. Nenhum achado era falso positivo; dois defeitos adicionais apareceram durante as correções.
-- Os quatro pontos que dependiam de decisão foram fechados em [FIX-04](handoffs/FIX-04-claude.md) e registrados em [ADR-012](decisions/ADR-012-notacao-por-campo.md). Seguem abertos, como tarefa própria: política de auditoria npm e pipeline de CI ([REVIEW-06](handoffs/REVIEW-06-pos-fix-06-p1-02-codex.md), R06-04 e R06-07).
+- Os quatro pontos que dependiam de decisão foram fechados em [FIX-04](handoffs/FIX-04-claude.md) e registrados em [ADR-012](decisions/ADR-012-notacao-por-campo.md). O workflow de CI e a política de auditoria foram implementados depois em [OPS-01](handoffs/OPS-01-claude.md); ainda não há execução no GitHub Actions.
 - **ENV-03 fechou a lacuna que atravessava todo o projeto.** A suíte de integração prova transação, advisory lock sob carga concorrente, os nove `CHECK`, o `RESTRICT` do histórico, a ordem das divergências e a paginação por cursor. Os índices parciais foram confirmados por `EXPLAIN`, não supostos.
 - `docker compose up` do zero levanta banco, aplica a migração como etapa própria e só então sobe a API, com `/ready` em 200 — fecha os achados 1 e 2 de [REVIEW-02](handoffs/REVIEW-02-claude.md).
 - Persistência de pedidos **e** do histórico de conferências após reinício do banco provada por `scripts/verify-persistence.mjs`.
@@ -37,9 +37,9 @@ Atualizado por Codex em 2026-09-30, após DOC-04.
 - Três defeitos encontrados e fechados com regressão: recusa do framework (429, 413) virava 500; o teto de 120 req/min estrangulava a varredura noturna do próprio enunciado; e `docs/API.md` errava **todos** os nomes de parte e o cabeçalho da ingestão, então quem seguisse a documentação não carregava nada.
 - `scripts/activate-node.sh` está apagado no working tree por alteração preexistente, preservada nesta revisão. O README deixou de referenciá-lo em DOC-02.
 
-## Ainda não implementado
+## Limitações e próximos passos
 
-Pipeline de CI e política de exceção da auditoria npm. A imagem final exclui os pacotes vulneráveis conhecidos, mas `npm audit --omit=dev --audit-level=high` ainda falha com quatro avisos altos trazidos pelo grafo de ferramentas do Prisma; isso precisa de política verificável, não de supressão informal.
+O workflow e a política npm já existem ([OPS-01](handoffs/OPS-01-claude.md)); falta executar o workflow num remoto GitHub. A política mantém quatro avisos altos do grafo de ferramentas do Prisma como exceções temporárias e verifica a mitigação na imagem final. As outras limitações operacionais estão listadas abaixo.
 
 FIX-17 fechou R16-01 e R16-02. REVIEW-17 encontrou R17-01 no caminho em que o fechamento falhava por exceder o limite agregado; FIX-18 passou a descartar essas linhas e mantém o invariante de zero staging não publicado ao fim de uma carga. REVIEW-18 confirmou a correção na integração PostgreSQL e pela rota HTTP ([REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md), [FIX-18](handoffs/FIX-18-claude.md), [REVIEW-18](handoffs/REVIEW-18-validacao-integral-codex.md)).
 

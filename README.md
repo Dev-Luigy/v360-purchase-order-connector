@@ -150,17 +150,17 @@ As demais escolhas: [TypeScript e Node](docs/decisions/ADR-002-typescript-nodejs
 
 ## Como isto está validado
 
-| O quê                           | Como                                                                                                                                    |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| cada exigência do enunciado     | `scripts/validate-case.mjs` — uma asserção por exigência, **30/30** no ar                                                               |
-| domínio, adaptadores, rotas     | `npm run check` — a suíte completa, sem exigir banco                                                                                    |
-| transação, locks, índices       | `npm run test:integration` — contra PostgreSQL real                                                                                     |
-| persistência após queda         | `scripts/verify-persistence.mjs` e `tests/integration/recovery.test.ts` — processo reiniciado e centenas de pedidos Delta reconciliados |
-| volume, nos quatro formatos     | `npm run validate:volume -- 20000 3 <cliente>`                                                                                          |
-| varredura sob carga             | `npm run validate:sweep` — o cenário que o requisito 1 descreve                                                                         |
-| a aplicação, pelas rotas        | `npm run validate:http` — 17 cenários por `fetch`, sem `app.inject`                                                                     |
-| o gravado é igual ao que entrou | `npm run audit:fidelity` — 156 campos das amostras do enunciado contra o PostgreSQL                                                     |
-| exceções de dependências e imagem | `npm run audit:policy` — falha para aviso não listado, exceção vencida ou mitigação ausente na imagem                                  |
+| O quê                             | Como                                                                                                                                    |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| cada exigência do enunciado       | `scripts/validate-case.mjs` — uma asserção por exigência, **30/30** no ar                                                               |
+| domínio, adaptadores, rotas       | `npm run check` — a suíte completa, sem exigir banco                                                                                    |
+| transação, locks, índices         | `npm run test:integration` — contra PostgreSQL real                                                                                     |
+| persistência após queda           | `scripts/verify-persistence.mjs` e `tests/integration/recovery.test.ts` — processo reiniciado e centenas de pedidos Delta reconciliados |
+| volume, nos quatro formatos       | `npm run validate:volume -- 20000 3 <cliente>`                                                                                          |
+| varredura sob carga               | `npm run validate:sweep` — o cenário que o requisito 1 descreve                                                                         |
+| a aplicação, pelas rotas          | `npm run validate:http` — 17 cenários por `fetch`, sem `app.inject`                                                                     |
+| o gravado é igual ao que entrou   | `npm run audit:fidelity` — 156 campos das amostras do enunciado contra o PostgreSQL                                                     |
+| exceções de dependências e imagem | `npm run audit:policy` — falha para aviso não listado, exceção vencida ou mitigação ausente na imagem                                   |
 
 Contagens de teste e cobertura ficam em [docs/STATUS.md](docs/STATUS.md), **geradas por `npm run evidence`** e não digitadas: escritas à mão elas derivaram três vezes, mesmo depois de eu concentrá-las num documento só. O 30/30 acima é exceção porque está atado à lista fixa de exigências do enunciado, não ao código.
 
@@ -192,13 +192,13 @@ Registradas porque são reais, não porque não têm solução:
 - **A carga é síncrona.** 50.000 pedidos são uma requisição HTTP de 3,2 minutos. Funciona no Compose; um balanceador com tempo limite padrão a derruba, e não há retomada — o cliente reenvia tudo. Ingestão assíncrona com protocolo de acompanhamento é o desenho certo e é mudança de contrato.
 - **O teto de requisições é por origem, não por identidade.** Sem autenticação — que o enunciado explicitamente não pede — clientes atrás do mesmo IP dividem a quota. Configurável por `RATE_LIMIT_MAX`.
 - **Migração e runtime usam a mesma credencial.** Separar DDL de DML fica para quando houver ambiente implantado.
-- **Não há CI**, e a política de exceção da auditoria npm não está definida.
+- **CI configurado, mas ainda sem execução no GitHub Actions.** A política npm mantém exceções temporárias verificáveis para avisos transitivos do Prisma ([OPS-01](docs/handoffs/OPS-01-claude.md)).
 - `GET /metrics` está desenhado em [ADR-005](docs/decisions/ADR-005-observabilidade.md) e não implementado.
 
 Não foram implementados por não serem pedidos: autenticação, autorização, controle de acesso por cliente, SLA, métricas e fila.
 
 ## Próxima etapa
 
-As features do enunciado estão completas para os quatro clientes. O que falta não é produto: **pipeline de CI** e a **política de exceção da auditoria npm**, que rodariam a suíte de integração contra um banco efêmero a cada mudança.
+As features do enunciado estão completas para os quatro clientes. O workflow e a política de auditoria estão implementados; ainda falta executar o workflow em um remoto GitHub. Outras limitações operacionais estão listadas acima e em [docs/STATUS.md](docs/STATUS.md).
 
 Estado corrente e posse das tarefas: [docs/STATUS.md](docs/STATUS.md) e [docs/TASKS.md](docs/TASKS.md). Colaboração entre agentes: [AGENTS.md](AGENTS.md).

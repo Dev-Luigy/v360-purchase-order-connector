@@ -20,6 +20,10 @@ regras que não devem depender de HTTP, Prisma ou configuração. A infraestrutu
 implementa as portas com PostgreSQL/Prisma e adaptadores de entrada. A
 composição concreta acontece em `src/main/server.ts`.
 
+TypeScript verifica contratos durante o build; Zod valida dados externos em
+runtime — parâmetros, corpo, cabeçalhos e valores que chegam dos arquivos —
+antes de avançarem para as operações tipadas.
+
 ```text
 HTTP → caso de uso → porta ← adaptador de infraestrutura
              ↓
@@ -28,7 +32,7 @@ HTTP → caso de uso → porta ← adaptador de infraestrutura
 
 O domínio não aponta para fora. Um caso de uso pode ser testado com repositórios
 substitutos; a integração real verifica as garantias do PostgreSQL. O diagrama
-de [classes e contratos](diagrams/classes.mmd) mostra os principais tipos e
+de [classes e contratos](diagrams/classes.md) mostra os principais tipos e
 implementações sem enumerar cada método de cada rota.
 
 ## O caminho de uma carga
@@ -60,7 +64,7 @@ implementações sem enumerar cada método de cada rota.
    spool temporário é removido ao fim da requisição.
 
 O processo e os caminhos alternativos estão em
-[ingestion-process.mmd](diagrams/ingestion-process.mmd). Limites, formatos
+[processes.md](diagrams/processes.md). Limites, formatos
 exatos e exemplos de payload permanecem somente em [API](API.md) e nos perfis
 em `src/infrastructure/integrations/client-profiles.ts`.
 

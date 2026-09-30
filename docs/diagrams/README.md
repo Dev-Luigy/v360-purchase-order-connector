@@ -5,8 +5,8 @@ como navegar por eles e pelo restante da implementação.
 
 | Diagrama                                               | Responde                                                                                             |
 | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| [classes.mmd](classes.mmd)                             | Quais são os principais tipos do domínio, casos de uso, portas e adaptadores e como se relacionam.   |
-| [ingestion-process.mmd](ingestion-process.mmd)         | Como inicialização/recuperação, ingestão, reconciliação, conferência e consulta percorrem o sistema. |
+| [classes.md](classes.md)                               | Quais são os principais tipos do domínio, casos de uso, portas e adaptadores e como se relacionam.   |
+| [processes.md](processes.md)                           | Como inicialização/recuperação, ingestão, reconciliação, conferência e consulta percorrem o sistema. |
 | [contrato-normalizado.puml](contrato-normalizado.puml) | Quais objetos do contrato normalizado existem, seus campos e cardinalidades.                         |
 | [portas-e-consumo.puml](portas-e-consumo.puml)         | Quem produz e consome objetos do contrato e quais componentes cumprem as portas.                     |
 
@@ -14,8 +14,8 @@ como navegar por eles e pelo restante da implementação.
 
 ## Renderizar e visualizar
 
-Arquivos `.mmd` usam Mermaid e podem ser visualizados por GitHub e editores com
-preview Mermaid. A fonte permanece no repositório e é o artefato editável.
+Os arquivos `.md` contêm blocos Mermaid e são renderizados no GitHub e em
+editores com preview Mermaid. O bloco é a própria fonte editável.
 
 Os arquivos `.puml` têm SVG versionado ao lado. Para renderizá-los:
 

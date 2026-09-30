@@ -1,6 +1,12 @@
+# Processos principais
+
+Visão do ciclo de vida da API, ingestão/reconciliação e operações de consulta.
+Detalhes de payload, limites e respostas HTTP estão em [API](../API.md).
+
+```mermaid
 flowchart TD
     start([Servidor inicia]) --> cleanupSpool[Remove restos do spool temporario]
-    cleanupSpool --> cleanupStaging[Remove staging nao publicado e abandonado]
+    cleanupSpool --> cleanupStaging[Remove espera nao publicada abandonada acima da idade minima]
     cleanupStaging --> ready[API pronta]
 
     ready --> request{Requisicao recebida}
@@ -43,3 +49,4 @@ flowchart TD
     ready -->|Consulta ou relatorio| query[Valida filtros e cursor]
     query --> pagedRead[Executa leitura paginada no repositorio]
     pagedRead --> queryResponse[Retorna pagina ou resumo]
+```

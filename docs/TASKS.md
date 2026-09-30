@@ -230,7 +230,7 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Responsável: Claude.
 - Estado: concluída.
 - Arquivos alterados (reservas liberadas): `.github/workflows/ci.yml`, `scripts/audit-policy.mjs`, `security/audit-exceptions.json`, `package.json` (uma linha de script), `docs/TASKS.md`, `docs/handoffs/OPS-01-claude.md`.
-- **Fora do meu escopo por conflito:** eu tinha reservado uma seção do `README.md`, mas DOC-04 do Codex reservou o arquivo inteiro e está em andamento. Larguei o README em vez de atropelar. Falta uma linha na tabela "Como isto está validado" apontando `npm run audit:policy`; quem fechar DOC-04 pode incluí-la.
+- **Conflito resolvido:** DOC-04 concluiu a atualização do README e incluiu `npm run audit:policy` na tabela de validação.
 - Escopo: o único item de peso que faltava, adiado pelo usuário desde o início. Duas entregas: um pipeline que roda o que hoje é rodado à mão, e uma política de auditoria **verificável**, não supressão informal.
 - Fato que orienta a política: os quatro avisos altos chegam por `@prisma/client > prisma > {@prisma/config > deepmerge-ts, mysql2}`. `prisma` está na árvore de produção porque `@prisma/client` depende dele, então não é só devDependency. `npm audit fix --force` rebaixaria para `prisma@6.19.3`, quebra de contrato. A imagem final já remove os quatro; conferido com `docker run` contra a imagem construída.
 - Critério: a política falha se aparecer aviso novo fora da lista, se uma exceção vencer, ou se a mitigação deixar de valer — ela **confere** a ausência dos pacotes na imagem em vez de afirmar.
@@ -286,7 +286,7 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 
 - Responsável: Codex.
 - Estado: concluída.
-- Arquivos alterados (reservas liberadas): `docs/ENGINEERING.md`, `docs/PROJECT-GUIDE.md`, `docs/diagrams/classes.mmd`, `docs/diagrams/ingestion-process.mmd`, `docs/diagrams/README.md`, `README.md`, `docs/API.md`, `docs/TASKS.md`, `docs/STATUS.md` e `docs/handoffs/DOC-04-codex.md`.
+- Arquivos alterados (reservas liberadas): `docs/ENGINEERING.md`, `docs/PROJECT-GUIDE.md`, `docs/diagrams/classes.md`, `docs/diagrams/processes.md`, `docs/diagrams/README.md`, `README.md`, `docs/API.md`, `docs/TASKS.md`, `docs/STATUS.md` e `docs/handoffs/DOC-04-codex.md`.
 - Escopo: explicar como navegar pelo projeto, separar visão de domínio/arquitetura, contrato HTTP, decisões e operação; produzir diagrama fiel ao modelo de classes/interfaces e fluxo de ingestão, incluindo o caso Delta sem cabeçalho e recuperação documentada.
 - Dependências: código atual, `docs/API.md`, ADRs e testes de integração existentes.
 - Evidência: [handoff DOC-04](handoffs/DOC-04-codex.md); relações conferidas contra domínio, portas, casos de uso, rotas, composição e integração de recuperação. `npm run check` e `git diff --check` aprovados.
