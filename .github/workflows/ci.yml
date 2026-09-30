@@ -1,0 +1,109 @@
+# O que já é rodado à mão nesta entrega, rodado sozinho.
+#
+# Quatro estágios, do mais barato para o mais caro: a suíte sem banco, a
+# integração contra PostgreSQL de verdade, a aceitação pelas rotas com a pilha
+# do Compose no ar, e a política de auditoria conferida contra a imagem
+# construída.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '24.21.0'
+
+jobs:
+  verificacao:
+    name: check sem banco
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      # Tipagem, lint, formatação, schema, suíte e build. As 16 integrações
+      # são puladas sem DATABASE_URL, de propósito: quem as roda é o job abaixo.
+      - run: npm run check
+
+  integracao:
+    name: integração em PostgreSQL
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_USER: v360
+          POSTGRES_PASSWORD: v360
+          POSTGRES_DB: v360
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U v360"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://v360:v360@localhost:5432/v360
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx prisma migrate deploy
+      # A suíte dá TRUNCATE e exige acesso exclusivo; aqui o banco é dela.
+      - run: npm run test:integration
+
+  aceitacao:
+    name: enunciado e rotas, pela pilha real
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: docker compose up -d --build
+      - name: esperar /ready
+        run: |
+          for _ in $(seq 1 60); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/ready)" = "200" ]; then
+              echo "pronto"; exit 0
+            fi
+            sleep 2
+          done
+          echo "a API não ficou pronta"; docker compose logs api; exit 1
+      # Uma asserção por exigência do enunciado, os cenários pelas rotas, e a
+      # igualdade campo a campo entre a entrada e o que ficou no banco.
+      - run: node scripts/validate-case.mjs
+      - run: npm run validate:http
+      - run: npm run audit:fidelity
+      - if: always()
+        run: docker compose logs api > api.log || true
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-da-api
+          path: api.log
+          if-no-files-found: ignore
+
+  seguranca:
+    name: política de auditoria
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: docker compose build api
+      # Recusa aviso alto fora da lista, exceção vencida, exceção sem uso, e
+      # pacote excetuado que continue dentro da imagem de runtime.
+      - run: npm run audit:policy -- --imagem v360-purchase-order-connector-api
