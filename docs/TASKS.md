@@ -34,6 +34,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-15        | Validar FIX-15 do zero contra todo o enunciado                    | concluída                      | Codex       | Aceitação passa; falha fatal vaza staging e publicação perde contabilidade                           |
 | REVIEW-16        | Validar FIX-16 integralmente do zero                              | concluída                      | Codex       | Duas falhas residuais reproduzidas; ver handoff                                                      |
 | REVIEW-17        | Verificar FIX-17 e repetir regressões de REVIEW-16                | concluída                      | Codex       | R16-01/02 fechados; falha nova de relatório registrada para FIX-18                                   |
+| TEST-AUDIT-01    | Auditar cobertura, bordas, integração e deploy                    | em andamento                   | Claude      | Pedido do usuário; três lacunas reais encontradas e corrigidas                                       |
 | FIX-19           | Corrigir o contrato de erro publicado e travar a deriva do API.md | concluída                      | Claude      | `API.md` anunciava erro aninhado em maiúsculas; o serviço responde plano em minúsculas               |
 | DOC-05           | Publicar a API navegável a partir dos schemas Zod das rotas       | concluída                      | Claude      | `/docs` no ar; 8 rotas e 11 objetos, com teste que falha se uma rota registrada sumir do documento   |
 | OPS-01           | Pipeline de CI e política de exceção da auditoria npm             | concluída                      | Claude      | CI em quatro estágios; política que recusa aviso novo, prazo vencido e mitigação que deixou de valer |
@@ -215,6 +216,18 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: conferir FIX-17 e repetir `npm run check`, integração PostgreSQL, 30 requisitos, cenários HTTP e reproduções independentes de R16-01/R16-02. Reexecutar varredura concorrente e volume se a versão compilada ou o ambiente tiver mudado. Preservar dados existentes e deixar claro o estado final.
 - Dependências: FIX-17 concluída; PostgreSQL/Compose disponível.
 - Evidência: [handoff REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md); check e cobertura passaram, 31/31 integrações, 30/30 requisitos, 16/16 rotas, sweep e quatro volumes passaram; R16-01/02 foram reproduzidos como fechados e R17-01 foi reproduzido no PostgreSQL.
+
+## TEST-AUDIT-01 — auditoria de cobertura, bordas, integração e deploy
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `package.json` (linha do `coverage`), `src/infrastructure/database/{pool,purchase-order-repository}.ts`, `tests/bordas.test.ts`, `tests/integration/staging.test.ts`, `docs/TASKS.md`, `docs/handoffs/TEST-AUDIT-01-claude.md`.
+- Origem: pedido do usuário — verificar se os testes olham todos os cenários possíveis, as bordas, a integração e o deploy.
+- Achado 1 (método): `npm run coverage` não carrega `.env`, então a suíte de integração é pulada e os repositórios PostgreSQL aparecem com ~55% de linha. A cobertura real, medida com banco, é 97,32% de linhas contra os 92,45% publicados.
+- Achado 2 (borda latente): o preset `ingestion` eleva `statement_timeout` para 300s — ADR-012 promete transação longa mas finita —, porém o **timeout de transação interativa do Prisma** é outro mecanismo, vale 5s por padrão e nunca foi configurado. Nenhum caminho no limite documentado estoura nesta máquina, mas a integração bateu 5.059 ms sob instrumentação, e a falha cai em `erro_interno` 500.
+- Achado 3 (bordas sem teste): `maxCursorLength` e `maxStagedRawCharacters` não são exercitados por teste nenhum. Os dois funcionam — sondados contra a aplicação real —, mas remover a guarda não deixaria nada vermelho.
+- Fora de escopo, verificado e correto: migração idempotente, imagem como usuário `node`, ordem e saúde no Compose, persistência após parada, recuperação após `SIGKILL`.
+- Dependências: nenhuma.
 
 ## FIX-19 — o contrato de erro publicado não era o do serviço
 
