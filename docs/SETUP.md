@@ -4,14 +4,14 @@ A instalação do sistema será feita pelo usuário. Sistema detectado: Arch Lin
 
 ## Ferramentas do sistema
 
-| Ferramenta     | Versão / finalidade                 | Situação observada                                              |
-| -------------- | ----------------------------------- | --------------------------------------------------------------- |
-| Node.js        | 24.x, projeto fixado em 24.21.0     | Disponível apenas em `.tools/node`                              |
-| npm            | Gerenciador de dependências         | Incluído no Node local; instalar pacote no Arch para uso global |
-| Docker Engine  | Executar API e banco em containers  | Não encontrado                                                  |
-| Docker Buildx  | Build das imagens pelo Compose      | Não encontrado                                                  |
-| Docker Compose | Comando `docker compose`            | Não encontrado                                                  |
-| Git            | Histórico, branches e marco parte-1 | Instalado                                                       |
+| Ferramenta     | Versão / finalidade                 | Situação verificada em 2026-09-30 |
+| -------------- | ----------------------------------- | --------------------------------- |
+| Node.js        | 24.x, projeto fixado em 24.21.0     | v24.21.0 no PATH                  |
+| npm            | Gerenciador de dependências         | 12.1.0                            |
+| Docker Engine  | Executar API e banco em containers  | 29.8.1                            |
+| Docker Buildx  | Build das imagens pelo Compose      | 0.37.1                            |
+| Docker Compose | Comando `docker compose`            | 5.5.1                             |
+| Git            | Histórico, branches e marco parte-1 | 2.55.0                            |
 
 No Arch, instalar Node 24 LTS e ferramentas:
 
