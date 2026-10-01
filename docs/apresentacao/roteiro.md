@@ -1,6 +1,9 @@
 # Roteiro do vídeo — 3 minutos
 
-> Arquivo de apoio para gravar a demonstração. Não é parte do produto; apague antes de enviar se preferir.
+> Arquivo de apoio para gravar a demonstração. Não é parte do produto; a pasta inteira pode ser apagada antes de enviar.
+>
+> Ao lado: [`chamadas.http`](chamadas.http) para clicar, [`falas.md`](falas.md) só com o texto, e
+> [`perguntas.md`](perguntas.md) com as dez perguntas da avaliação respondidas.
 
 Três minutos não dão para mostrar tudo. A escolha deste roteiro: **mostrar comportamento que prova decisão**, em vez de narrar arquitetura. Quem avalia já vai ler o README; o vídeo existe para ver funcionando.
 

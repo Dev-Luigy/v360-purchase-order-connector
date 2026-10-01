@@ -1,6 +1,6 @@
 # Falas — só o texto, para ler na gravação
 
-Para deixar na segunda tela. Os comandos de cada bloco estão em [`chamadas.http`](chamadas.http); o roteiro com as duas coisas juntas, em [`roteiro.md`](roteiro.md).
+Para deixar na segunda tela. Os comandos de cada bloco estão em [`chamadas.http`](chamadas.http); o roteiro com as duas coisas juntas, em [`roteiro.md`](roteiro.md). Para a conversa depois do vídeo, [`perguntas.md`](perguntas.md).
 
 **433 palavras de fala, que somam 2 min 48 s** a cerca de 155 palavras por minuto. Os doze segundos que faltam para os três minutos são os intervalos em que você roda o comando e a saída aparece na tela — por isso a fala não preenche o tempo inteiro.
 

@@ -34,6 +34,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-15        | Validar FIX-15 do zero contra todo o enunciado                    | concluída                      | Codex       | Aceitação passa; falha fatal vaza staging e publicação perde contabilidade                           |
 | REVIEW-16        | Validar FIX-16 integralmente do zero                              | concluída                      | Codex       | Duas falhas residuais reproduzidas; ver handoff                                                      |
 | REVIEW-17        | Verificar FIX-17 e repetir regressões de REVIEW-16                | concluída                      | Codex       | R16-01/02 fechados; falha nova de relatório registrada para FIX-18                                   |
+| DOC-08           | Responder as dez perguntas da avaliação, para estudo              | concluída                      | Claude      | Toda afirmação conferida contra o código antes de entrar                                             |
 | FIX-20           | Multipart ilegível respondia 500 em vez de 400                    | concluída                      | Claude      | Achado ao testar a coleção .http no kulala; erro do cliente virava defeito nosso                     |
 | DEPLOY-01        | Preparar a implantação em VPS atrás de proxy com TLS              | concluída                      | Claude      | `TRUST_PROXY`, Caddyfile e runbook; a execução no servidor é do usuário                              |
 | ENTREGA-01       | Fechar os entregáveis que o e-mail do processo exige              | em andamento                   | Claude      | AI_USAGE.md, coleção .http, README e CI verde no remoto                                              |
@@ -222,6 +223,16 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: conferir FIX-17 e repetir `npm run check`, integração PostgreSQL, 30 requisitos, cenários HTTP e reproduções independentes de R16-01/R16-02. Reexecutar varredura concorrente e volume se a versão compilada ou o ambiente tiver mudado. Preservar dados existentes e deixar claro o estado final.
 - Dependências: FIX-17 concluída; PostgreSQL/Compose disponível.
 - Evidência: [handoff REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md); check e cobertura passaram, 31/31 integrações, 30/30 requisitos, 16/16 rotas, sweep e quatro volumes passaram; R16-01/02 foram reproduzidos como fechados e R17-01 foi reproduzido no PostgreSQL.
+
+## DOC-08 — as dez perguntas da avaliação
+
+- Responsável: Claude.
+- Estado: concluída.
+- Arquivos alterados: `docs/apresentacao/**` (a pasta `docs/video` foi renomeada, porque agora guarda mais que vídeo), `docs/TASKS.md`.
+- Pedido do usuário: as respostas das perguntas que o e-mail do processo diz que serão feitas na apresentação, para estudar e entender bem.
+- Forma: por pergunta, a **resposta curta** que basta se ele lembrar de uma frase, o raciocínio, e onde olhar no repositório. Inclui o que **não** funciona — os limites do perfil, os caminhos não indexados de propósito, os trade-offs — porque enunciar o limite é o que distingue quem entende de quem decorou.
+- Toda afirmação numérica foi conferida contra o código: 7 códigos de divergência, 11 índices, 10 `CHECK`, 310 linhas no adaptador mais complexo, 5 perfis, 19 revisões, página 50/100.
+- Observação de escopo: é material de apresentação, não de produto. A pasta inteira pode ser removida antes do envio sem afetar nada.
 
 ## FIX-20 — multipart ilegível virava `erro_interno`
 
