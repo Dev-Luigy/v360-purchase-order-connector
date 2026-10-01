@@ -1,0 +1,330 @@
+### V360 — Conector de Pedidos de Compra
+###
+### Coleção executável das rotas, na ordem em que fazem sentido: subir, carregar
+### os quatro clientes, consultar, conferir uma nota e ler os relatórios. O
+### último bloco é só de recusas — é onde as decisões do serviço aparecem.
+###
+### Como rodar:
+###   docker compose up
+###   VS Code: extensão "REST Client", clique em "Send Request" acima de cada bloco
+###   IntelliJ / WebStorm: suporte nativo a .http, clique no ▶ da margem
+###
+### Os caminhos de arquivo são relativos a este arquivo, na raiz do repositório.
+
+@host = http://localhost:3000
+
+### ──────────────────────────────────────────────────────────── operação
+
+### O processo está de pé (não olha o banco de propósito)
+GET {{host}}/health
+
+### O serviço pode receber tráfego: olha o estado das migrações, não só a conexão
+GET {{host}}/ready
+
+### A API navegável, gerada dos mesmos schemas que validam as requisições
+GET {{host}}/docs/json
+
+### ──────────────────────────────────────────────────────────── cargas
+
+### Alfa — JSON com os itens aninhados dentro do pedido. Uma parte: "orders"
+POST {{host}}/clients/alfa/ingestions
+X-Format-Version: 1
+Content-Type: multipart/form-data; boundary=limite
+
+--limite
+Content-Disposition: form-data; name="orders"; filename="purchase-orders.json"
+Content-Type: application/json
+
+< ./tests/fixtures/alfa/purchase-orders.json
+--limite--
+
+### Beta — dois CSV em português ligados pelo número do pedido
+POST {{host}}/clients/beta/ingestions
+X-Format-Version: 1
+Content-Type: multipart/form-data; boundary=limite
+
+--limite
+Content-Disposition: form-data; name="headers"; filename="cabecalho.csv"
+Content-Type: text/csv
+
+< ./tests/fixtures/beta/cabecalho.csv
+--limite
+Content-Disposition: form-data; name="items"; filename="itens.csv"
+Content-Type: text/csv
+
+< ./tests/fixtures/beta/itens.csv
+--limite--
+
+### Beta ERP — o mesmo adaptador, outro perfil: Windows-1252 com CRLF
+POST {{host}}/clients/beta-erp/ingestions
+X-Format-Version: 1
+Content-Type: multipart/form-data; boundary=limite
+
+--limite
+Content-Disposition: form-data; name="headers"; filename="cabecalho.csv"
+Content-Type: text/csv
+
+< ./tests/fixtures/beta-erp/cabecalho.csv
+--limite
+Content-Disposition: form-data; name="items"; filename="itens.csv"
+Content-Type: text/csv
+
+< ./tests/fixtures/beta-erp/itens.csv
+--limite--
+
+### Gama — tudo achatado: timestamp Unix, preço em centavos, situação numérica
+POST {{host}}/clients/gama/ingestions
+X-Format-Version: 1
+Content-Type: multipart/form-data; boundary=limite
+
+--limite
+Content-Disposition: form-data; name="lines"; filename="purchase-order-lines.json"
+Content-Type: application/json
+
+< ./tests/fixtures/gama/purchase-order-lines.json
+--limite--
+
+### Delta — duas consultas independentes, enviadas juntas
+POST {{host}}/clients/delta/ingestions
+X-Format-Version: 1
+Content-Type: multipart/form-data; boundary=limite
+
+--limite
+Content-Disposition: form-data; name="orders"; filename="orders.json"
+Content-Type: application/json
+
+< ./tests/fixtures/delta/orders.json
+--limite
+Content-Disposition: form-data; name="items"; filename="items.json"
+Content-Type: application/json
+
+< ./tests/fixtures/delta/items.json
+--limite--
+
+### Delta — só os itens. O que não achar cabeçalho vai para espera, não vira
+### pedido inventado: veja `stagedTotal` e `staged[].reason` na resposta
+POST {{host}}/clients/delta/ingestions
+X-Format-Version: 1
+Content-Type: multipart/form-data; boundary=limite
+
+--limite
+Content-Disposition: form-data; name="items"; filename="items.json"
+Content-Type: application/json
+
+< ./tests/fixtures/delta/items.json
+--limite--
+
+### Delta — só os cabeçalhos. NÃO apaga os itens já conhecidos (ADR-008)
+POST {{host}}/clients/delta/ingestions
+X-Format-Version: 1
+Content-Type: multipart/form-data; boundary=limite
+
+--limite
+Content-Disposition: form-data; name="orders"; filename="orders.json"
+Content-Type: application/json
+
+< ./tests/fixtures/delta/orders.json
+--limite--
+
+### ──────────────────────────────────────────── requisito 1: consultar
+
+### Todos os clientes no mesmo contrato
+GET {{host}}/purchase-orders
+
+### Achar um pedido pelo número que o cliente usa — não pelo UUID interno
+GET {{host}}/purchase-orders?clientId=alfa&externalNumber=4500001234
+
+### O mesmo número em clientes diferentes: a identidade é o par
+GET {{host}}/purchase-orders?externalNumber=4500001234
+
+### Filtro por cliente de origem
+GET {{host}}/purchase-orders?clientId=beta
+
+### Filtro por fornecedor
+GET {{host}}/purchase-orders?supplierTaxId=23456789000101
+
+### Filtro por situação
+GET {{host}}/purchase-orders?status=aberto
+
+### Só os que ainda têm algo a receber
+GET {{host}}/purchase-orders?pending=true
+
+### Filtros combinados convivendo com a paginação
+GET {{host}}/purchase-orders?clientId=beta&status=aberto&pending=true&limit=5
+
+### Primeira página: copie `page.nextCursor` para o bloco seguinte
+GET {{host}}/purchase-orders?limit=2
+
+### Próxima página — troque COLE_O_CURSOR_AQUI pelo `nextCursor` acima
+GET {{host}}/purchase-orders?limit=2&cursor=COLE_O_CURSOR_AQUI
+
+### Detalhe: o que já foi recebido e o que falta em cada item.
+### Troque o id por um `data[].id` de qualquer consulta acima
+GET {{host}}/purchase-orders/COLE_O_ID_AQUI
+
+### ────────────────────────────────────────────── requisito 2: conferir
+
+### Nota conforme o pedido — responde 201 com outcome "aprovada"
+POST {{host}}/conferences
+Content-Type: application/json
+
+{
+  "clientId": "alfa",
+  "purchaseOrderNumber": "4500001234",
+  "supplierTaxId": "23456789000101",
+  "lines": [{ "material": "MAT-1001", "quantity": "40", "totalValue": "1836.00" }]
+}
+
+### Nota divergente — devolve TODAS as divergências, não a primeira
+POST {{host}}/conferences
+Content-Type: application/json
+
+{
+  "clientId": "alfa",
+  "purchaseOrderNumber": "4500001234",
+  "supplierTaxId": "23456789000101",
+  "lines": [{ "material": "MAT-1001", "quantity": "500", "totalValue": "1.00" }]
+}
+
+### Material que não existe no pedido
+POST {{host}}/conferences
+Content-Type: application/json
+
+{
+  "clientId": "alfa",
+  "purchaseOrderNumber": "4500001234",
+  "supplierTaxId": "23456789000101",
+  "lines": [{ "material": "NAO-EXISTE", "quantity": "1", "totalValue": "1.00" }]
+}
+
+### Fornecedor diferente do que está no pedido
+POST {{host}}/conferences
+Content-Type: application/json
+
+{
+  "clientId": "alfa",
+  "purchaseOrderNumber": "4500001234",
+  "supplierTaxId": "12345678000190",
+  "lines": [{ "material": "MAT-1001", "quantity": "1", "totalValue": "45.90" }]
+}
+
+### Gama: a nota fala em unidades, o pedido está em caixa.
+### 24 unidades = 2 caixas de 12, a R$ 1.200,00 a caixa
+POST {{host}}/conferences
+Content-Type: application/json
+
+{
+  "clientId": "gama",
+  "purchaseOrderNumber": "GL-778",
+  "supplierTaxId": "34567890000112",
+  "lines": [{ "material": "TRP-01", "quantity": "24", "totalValue": "2400.00" }]
+}
+
+### ──────────────────────────────────────────── requisito 3: relatório
+
+### Quantas passaram, quantas travaram e por quais motivos
+GET {{host}}/conferences/summary
+
+### Resumo de um cliente
+GET {{host}}/conferences/summary?clientId=alfa
+
+### Histórico paginado
+GET {{host}}/conferences?limit=5
+
+### Histórico filtrado por resultado
+GET {{host}}/conferences?outcome=reprovada&limit=5
+
+### Histórico filtrado por tipo de divergência
+GET {{host}}/conferences?divergenceCode=QUANTIDADE_ACIMA_DO_SALDO&limit=5
+
+### ──────────────────────────────────────────── as recusas, de propósito
+
+### clientId sem perfil → 404 cliente_desconhecido
+POST {{host}}/clients/epsilon/ingestions
+X-Format-Version: 1
+Content-Type: multipart/form-data; boundary=limite
+
+--limite
+Content-Disposition: form-data; name="orders"; filename="purchase-orders.json"
+Content-Type: application/json
+
+< ./tests/fixtures/alfa/purchase-orders.json
+--limite--
+
+### Parte com nome fora da forma de entrega → 400 carga_invalida
+POST {{host}}/clients/alfa/ingestions
+X-Format-Version: 1
+Content-Type: multipart/form-data; boundary=limite
+
+--limite
+Content-Disposition: form-data; name="lines"; filename="purchase-orders.json"
+Content-Type: application/json
+
+< ./tests/fixtures/alfa/purchase-orders.json
+--limite--
+
+### Versão de formato diferente da que o perfil declara → 422 payload_incompativel
+POST {{host}}/clients/alfa/ingestions
+X-Format-Version: 2
+Content-Type: multipart/form-data; boundary=limite
+
+--limite
+Content-Disposition: form-data; name="orders"; filename="purchase-orders.json"
+Content-Type: application/json
+
+< ./tests/fixtures/alfa/purchase-orders.json
+--limite--
+
+### Pedido que não existe → 404 pedido_nao_encontrado, não divergência:
+### a nota pode estar certa e o pedido ainda não ter sido carregado
+POST {{host}}/conferences
+Content-Type: application/json
+
+{
+  "clientId": "alfa",
+  "purchaseOrderNumber": "PEDIDO-INEXISTENTE",
+  "supplierTaxId": "23456789000101",
+  "lines": [{ "material": "MAT-1001", "quantity": "1", "totalValue": "45.90" }]
+}
+
+### limit acima do teto de 100 → 400, recusa e não recorte silencioso
+GET {{host}}/purchase-orders?limit=500
+
+### Cursor malformado → 400 cursor_invalido
+GET {{host}}/purchase-orders?cursor=lixo
+
+### Cursor acima do teto de 256 caracteres → 400, antes de decodificar
+GET {{host}}/purchase-orders?cursor=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+
+### Situação fora do vocabulário do perfil → recusa o registro, não interpreta
+POST {{host}}/clients/alfa/ingestions
+X-Format-Version: 1
+Content-Type: multipart/form-data; boundary=limite
+
+--limite
+Content-Disposition: form-data; name="orders"; filename="situacao-desconhecida.json"
+Content-Type: application/json
+
+{
+  "purchase_orders": [
+    {
+      "po_number": "REC-1",
+      "created_at": "2026-09-01",
+      "status": "suspended",
+      "currency": "BRL",
+      "vendor": { "tax_id": "23456789000101", "name": "Fornecedor" },
+      "items": [
+        {
+          "line": 1,
+          "material": "MAT-1",
+          "description": "Item",
+          "uom": "UN",
+          "quantity_ordered": 1,
+          "quantity_received": 0,
+          "unit_price": 1.0
+        }
+      ]
+    }
+  ]
+}
+--limite--

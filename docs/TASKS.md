@@ -34,6 +34,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-15        | Validar FIX-15 do zero contra todo o enunciado                    | concluída                      | Codex       | Aceitação passa; falha fatal vaza staging e publicação perde contabilidade                           |
 | REVIEW-16        | Validar FIX-16 integralmente do zero                              | concluída                      | Codex       | Duas falhas residuais reproduzidas; ver handoff                                                      |
 | REVIEW-17        | Verificar FIX-17 e repetir regressões de REVIEW-16                | concluída                      | Codex       | R16-01/02 fechados; falha nova de relatório registrada para FIX-18                                   |
+| ENTREGA-01       | Fechar os entregáveis que o e-mail do processo exige              | em andamento                   | Claude      | AI_USAGE.md, coleção .http, README e CI verde no remoto                                              |
 | DOC-07           | Documentar o uso prático: como achar, carregar e conferir         | concluída                      | Claude      | Pedido do usuário; nasceu de perguntas que nenhum documento respondia                                |
 | DOC-06           | Escrever as partes difíceis: problema, por que, decisão e prova   | concluída                      | Claude      | Pedido do usuário; os guias atuais são navegacionais e não contam o porquê                           |
 | TEST-AUDIT-01    | Auditar cobertura, bordas, integração e deploy                    | concluída                      | Claude      | Pedido do usuário; três lacunas reais encontradas e corrigidas                                       |
@@ -219,6 +220,16 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: conferir FIX-17 e repetir `npm run check`, integração PostgreSQL, 30 requisitos, cenários HTTP e reproduções independentes de R16-01/R16-02. Reexecutar varredura concorrente e volume se a versão compilada ou o ambiente tiver mudado. Preservar dados existentes e deixar claro o estado final.
 - Dependências: FIX-17 concluída; PostgreSQL/Compose disponível.
 - Evidência: [handoff REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md); check e cobertura passaram, 31/31 integrações, 30/30 requisitos, 16/16 rotas, sweep e quatro volumes passaram; R16-01/02 foram reproduzidos como fechados e R17-01 foi reproduzido no PostgreSQL.
+
+## ENTREGA-01 — os entregáveis do processo seletivo
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `AI_USAGE.md`, `requests.http`, `README.md`, `docs/TASKS.md`, `docs/handoffs/ENTREGA-01-claude.md`.
+- Origem: o usuário trouxe o e-mail do processo. Auditei o repositório contra ele e três entregáveis exigidos ou pontuados faltavam.
+- Lacunas encontradas: `AI_USAGE.md` **não existia** e é obrigatório, com quatro seções nomeadas; não havia coleção de requests, que o e-mail diz que conta pontos; o README tinha as decisões mas não uma seção explícita de "o que faria diferente", e a linha sobre o CI dizia que ele nunca rodou — ele rodou e falhou; e havia 12 commits locais não enviados, com o remoto em CI vermelho.
+- Fora do meu alcance: vídeo de demonstração ou aplicação hospedada.
+- Dependências: nenhuma.
 
 ## DOC-07 — uso prático do serviço
 

@@ -28,6 +28,10 @@ Carregar as amostras e exercitar tudo:
 node scripts/validate-case.mjs    # 30 asserções, uma por exigência do enunciado
 ```
 
+Para clicar em vez de digitar, [`requests.http`](requests.http) tem toda rota e todo caso de recusa, pronto para o **REST Client** do VS Code ou o suporte nativo do IntelliJ — sem instalar nada. Com o serviço no ar, a API navegável fica em <http://localhost:3000/docs>.
+
+O uso de IA neste desafio está em [AI_USAGE.md](AI_USAGE.md).
+
 Desenvolvimento local: `cp .env.example .env && npm ci && npm run db:up && npm run dev`. `npm run check` roda geração do cliente Prisma, tipagem, lint, formatação, a suíte completa e o build, **sem exigir banco**; `npm run test:integration` roda o que exige PostgreSQL real. O contrato completo das rotas está em [docs/API.md](docs/API.md).
 
 Para entender a arquitetura e seguir uma leitura guiada do código, comece pelo [índice de engenharia](docs/ENGINEERING.md) e pelo [guia do projeto](docs/PROJECT-GUIDE.md). Os [diagramas](docs/diagrams/README.md) incluem relações de classes/contratos e o fluxo dos processos.
@@ -192,13 +196,22 @@ Registradas porque são reais, não porque não têm solução:
 - **A carga é síncrona.** 50.000 pedidos são uma requisição HTTP de 3,2 minutos. Funciona no Compose; um balanceador com tempo limite padrão a derruba, e não há retomada — o cliente reenvia tudo. Ingestão assíncrona com protocolo de acompanhamento é o desenho certo e é mudança de contrato.
 - **O teto de requisições é por origem, não por identidade.** Sem autenticação — que o enunciado explicitamente não pede — clientes atrás do mesmo IP dividem a quota. Configurável por `RATE_LIMIT_MAX`.
 - **Migração e runtime usam a mesma credencial.** Separar DDL de DML fica para quando houver ambiente implantado.
-- **CI configurado, mas ainda sem execução no GitHub Actions.** A política npm mantém exceções temporárias verificáveis para avisos transitivos do Prisma ([OPS-01](docs/handoffs/OPS-01-claude.md)).
+- **A política de auditoria npm mantém quatro exceções temporárias**, verificáveis e com vencimento, para avisos transitivos do grafo de ferramentas do Prisma. `npm run audit:policy` recusa aviso novo, exceção vencida e mitigação que deixou de valer — e confere, na imagem construída, que os pacotes excetuados não estão lá ([OPS-01](docs/handoffs/OPS-01-claude.md)).
 - `GET /metrics` está desenhado em [ADR-005](docs/decisions/ADR-005-observabilidade.md) e não implementado.
 
 Não foram implementados por não serem pedidos: autenticação, autorização, controle de acesso por cliente, SLA, métricas e fila.
 
+## O que eu faria diferente com mais tempo
+
+- **Ingestão assíncrona.** Hoje 50.000 pedidos são uma requisição HTTP de 3,2 minutos. O desenho certo é aceitar a carga, devolver um identificador e expor o andamento — com retomada, para o cliente não reenviar tudo depois de um tempo limite. É mudança de contrato, não ajuste.
+- **Perfis fora do código.** O perfil de um cliente é um literal TypeScript validado no start, então cliente novo em formato conhecido não exige lógica nova, mas exige reimplantar. Perfil em banco, versionado, com validação na entrada, tira isso do caminho crítico.
+- **Separar DDL de DML.** Migração e runtime usam a mesma credencial. Fica para quando houver ambiente implantado.
+- **Coordenação entre réplicas.** A varredura de espera abandonada roda no start de cada instância e se apoia numa folga de uma hora. Com várias réplicas isso funciona, mas por folga, não por coordenação.
+- **`GET /metrics`.** Está desenhado em [ADR-005](docs/decisions/ADR-005-observabilidade.md) e não implementado — decisão registrada de não instalar dependência de observabilidade sem ambiente onde ela seja lida.
+- **Rota composta de detalhe.** Ver os itens de um pedido do qual se sabe só o número custa duas requisições; `GET /clients/{clientId}/purchase-orders/{externalNumber}` resolveria em uma.
+
 ## Próxima etapa
 
-As features do enunciado estão completas para os quatro clientes. O workflow e a política de auditoria estão implementados; ainda falta executar o workflow em um remoto GitHub. Outras limitações operacionais estão listadas acima e em [docs/STATUS.md](docs/STATUS.md).
+As features do enunciado estão completas para os quatro clientes. Outras limitações operacionais estão listadas acima e em [docs/STATUS.md](docs/STATUS.md).
 
 Estado corrente e posse das tarefas: [docs/STATUS.md](docs/STATUS.md) e [docs/TASKS.md](docs/TASKS.md). Colaboração entre agentes: [AGENTS.md](AGENTS.md).
