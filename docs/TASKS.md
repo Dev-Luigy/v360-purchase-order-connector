@@ -34,6 +34,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-15        | Validar FIX-15 do zero contra todo o enunciado                    | concluída                      | Codex       | Aceitação passa; falha fatal vaza staging e publicação perde contabilidade                           |
 | REVIEW-16        | Validar FIX-16 integralmente do zero                              | concluída                      | Codex       | Duas falhas residuais reproduzidas; ver handoff                                                      |
 | REVIEW-17        | Verificar FIX-17 e repetir regressões de REVIEW-16                | concluída                      | Codex       | R16-01/02 fechados; falha nova de relatório registrada para FIX-18                                   |
+| DOC-07           | Documentar o uso prático: como achar, carregar e conferir         | em andamento                   | Claude      | Pedido do usuário; nasceu de perguntas que nenhum documento respondia                                |
 | DOC-06           | Escrever as partes difíceis: problema, por que, decisão e prova   | concluída                      | Claude      | Pedido do usuário; os guias atuais são navegacionais e não contam o porquê                           |
 | TEST-AUDIT-01    | Auditar cobertura, bordas, integração e deploy                    | concluída                      | Claude      | Pedido do usuário; três lacunas reais encontradas e corrigidas                                       |
 | FIX-19           | Corrigir o contrato de erro publicado e travar a deriva do API.md | concluída                      | Claude      | `API.md` anunciava erro aninhado em maiúsculas; o serviço responde plano em minúsculas               |
@@ -218,6 +219,17 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: conferir FIX-17 e repetir `npm run check`, integração PostgreSQL, 30 requisitos, cenários HTTP e reproduções independentes de R16-01/R16-02. Reexecutar varredura concorrente e volume se a versão compilada ou o ambiente tiver mudado. Preservar dados existentes e deixar claro o estado final.
 - Dependências: FIX-17 concluída; PostgreSQL/Compose disponível.
 - Evidência: [handoff REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md); check e cobertura passaram, 31/31 integrações, 30/30 requisitos, 16/16 rotas, sweep e quatro volumes passaram; R16-01/02 foram reproduzidos como fechados e R17-01 foi reproduzido no PostgreSQL.
+
+## DOC-07 — uso prático do serviço
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `docs/HOW-TO.md`, `docs/ENGINEERING.md` (uma linha), `docs/API.md` (um ponteiro), `docs/TASKS.md`, `docs/handoffs/DOC-07-claude.md`.
+- Origem: o usuário perguntou o que é o `clientId`, como o cliente faz a requisição hoje e — já que os identificadores são UUID — como se acha um pedido. As três respostas estavam no código e em nenhum documento.
+- Diagnóstico: `API.md` é referência **rota a rota**; as perguntas são **tarefas que atravessam rotas** ("quero ver os itens de um pedido do qual só sei o número"). `HARD-PARTS.md` responde por quê, `PROJECT-GUIDE.md` responde onde fica. Faltava o quarto papel: como se faz.
+- Forma: pergunta como título, comando real como resposta, saída verificada contra o serviço no ar.
+- Fricção a registrar com honestidade, não a esconder: ver o detalhe de um pedido do qual se sabe só o número custa **duas** requisições, porque a rota de detalhe pede o id interno. Documentar; a rota composta foi oferecida ao usuário e não foi pedida.
+- Dependências: nenhuma.
 
 ## DOC-06 — as partes difíceis do projeto
 
