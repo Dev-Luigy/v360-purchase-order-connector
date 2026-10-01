@@ -1,6 +1,6 @@
 # Estado do projeto
 
-Atualizado por Codex em 2026-09-30, após DOC-04.
+Atualizado por Codex em 2026-09-30, após DOCKER-E2E-01.
 
 ## Implementado
 
@@ -51,6 +51,8 @@ FIX-17 fechou R16-01 e R16-02. REVIEW-17 encontrou R17-01 no caminho em que o fe
 **Atualização TEST-RECOVERY-01 — queda e pedidos sem cabeçalho em escala:** a nova integração gera 250 pedidos Delta (766 linhas), mata a API durante staging não publicado, reinicia o processo, confere a limpeza seletiva, reenvia os órfãos e concilia 500 cabeçalhos. O teste compara no PostgreSQL os 1.532 itens resultantes, sem perda ou duplicação. A suíte completa passou 34/34 em banco descartável; detalhes e limites em [TEST-RECOVERY-01](handoffs/TEST-RECOVERY-01-codex.md).
 
 **Atualização DOC-04 — documentação de engenharia:** índice de documentos e guia de leitura adicionados, com diagramas Mermaid de classes/contratos e processos. O guia aponta para as fontes detalhadas existentes sem duplicar contrato HTTP, decisões ADR ou estado das tarefas; veja [DOC-04](handoffs/DOC-04-codex.md).
+
+**Atualização DOCKER-E2E-01 — limpeza e validação do zero:** removidos todos os containers, imagens, volumes e cache BuildKit que existiam no daemon; o volume PostgreSQL anterior (~160 MB) foi apagado a pedido do usuário. Rebuild limpo, sete migrações aplicadas, API e PostgreSQL saudáveis; `/ready` e `/docs` responderam 200. `npm run check` passou (260 testes: 244 aprovados, 16 integrações puladas sem banco); contra o banco recém-criado, integração 34/34, critérios do enunciado 30/30, validação HTTP 17/17, fidelidade 156/156 campos e política de auditoria da imagem aprovados. O Compose está ativo ao final, com novos containers, imagens e volume; ver [DOCKER-E2E-01](handoffs/DOCKER-E2E-01-codex.md).
 
 ## Próxima retomada
 

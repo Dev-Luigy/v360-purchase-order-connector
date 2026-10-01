@@ -43,6 +43,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-19        | Comparar fixtures de entrada com pedidos realmente persistidos    | concluída                      | Codex       | 8 cabeçalhos e 11 itens conferidos; órfão Delta corresponde ao staging                               |
 | PORTFOLIO-01     | Documentar contribuição real do responsável pelo projeto          | concluída                      | Codex       | Decisões, critérios de aceite e revisão visíveis no README; autoria de implementação preservada      |
 | TEST-RECOVERY-01 | Gerar cenários em escala para queda, reenvio e cabeçalho ausente  | concluída                      | Codex       | 250 pedidos, 766 linhas e 1.532 itens comparados; PostgreSQL isolado, integração 34/34               |
+| DOCKER-E2E-01    | Limpar recursos Docker e validar a aplicação do zero              | concluída                      | Codex       | Limpeza global confirmada; stack reconstruída e validação ponta a ponta aprovada                     |
 | DOC-04           | Criar guia de leitura do projeto e diagramas de classes/processos | concluída                      | Codex       | Guia orientado pelo código; Mermaid no repositório, sem duplicar API, ADRs ou diagramas de contrato  |
 | FIX-18           | Fechar R17-01: espera invisível após falha ao fechar pedido       | concluída                      | Claude      | Invariante: carga terminada não deixa linha não publicada                                            |
 | CLEAN-01         | Enxugar comentários do código estável                             | concluída                      | Codex       | 526 linhas removidas; arquivos ativos de P1-04 preservados                                           |
@@ -310,6 +311,16 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: cobrir 250 pedidos Delta gerados com itens sem cabeçalho, morte abrupta e reinício do servidor, remoção de staging não publicado abandonado, preservação da espera publicada, reenvio e reconciliação sem duplicata; comparar todos os itens gerados diretamente no PostgreSQL.
 - Dependências: API TypeScript e migrações atuais; rodar integração somente num banco descartável.
 - Evidência: [handoff TEST-RECOVERY-01](handoffs/TEST-RECOVERY-01-codex.md); seed fixa `20260930`, morte abrupta (`SIGKILL`) e reinício da API, retenção/expurgo corretos, comparação de 500 cabeçalhos e 1.532 itens no banco. `npm run check` e integração PostgreSQL descartável 34/34 aprovados; banco persistente não usado.
+
+## DOCKER-E2E-01 — limpeza do Docker e teste ponta a ponta
+
+- Responsável: Codex.
+- Estado: concluída.
+- Arquivos reservados: `docs/TASKS.md`, `docs/STATUS.md` e `docs/handoffs/DOCKER-E2E-01-codex.md`.
+- Escopo: apagar os recursos Docker inventariados do host (containers, imagens, volume do PostgreSQL do projeto, rede Compose e cache BuildKit), reconstruir a aplicação do zero e validar migração, prontidão, rotas reais, fixtures/persistência e documentação OpenAPI.
+- Aviso de dados: o volume `v360-purchase-order-connector_postgres_data` será removido; os aproximadamente 160 MB de dados atuais não são recuperáveis após a remoção.
+- Critério de aceite: limpeza confirmada, build/migrações e verificações HTTP completas aprovadas; entregar com evidências e indicar quais containers/volumes permanecerão depois do teste.
+- Evidência: [handoff DOCKER-E2E-01](handoffs/DOCKER-E2E-01-codex.md); `npm run check` (260 testes, 244 passaram e 16 integrações puladas), `npm run test:integration` (34/34), `validate-case` (30/30), `validate:http` (17/17), `audit:fidelity` (156 campos) e `audit:policy -- --imagem ...` aprovados. Compose permanece no ar com API saudável, PostgreSQL e volume recém-criado.
 
 ## DOC-04 — guia de leitura e diagramas de engenharia
 
