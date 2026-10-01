@@ -34,6 +34,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-15        | Validar FIX-15 do zero contra todo o enunciado                    | concluída                      | Codex       | Aceitação passa; falha fatal vaza staging e publicação perde contabilidade                           |
 | REVIEW-16        | Validar FIX-16 integralmente do zero                              | concluída                      | Codex       | Duas falhas residuais reproduzidas; ver handoff                                                      |
 | REVIEW-17        | Verificar FIX-17 e repetir regressões de REVIEW-16                | concluída                      | Codex       | R16-01/02 fechados; falha nova de relatório registrada para FIX-18                                   |
+| DOC-06           | Escrever as partes difíceis: problema, por que, decisão e prova   | em andamento                   | Claude      | Pedido do usuário; os guias atuais são navegacionais e não contam o porquê                           |
 | TEST-AUDIT-01    | Auditar cobertura, bordas, integração e deploy                    | concluída                      | Claude      | Pedido do usuário; três lacunas reais encontradas e corrigidas                                       |
 | FIX-19           | Corrigir o contrato de erro publicado e travar a deriva do API.md | concluída                      | Claude      | `API.md` anunciava erro aninhado em maiúsculas; o serviço responde plano em minúsculas               |
 | DOC-05           | Publicar a API navegável a partir dos schemas Zod das rotas       | concluída                      | Claude      | `/docs` no ar; 8 rotas e 11 objetos, com teste que falha se uma rota registrada sumir do documento   |
@@ -217,6 +218,16 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: conferir FIX-17 e repetir `npm run check`, integração PostgreSQL, 30 requisitos, cenários HTTP e reproduções independentes de R16-01/R16-02. Reexecutar varredura concorrente e volume se a versão compilada ou o ambiente tiver mudado. Preservar dados existentes e deixar claro o estado final.
 - Dependências: FIX-17 concluída; PostgreSQL/Compose disponível.
 - Evidência: [handoff REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md); check e cobertura passaram, 31/31 integrações, 30/30 requisitos, 16/16 rotas, sweep e quatro volumes passaram; R16-01/02 foram reproduzidos como fechados e R17-01 foi reproduzido no PostgreSQL.
+
+## DOC-06 — as partes difíceis do projeto
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `docs/HARD-PARTS.md`, `docs/ENGINEERING.md` (uma linha do índice), `docs/TASKS.md`, `docs/handoffs/DOC-06-claude.md`.
+- Pedido do usuário: um arquivo citando como foi resolvido e arquitetado cada problema que o projeto tinha e que merece explicação maior, resumido — notando que já existem arquivos com esse propósito, mas "muito vago".
+- Diagnóstico do que falta: `PROJECT-GUIDE.md` é **navegacional** — ensina onde fica cada coisa e descreve a pilha ("HTTP → caso de uso → porta"), que é Clean Architecture genérica e valeria para qualquer serviço. Os ADRs registram decisões uma a uma, sem a ligação entre elas. Nenhum dos dois conta **qual era o problema difícil**, por que a resposta óbvia falha e como se sabe que a solução funciona. É isso que falta para defender o projeto oralmente, que o enunciado cobra.
+- Forma: um problema por seção, sempre em quatro movimentos — o problema, por que a resposta óbvia falha, a decisão, como está provado. Sem repetir contrato (está em `API.md`) nem histórico de revisão (está nos handoffs).
+- Dependências: nenhuma.
 
 ## TEST-AUDIT-01 — auditoria de cobertura, bordas, integração e deploy
 
