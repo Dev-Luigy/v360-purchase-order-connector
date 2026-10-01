@@ -3,6 +3,12 @@
 Índice de leitura. Cada documento tem uma responsabilidade; quando precisar de
 detalhes completos, consulte a fonte indicada em vez de copiar seu conteúdo.
 
+## Usar o serviço
+
+- [Como se faz](HOW-TO.md): perguntas práticas com o comando que as responde —
+  carregar cada cliente, achar um pedido, conferir uma nota, paginar e ler os
+  relatórios. Toda saída foi copiada de execução real.
+
 ## Entender o sistema
 
 1. [As partes difíceis](HARD-PARTS.md): **comece por aqui para entender o
@@ -32,7 +38,8 @@ detalhes completos, consulte a fonte indicada em vez de copiar seu conteúdo.
 - [ADRs](decisions/README.md)
 - [Diagramas do contrato normalizado](diagrams/README.md)
 
-O princípio editorial é simples: `HARD-PARTS.md` explica os problemas e a
+O princípio editorial é simples: `HOW-TO.md` mostra como fazer;
+`HARD-PARTS.md` explica os problemas e a
 engenharia que resolveu cada um; `API.md` define o contrato externo; ADRs
 registram cada decisão com o seu contexto; `PROJECT-GUIDE.md` ensina a navegar;
 diagramas mostram relações/fluxos; `STATUS.md` e `TASKS.md` registram situação e
