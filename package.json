@@ -28,6 +28,8 @@
     "schema:check": "prisma format --check",
     "coverage": "node --import tsx --test --experimental-test-coverage \"tests/**/*.test.ts\"",
     "coverage:db": "node --env-file=.env --import tsx --test --test-concurrency=1 --experimental-test-coverage \"tests/**/*.test.ts\"",
+    "precoverage:db": "npm run generate",
+    "pretest:integration": "npm run generate",
     "test:integration": "node --env-file-if-exists=.env --import tsx --test --test-concurrency=1 \"tests/integration/**/*.test.ts\"",
     "audit:fidelity": "node scripts/audit-fidelity.mjs",
     "audit:policy": "node scripts/audit-policy.mjs",
