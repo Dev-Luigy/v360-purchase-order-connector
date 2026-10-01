@@ -34,6 +34,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-15        | Validar FIX-15 do zero contra todo o enunciado                    | concluída                      | Codex       | Aceitação passa; falha fatal vaza staging e publicação perde contabilidade                           |
 | REVIEW-16        | Validar FIX-16 integralmente do zero                              | concluída                      | Codex       | Duas falhas residuais reproduzidas; ver handoff                                                      |
 | REVIEW-17        | Verificar FIX-17 e repetir regressões de REVIEW-16                | concluída                      | Codex       | R16-01/02 fechados; falha nova de relatório registrada para FIX-18                                   |
+| DEPLOY-01        | Preparar a implantação em VPS atrás de proxy com TLS              | em andamento                   | Claude      | `TRUST_PROXY`, Caddyfile e runbook; a execução no servidor é do usuário                              |
 | ENTREGA-01       | Fechar os entregáveis que o e-mail do processo exige              | em andamento                   | Claude      | AI_USAGE.md, coleção .http, README e CI verde no remoto                                              |
 | DOC-07           | Documentar o uso prático: como achar, carregar e conferir         | concluída                      | Claude      | Pedido do usuário; nasceu de perguntas que nenhum documento respondia                                |
 | DOC-06           | Escrever as partes difíceis: problema, por que, decisão e prova   | concluída                      | Claude      | Pedido do usuário; os guias atuais são navegacionais e não contam o porquê                           |
@@ -220,6 +221,17 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 - Escopo: conferir FIX-17 e repetir `npm run check`, integração PostgreSQL, 30 requisitos, cenários HTTP e reproduções independentes de R16-01/R16-02. Reexecutar varredura concorrente e volume se a versão compilada ou o ambiente tiver mudado. Preservar dados existentes e deixar claro o estado final.
 - Dependências: FIX-17 concluída; PostgreSQL/Compose disponível.
 - Evidência: [handoff REVIEW-17](handoffs/REVIEW-17-validacao-pos-fix-17-codex.md); check e cobertura passaram, 31/31 integrações, 30/30 requisitos, 16/16 rotas, sweep e quatro volumes passaram; R16-01/02 foram reproduzidos como fechados e R17-01 foi reproduzido no PostgreSQL.
+
+## DEPLOY-01 — implantação em VPS atrás de proxy
+
+- Responsável: Claude.
+- Estado: em andamento.
+- Arquivos reservados: `src/infrastructure/config/env.ts`, `src/presentation/http/app.ts`, `src/main/server.ts`, `.env.example`, `deploy/**`, `tests/bordas.test.ts`, `docs/TASKS.md`, `docs/handoffs/DEPLOY-01-claude.md`.
+- Origem: o usuário quer a aplicação hospedada e tem VPS, DNS e VPN. Ele passou uma chave de API, mas **o sandbox desta sessão bloqueia materializar credencial** — tentei duas vezes hoje, nos dois caminhos. Então eu não executo nada no servidor: preparo o que falta e ele roda.
+- O que já estava certo: as duas portas do Compose são publicadas em `127.0.0.1`, então um VPS não expõe nem a API nem o banco por padrão. O proxy fala com o loopback.
+- O que falta: `trustProxy`. Sem ele, o teto por origem conta o IP do proxy e **todos os clientes dividem uma quota só**. Com ele ligado sem proxy na frente, qualquer cliente falsifica `X-Forwarded-For` e escapa do teto. Logo: tem de ser configurável, e desligado por padrão.
+- Fora de escopo e dito no runbook: não há autenticação, por decisão registrada (o enunciado exclui). Expor na internet aberta é diferente de rodar no Compose local, então o proxy leva Basic Auth.
+- Dependências: nenhuma.
 
 ## ENTREGA-01 — os entregáveis do processo seletivo
 
