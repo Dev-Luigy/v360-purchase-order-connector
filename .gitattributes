@@ -4,4 +4,10 @@
 # inclusive quando existir variante em CRLF.
 tests/fixtures/** -text
 
+# Coleção HTTP: o corpo multipart exige CRLF, e `* text=auto eol=lf` acima
+# normalizaria para LF — o que faz clientes que preservam o terminador de cada
+# linha, como o kulala.nvim, montarem um corpo que o servidor não lê.
+# `eol=crlf` garante CRLF no working copy de quem clonar, em qualquer sistema.
+*.http text eol=crlf
+
 *.pdf binary
