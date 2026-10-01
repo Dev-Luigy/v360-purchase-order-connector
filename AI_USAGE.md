@@ -61,13 +61,21 @@ O caso mais instrutivo não é um erro isolado: é um **padrão**. De `REVIEW-09
 
 **O que fiz:** as correções que quebraram o ciclo foram as que tornaram o erro **impossível por construção**, não vigiado. A última é um invariante: _carga terminada não deixa linha não publicada_. Não é "verifique se sobrou" — é "é impossível sobrar", e se sobrar o relatório diz. Depois dela, `REVIEW-18` passou sem achados, a primeira vez em dez ciclos.
 
-### 2. Um teste que codificava o defeito que a mensagem negava
+### 2. Um dublê de teste que mentia, e invalidava uma categoria inteira
 
-Pedi um teste de regressão para um achado sobre o teto de itens. A IA escreveu um teste que afirmava `staged === 10000` com uma recusa — exatamente o comportamento **errado** que o achado descrevia. A mensagem de recusa dizia "o pedido inteiro foi recusado"; o teste afirmava que dez mil itens tinham sido gravados assim mesmo.
+A suíte usa um repositório em memória para provar a cadeia rota → caso de uso → adaptador sem precisar de banco. A IA escreveu esse dublê — e ele **nunca implementou o cursor**.
 
-**Como percebi:** li o teste perguntando "se isto passar, o que eu provei?" — e a resposta era "provei que o bug existe". Teste verde não é prova de nada se a asserção estiver errada.
+Devolvia `nextCursor: null` sempre, ignorava o cursor recebido e não conferia a impressão digital dos filtros. Pior: emitia `hasMore: true` junto com `nextCursor: null`, um envelope que o repositório real nunca produz. Os identificadores eram `order-1`, `order-2` — que não são UUID e ordenam errado, com `order-10` vindo antes de `order-2`.
 
-**O que fiz:** reescrevi e adotei a regra de **sempre exercitar o caminho de recusa**. Virou prática: toda guarda nova deste repositório foi quebrada de propósito para ver o teste ficar vermelho. Isso pegou, mais tarde, um teste meu de teto de cursor que **não reprovava** — eu montava a entrada a partir da própria constante, então ele acompanhava qualquer valor e não verificava nada ([TEST-AUDIT-01](docs/handoffs/TEST-AUDIT-01-claude.md)).
+O efeito: **todo teste de paginação na borda HTTP era vazio.** Eles passavam porque nunca paginavam.
+
+**Como percebi:** não foi lendo o dublê. Foi seguindo uma instrução do usuário — _"após cada correção, verifique as coisas ao redor"_. Fui olhar a vizinhança da paginação e abri o dublê por curiosidade.
+
+**O que fiz:** o dublê passou a usar o **mesmo codec** de cursor do repositório real, e ids UUID v7 de verdade. E a frase que mede o tamanho do buraco: **nenhum teste existente quebrou quando o dublê passou a paginar de verdade.** Se eles estivessem provando algo, pelo menos um teria reclamado.
+
+Disso veio a regra que uso desde então: **toda guarda é quebrada de propósito para ver o teste ficar vermelho.** Ela pegou, mais tarde, um teste **meu** de teto de cursor que não reprovava — eu montava a entrada a partir da própria constante, então ele acompanhava qualquer valor ([TEST-AUDIT-01](docs/handoffs/TEST-AUDIT-01-claude.md)). E pegou um caso parecido no `validate-sweep`: a primeira versão dele terminava a varredura **antes** de qualquer escrita concorrente, então passava sem provar o cenário que existia para provar.
+
+Registro completo em [FINAL-01](docs/handoffs/FINAL-01-claude.md).
 
 ### 3. Ler "verde" onde havia vermelho
 

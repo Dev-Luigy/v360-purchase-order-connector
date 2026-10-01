@@ -248,7 +248,15 @@ A resposta completa está em [`AI_USAGE.md`](../../AI_USAGE.md). O essencial par
 
 **O que reescrevi, e por quê:** a notação numérica única (quebraria o Gama), e o checksum de CNPJ como obrigatório (reprovaria as sete amostras do enunciado).
 
-**Onde a IA errou** — tenha um exemplo na ponta da língua: ela escreveu um teste de regressão que **afirmava o comportamento errado** que o próprio achado descrevia. Percebi lendo o teste e perguntando "se isto passar, o que eu provei?". A resposta era "provei que o bug existe". Disso virou prática: toda guarda deste repositório foi quebrada de propósito para ver o teste ficar vermelho.
+**Onde a IA errou** — tenha este na ponta da língua, porque é o mais forte:
+
+> A IA escreveu o repositório em memória que a suíte usa para testar a borda HTTP sem banco. Esse dublê **nunca implementou o cursor** — devolvia `nextCursor: null` sempre e ignorava o cursor recebido. Resultado: **todo teste de paginação na borda era vazio**, passavam porque nunca paginavam.
+>
+> Achei seguindo a instrução de verificar a vizinhança depois de cada correção. E o que mede o tamanho do buraco: **nenhum teste quebrou quando o dublê passou a paginar de verdade.** Se estivessem provando algo, pelo menos um teria reclamado.
+
+Disso veio a regra: **toda guarda é quebrada de propósito para ver o teste ficar vermelho.** Ela pegou depois um teste **meu** que não reprovava — eu montava a entrada a partir da própria constante que queria verificar.
+
+Se te pedirem um segundo exemplo, use este: ao validar o trabalho da outra IA, rodei `npm run check | grep ...`. O **pipe descarta o código de saída**; o check estava vermelho, eu li silêncio como aprovação e commitei.
 
 **Como garanti que entendo:** reproduzir cada achado com uma sonda antes de corrigir; verificar contra o serviço real e não contra o teste; exigir medição em vez de argumento.
 
