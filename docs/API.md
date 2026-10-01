@@ -13,6 +13,8 @@ GET  /health
 GET  /ready
 ```
 
+Este documento é **referência rota a rota**. Para tarefas que atravessam rotas — achar um pedido pelo número do cliente, conferir uma nota, percorrer tudo paginando — veja [Como se faz](HOW-TO.md).
+
 Os testes de rota usam repositório em memória; transações, locks, constraints e consultas PostgreSQL são cobertos separadamente pela suíte de integração. A validação mais recente e o escopo do banco descartável estão registrados em [STATUS](STATUS.md) e nos handoffs de teste.
 
 ## Convenções
@@ -66,7 +68,7 @@ Resposta `200`:
 
 ```json
 {
-  "ingestionId": "01J9Z…",
+  "ingestionId": "01a0f339-c2b7-7a41-9f0e-4d2a83c15e90",
   "clientId": "alfa",
   "formatVersion": "1",
   "startedAt": "2026-09-27T12:00:00.000Z",
@@ -103,7 +105,7 @@ Todos os filtros são combináveis e convivem com a paginação. `pending=true` 
 {
   "data": [
     {
-      "id": "1042",
+      "id": "01a0f339-da11-74e8-a9d6-968f3d4d7d3e",
       "clientId": "alfa",
       "externalNumber": "4500001234",
       "supplier": {
@@ -134,11 +136,13 @@ Todos os filtros são combináveis e convivem com a paginação. `pending=true` 
 GET /purchase-orders/{id}
 ```
 
+`{id}` é o identificador **interno**, um UUID v7 que vem na consulta acima — não o número do pedido no cliente. Para achar um pedido você usa `externalNumber`, não o UUID; [Como se faz](HOW-TO.md#como-achar-um-pedido) mostra o caminho inteiro. A versão 7 do UUID é ordenável no tempo, e a varredura por cursor depende disso (ADR-010).
+
 Traz o que já foi recebido e o que ainda falta em cada item. Quantidades na unidade de compra, com o fator ao lado, mais o pendente já convertido para unidade de consumo — que é a unidade em que a nota fiscal vem (ADR-007):
 
 ```json
 {
-  "id": "1042",
+  "id": "01a0f339-da11-74e8-a9d6-968f3d4d7d3e",
   "clientId": "alfa",
   "externalNumber": "4500001234",
   "supplier": {
@@ -153,7 +157,7 @@ Traz o que já foi recebido e o que ainda falta em cada item. Quantidades na uni
   "hasPendingBalance": true,
   "items": [
     {
-      "id": "8801",
+      "id": "01a0f339-da12-7c05-b3f7-2e7c5a190b44",
       "externalLine": 10,
       "material": "MAT-1001",
       "description": "Chapa de aço 2mm",
@@ -193,8 +197,8 @@ Resposta `201`, aprovada:
 
 ```json
 {
-  "id": "5501",
-  "purchaseOrderId": "1042",
+  "id": "01a0f3a4-61ce-7b2d-8c19-55e0f7d3a208",
+  "purchaseOrderId": "01a0f339-da11-74e8-a9d6-968f3d4d7d3e",
   "purchaseOrderIngestionVersion": 3,
   "clientId": "alfa",
   "checkedAt": "2026-09-27T12:10:00.000Z",
