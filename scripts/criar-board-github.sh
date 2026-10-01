@@ -28,14 +28,37 @@ echo '==> conferindo autenticação e escopo'
 gh auth status >/dev/null 2>&1 || { echo 'faça `gh auth login` ou exporte GH_TOKEN'; exit 1; }
 
 echo "==> criando o projeto: $TITULO"
-PROJETO=$(gh project create --owner "$DONO" --title "$TITULO" --format json 2>/dev/null | python3 -c 'import sys,json; print(json.load(sys.stdin)["number"])') || {
+SAIDA=$(gh project create --owner "$DONO" --title "$TITULO" --format json 2>&1) || true
+PROJETO=$(printf '%s' "$SAIDA" | python3 -c 'import sys,json
+try: print(json.load(sys.stdin)["number"])
+except Exception: pass' 2>/dev/null)
+
+if [ -z "$PROJETO" ]; then
   echo
-  echo 'Falhou ao criar o projeto. A causa quase sempre é escopo do token:'
-  echo '  - token clássico: precisa do escopo `project`'
-  echo '  - token fine-grained: precisa de "Projects: Read and write" na conta'
-  echo '  - `gh auth login` interativo pede o escopo sozinho'
+  echo '    o gh respondeu:'
+  printf '    %s\n' "$SAIDA"
+  echo
+  if printf '%s' "$SAIDA" | grep -q 'createProjectV2'; then
+    cat <<'AJUDA'
+    O token não tem permissão para criar projeto. Projeto de USUÁRIO depende de
+    permissão de CONTA, não de repositório — é o ponto que costuma passar batido.
+
+    Com token fine-grained (github_pat_…), em
+    github.com/settings/personal-access-tokens, no token em uso:
+        Account permissions  ->  Projects  ->  Read and write
+    Repository permissions não resolve: não existe Projects lá para projeto de
+    usuário. Depois de salvar, rode este script de novo.
+
+    Com token clássico, em github.com/settings/tokens:
+        marque o escopo `project`
+
+    Ou deixe o gh pedir sozinho, no navegador:
+        gh auth logout --hostname github.com
+        gh auth login --hostname github.com --web --scopes project
+AJUDA
+  fi
   exit 1
-}
+fi
 echo "    projeto #$PROJETO criado"
 
 echo '==> lendo as tarefas do quadro e as datas do histórico'
