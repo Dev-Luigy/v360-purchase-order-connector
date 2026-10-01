@@ -34,7 +34,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-15        | Validar FIX-15 do zero contra todo o enunciado                    | concluída                      | Codex       | Aceitação passa; falha fatal vaza staging e publicação perde contabilidade                           |
 | REVIEW-16        | Validar FIX-16 integralmente do zero                              | concluída                      | Codex       | Duas falhas residuais reproduzidas; ver handoff                                                      |
 | REVIEW-17        | Verificar FIX-17 e repetir regressões de REVIEW-16                | concluída                      | Codex       | R16-01/02 fechados; falha nova de relatório registrada para FIX-18                                   |
-| FIX-20           | Multipart ilegível respondia 500 em vez de 400                    | em andamento                   | Claude      | Achado ao testar a coleção .http no kulala; erro do cliente virava defeito nosso                     |
+| FIX-20           | Multipart ilegível respondia 500 em vez de 400                    | concluída                      | Claude      | Achado ao testar a coleção .http no kulala; erro do cliente virava defeito nosso                     |
 | DEPLOY-01        | Preparar a implantação em VPS atrás de proxy com TLS              | concluída                      | Claude      | `TRUST_PROXY`, Caddyfile e runbook; a execução no servidor é do usuário                              |
 | ENTREGA-01       | Fechar os entregáveis que o e-mail do processo exige              | em andamento                   | Claude      | AI_USAGE.md, coleção .http, README e CI verde no remoto                                              |
 | DOC-07           | Documentar o uso prático: como achar, carregar e conferir         | concluída                      | Claude      | Pedido do usuário; nasceu de perguntas que nenhum documento respondia                                |
@@ -226,13 +226,14 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## FIX-20 — multipart ilegível virava `erro_interno`
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/presentation/http/spool.ts`, `tests/bordas.test.ts`, `docs/video/chamadas.http`, `docs/TASKS.md`, `docs/handoffs/FIX-20-claude.md`.
+- Estado: concluída.
+- Arquivos alterados (reservas liberadas): `src/presentation/http/spool.ts`, `tests/bordas.test.ts`, `docs/video/chamadas.http`, `docs/TASKS.md`, `docs/handoffs/FIX-20-claude.md`.
 - Origem: o usuário rodou a coleção `.http` no kulala.nvim e falhou. Fui ler o código do plugin em vez de supor, e achei **dois** problemas.
 - Problema 1, meu: `docs/video/chamadas.http` foi escrito com LF puro. O kulala monta o corpo preservando o terminador de cada linha (`parser/request.lua:240`), e multipart exige CRLF. Com LF, o corpo sai inválido.
 - Problema 2, da aplicação: um corpo multipart ilegível devolve **500 `erro_interno`**. O busboy lança `Error: Unexpected end of multipart data`, um `Error` simples sem `statusCode`, e `toProblem` o trata como defeito interno. É erro do **cliente** e tem de ser 400, com o código `carga_invalida` que já existe exatamente para "multipart que não dá para ler".
 - Critério: distinguir falha de leitura do cliente de falha nossa de disco. Erro de sistema tem `syscall`; o do parser não.
 - Dependências: nenhuma.
+- Evidência: [handoff FIX-20](handoffs/FIX-20-claude.md); o mesmo corpo com LF que devolvia `500 erro_interno` passou a devolver `400 carga_invalida: corpo multipart ilegível`, conferido contra a imagem reconstruída. Teste nos dois sentidos — LF recusa, CRLF aceita —, porque a asserção de recusa sozinha passaria num serviço que rejeitasse todo multipart.
 
 ## DEPLOY-01 — implantação em VPS atrás de proxy
 

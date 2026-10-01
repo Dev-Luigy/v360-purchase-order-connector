@@ -85,10 +85,33 @@ export async function spoolMultipart(
     }
   } catch (error) {
     await cleanup();
-    throw error;
+    throw comoFalhaDeLeitura(error);
   }
 
   return { parts, cleanup };
+}
+
+/**
+ * Corpo multipart ilegível é erro de quem enviou, não defeito nosso.
+ *
+ * O parser lança `Error` simples — `Unexpected end of multipart data` quando o
+ * corpo termina no meio, que é o que acontece com cliente que monta as linhas
+ * com LF em vez de CRLF. Sem `statusCode`, isso caía no `erro_interno` 500: a
+ * recusa determinística virava defeito interno, e quem integra não tem como
+ * saber que o problema é dele.
+ *
+ * A distinção é por `syscall`: disco cheio ou permissão negada vêm do sistema
+ * e **são** nossos, então continuam 500. O resto, vindo da leitura do que o
+ * cliente mandou, é 400.
+ */
+function comoFalhaDeLeitura(error: unknown): unknown {
+  if (error instanceof SpoolError) return error;
+  if (typeof error === 'object' && error !== null && 'syscall' in error) {
+    return error;
+  }
+  return error instanceof Error
+    ? new SpoolError(`corpo multipart ilegível: ${error.message}`)
+    : error;
 }
 
 /**
