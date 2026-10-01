@@ -44,6 +44,9 @@ const ingestionOrderRepository = new PrismaPurchaseOrderRepository(
 );
 
 const app = await buildApp({
+  // Em VPS atrás de proxy, sem isto o teto por origem conta o IP do proxy e
+  // todos os clientes dividem uma quota só (DEPLOY-01).
+  trustProxy: env.TRUST_PROXY,
   // Prontidão olha o estado das migrações, não só a conexão: banco vazio
   // respondendo 200 faz o healthcheck do Compose mentir.
   readiness: new CheckReadiness(new SchemaReadiness(database.pool)),

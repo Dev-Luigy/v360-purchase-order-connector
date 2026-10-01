@@ -154,3 +154,54 @@ describe('os tempos de transação concordam com os do pool', () => {
     }
   });
 });
+
+/**
+ * `X-Forwarded-For` é cabeçalho que o cliente escreve. Honrá-lo sem proxy na
+ * frente deixa qualquer um escolher o próprio IP — e escapar do teto por
+ * origem mandando um valor novo a cada requisição. Ignorá-lo atrás de um proxy
+ * faz o contrário: todos os clientes chegam com o IP do proxy e dividem uma
+ * quota só. Os dois extremos erram, então a confiança é declarada no ambiente.
+ */
+describe('de quem é o IP de origem', () => {
+  const comoSeFosseOutro = { 'x-forwarded-for': '203.0.113.7' };
+
+  /** O IP que o Fastify resolveu, que é o que o teto por origem usa. */
+  async function ipResolvido(trustProxy?: string): Promise<string> {
+    const { app } = await buildTestApp(
+      trustProxy === undefined ? {} : { trustProxy },
+    );
+    try {
+      let visto = '';
+      // Antes do `ready`: o Fastify recusa `addHook` depois que a instância
+      // está de pé.
+      app.addHook('onRequest', (requisicao, _resposta, segue) => {
+        visto = requisicao.ip;
+        segue();
+      });
+      await app.ready();
+      await app.inject({
+        method: 'GET',
+        url: '/health',
+        headers: comoSeFosseOutro,
+      });
+      return visto;
+    } finally {
+      await app.close();
+    }
+  }
+
+  it('sem proxy declarado, o cabeçalho do cliente é ignorado', async () => {
+    const ip = await ipResolvido();
+    assert.notEqual(
+      ip,
+      '203.0.113.7',
+      'o cliente escolheu o próprio IP e escaparia do teto por origem',
+    );
+  });
+
+  it('com o proxy declarado, o cabeçalho passa a valer', async () => {
+    // Sem este lado, a asserção acima passaria também num serviço que nunca
+    // olha o cabeçalho — inclusive num que não soubesse ler proxy nenhum.
+    assert.equal(await ipResolvido('127.0.0.1'), '203.0.113.7');
+  });
+});

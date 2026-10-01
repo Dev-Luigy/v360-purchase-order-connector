@@ -32,6 +32,7 @@ export async function buildTestApp(
   options: {
     readonly databaseAvailable?: boolean;
     readonly rateLimit?: { readonly max: number; readonly timeWindow: string };
+    readonly trustProxy?: string;
   } = {},
 ): Promise<TestApp> {
   const profiles = new InMemoryClientProfiles();
@@ -42,6 +43,9 @@ export async function buildTestApp(
   const app = await buildApp({
     logLevel: 'silent',
     ...(options.rateLimit ? { rateLimit: options.rateLimit } : {}),
+    ...(options.trustProxy === undefined
+      ? {}
+      : { trustProxy: options.trustProxy }),
     readiness: new CheckReadiness({
       ping() {
         return disponivel
