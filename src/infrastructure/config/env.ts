@@ -13,6 +13,21 @@ const environmentSchema = z.object({
   // noturna. O padrão precisa caber a varredura que o enunciado descreve.
   RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(1_000_000).default(1200),
   RATE_LIMIT_WINDOW: z.string().min(2).default('1 minute'),
+  /**
+   * Quem pode dizer o IP de origem por `X-Forwarded-For`.
+   *
+   * Decide de quem é o IP que o teto de requisições conta, e os dois extremos
+   * erram. Vazio — o padrão — ignora o cabeçalho: atrás de um proxy, todos os
+   * clientes chegam com o IP dele e **dividem uma quota só**. Confiar em
+   * qualquer um sem proxy na frente é pior: o cliente manda o cabeçalho que
+   * quiser e escapa do teto.
+   *
+   * Por isso é de ambiente e nasce desligado: só quem implanta sabe o que há
+   * na frente. Com Caddy ou Nginx no mesmo host, `loopback` — assim o
+   * cabeçalho só é honrado quando quem conecta é o próprio host. Também aceita
+   * endereço ou faixa CIDR, e vários separados por vírgula.
+   */
+  TRUST_PROXY: z.string().default(''),
   DATABASE_URL: z
     .url()
     .refine(

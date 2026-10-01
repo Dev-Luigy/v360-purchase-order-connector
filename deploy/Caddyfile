@@ -1,0 +1,44 @@
+# Proxy para o conector V360, com TLS automático e Basic Auth.
+#
+# Trocar: o domínio, o usuário e o hash da senha. O hash sai de
+#   docker run --rm caddy:2 caddy hash-password --plaintext 'sua-senha'
+#
+# Instalar em /etc/caddy/Caddyfile e recarregar com `systemctl reload caddy`.
+
+seu-dominio.com {
+	# Basic Auth porque a aplicação não tem autenticação: é decisão registrada,
+	# já que o enunciado exclui do escopo. Rodar sem ela no Compose local é uma
+	# coisa; deixar na internet aberta uma API que aceita carga de dados é outra.
+	basic_auth {
+		usuario $2a$14$TROQUE_PELO_HASH_GERADO_PELO_COMANDO_ACIMA
+	}
+
+	# A aplicação escuta só no loopback; o proxy é o único caminho de fora.
+	reverse_proxy 127.0.0.1:3000 {
+		# O `TRUST_PROXY=loopback` no .env é o outro lado disto: sem ele a
+		# aplicação ignora o cabeçalho e conta todos os clientes como um só,
+		# estrangulando o teto por origem.
+		header_up X-Forwarded-For {remote_host}
+
+		# A carga é síncrona e pode levar minutos com dezenas de milhares de
+		# pedidos. O padrão do Caddy não corta, mas declarar evita surpresa se
+		# algum intermediário cortar.
+		transport http {
+			read_timeout 10m
+			write_timeout 10m
+		}
+	}
+
+	# Teto de corpo no proxy, acima do que a borda da aplicação aceita, para a
+	# recusa vir com a mensagem da aplicação e não com um 413 anônimo do Caddy.
+	request_body {
+		max_size 200MB
+	}
+
+	encode gzip
+
+	log {
+		output file /var/log/caddy/v360.log
+		format json
+	}
+}

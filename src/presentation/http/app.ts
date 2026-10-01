@@ -70,6 +70,21 @@ export const httpLimits = {
   },
 } as const;
 
+/**
+ * Traduz `TRUST_PROXY` para o que o Fastify aceita.
+ *
+ * O tipo dele é `boolean | string | string[] | função` — **não** aceita
+ * contagem de saltos, por mais que a documentação de proxy fale em hops. Vazio
+ * vira `false`, e a lista separada por vírgula vira array.
+ */
+function proxyConfiavel(valor: string | undefined): boolean | string[] {
+  const entradas = (valor ?? '')
+    .split(',')
+    .map((parte) => parte.trim())
+    .filter((parte) => parte !== '');
+  return entradas.length === 0 ? false : entradas;
+}
+
 export interface AppDependencies {
   readonly readiness: CheckReadiness;
   readonly ingest: IngestPurchaseOrders;
@@ -80,6 +95,12 @@ export interface AppDependencies {
   readonly summarizeConferences: SummarizeConferences;
   readonly profileFormatOf: (clientId: string) => Promise<string | null>;
   readonly logLevel?: string;
+  /**
+   * Endereço ou faixa de quem pode informar o IP de origem. Ausente ou vazio
+   * ignora `X-Forwarded-For`. Veja `TRUST_PROXY` em
+   * `src/infrastructure/config/env.ts`.
+   */
+  readonly trustProxy?: string;
   /** Teto de requisições; ausente usa o padrão de `httpLimits`. */
   readonly rateLimit?: { readonly max: number; readonly timeWindow: string };
 }
@@ -89,6 +110,10 @@ export async function buildApp(
 ): Promise<FastifyInstance> {
   const app = Fastify({
     bodyLimit: httpLimits.bodyLimit,
+    // Quem pode dizer o IP de origem por `X-Forwarded-For`. `false` — o padrão
+    // — ignora o cabeçalho, que é o certo sem proxy na frente: honrá-lo sem
+    // proxy deixa qualquer cliente escapar do teto por origem.
+    trustProxy: proxyConfiavel(dependencies.trustProxy),
     logger: {
       level: dependencies.logLevel ?? 'info',
       // Cabeçalho de credencial nunca vai para o log, nem os que ainda não

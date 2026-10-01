@@ -34,7 +34,7 @@ Estados: disponível, aguardando, em andamento, em revisão, concluída. Respons
 | REVIEW-15        | Validar FIX-15 do zero contra todo o enunciado                    | concluída                      | Codex       | Aceitação passa; falha fatal vaza staging e publicação perde contabilidade                           |
 | REVIEW-16        | Validar FIX-16 integralmente do zero                              | concluída                      | Codex       | Duas falhas residuais reproduzidas; ver handoff                                                      |
 | REVIEW-17        | Verificar FIX-17 e repetir regressões de REVIEW-16                | concluída                      | Codex       | R16-01/02 fechados; falha nova de relatório registrada para FIX-18                                   |
-| DEPLOY-01        | Preparar a implantação em VPS atrás de proxy com TLS              | em andamento                   | Claude      | `TRUST_PROXY`, Caddyfile e runbook; a execução no servidor é do usuário                              |
+| DEPLOY-01        | Preparar a implantação em VPS atrás de proxy com TLS              | concluída                      | Claude      | `TRUST_PROXY`, Caddyfile e runbook; a execução no servidor é do usuário                              |
 | ENTREGA-01       | Fechar os entregáveis que o e-mail do processo exige              | em andamento                   | Claude      | AI_USAGE.md, coleção .http, README e CI verde no remoto                                              |
 | DOC-07           | Documentar o uso prático: como achar, carregar e conferir         | concluída                      | Claude      | Pedido do usuário; nasceu de perguntas que nenhum documento respondia                                |
 | DOC-06           | Escrever as partes difíceis: problema, por que, decisão e prova   | concluída                      | Claude      | Pedido do usuário; os guias atuais são navegacionais e não contam o porquê                           |
@@ -225,13 +225,15 @@ Ao assumir tarefa, acrescentar abaixo: ID, responsável, arquivos reservados e d
 ## DEPLOY-01 — implantação em VPS atrás de proxy
 
 - Responsável: Claude.
-- Estado: em andamento.
-- Arquivos reservados: `src/infrastructure/config/env.ts`, `src/presentation/http/app.ts`, `src/main/server.ts`, `.env.example`, `deploy/**`, `tests/bordas.test.ts`, `docs/TASKS.md`, `docs/handoffs/DEPLOY-01-claude.md`.
+- Estado: concluída (execução no servidor pendente do usuário).
+- Arquivos alterados (reservas liberadas): `src/infrastructure/config/env.ts`, `src/presentation/http/app.ts`, `src/main/server.ts`, `.env.example`, `deploy/**`, `tests/bordas.test.ts`, `docs/TASKS.md`, `docs/handoffs/DEPLOY-01-claude.md`.
 - Origem: o usuário quer a aplicação hospedada e tem VPS, DNS e VPN. Ele passou uma chave de API, mas **o sandbox desta sessão bloqueia materializar credencial** — tentei duas vezes hoje, nos dois caminhos. Então eu não executo nada no servidor: preparo o que falta e ele roda.
 - O que já estava certo: as duas portas do Compose são publicadas em `127.0.0.1`, então um VPS não expõe nem a API nem o banco por padrão. O proxy fala com o loopback.
 - O que falta: `trustProxy`. Sem ele, o teto por origem conta o IP do proxy e **todos os clientes dividem uma quota só**. Com ele ligado sem proxy na frente, qualquer cliente falsifica `X-Forwarded-For` e escapa do teto. Logo: tem de ser configurável, e desligado por padrão.
 - Fora de escopo e dito no runbook: não há autenticação, por decisão registrada (o enunciado exclui). Expor na internet aberta é diferente de rodar no Compose local, então o proxy leva Basic Auth.
 - Dependências: nenhuma.
+- Evidência: [handoff DEPLOY-01](handoffs/DEPLOY-01-claude.md); `TRUST_PROXY` provado nos dois sentidos contra a imagem de produção — padrão ignora `X-Forwarded-For` e registra o IP real, ligado passa a honrá-lo. `Caddyfile` validado pelo próprio Caddy. `npm run check` 262/0.
+- Correção de rota registrada: modelei `TRUST_PROXY` primeiro como contagem de saltos; o tipo do Fastify 5 é `boolean | string | string[] | função` e **não aceita número**, o que produzia um erro de sobrecarga de HTTP/2 totalmente enganoso. Refeito como lista de endereços confiáveis, que é mais seguro.
 
 ## ENTREGA-01 — os entregáveis do processo seletivo
 
