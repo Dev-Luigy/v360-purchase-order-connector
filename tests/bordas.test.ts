@@ -205,3 +205,78 @@ describe('de quem é o IP de origem', () => {
     assert.equal(await ipResolvido('127.0.0.1'), '203.0.113.7');
   });
 });
+
+/**
+ * Corpo multipart ilegível é erro de quem enviou.
+ *
+ * Descoberto testando a coleção `.http` num cliente que monta as linhas com
+ * LF: multipart exige CRLF, o parser lança `Unexpected end of multipart data`
+ * — um `Error` simples, sem `statusCode` — e isso caía no `erro_interno` 500.
+ * Quem integra recebia "defeito interno" para um problema que era dele.
+ */
+describe('multipart que o servidor não consegue ler', () => {
+  it('é 400 do cliente, não 500 nosso', async () => {
+    const { app } = await buildTestApp();
+    await app.ready();
+    try {
+      const corpo = [
+        '--limite',
+        'Content-Disposition: form-data; name="orders"; filename="o.json"',
+        'Content-Type: application/json',
+        '',
+        '{"purchase_orders":[]}',
+        '--limite--',
+        '',
+        // LF puro, de propósito: é o que torna o corpo ilegível.
+      ].join('\n');
+
+      const resposta = await app.inject({
+        method: 'POST',
+        url: '/clients/alfa/ingestions',
+        headers: {
+          'x-format-version': '1',
+          'content-type': 'multipart/form-data; boundary=limite',
+        },
+        payload: corpo,
+      });
+
+      assert.equal(resposta.statusCode, 400);
+      assert.equal(resposta.json().error, 'carga_invalida');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('o mesmo corpo com CRLF é aceito', async () => {
+    // Sem este lado, a asserção acima passaria num serviço que recusasse todo
+    // multipart — inclusive o válido.
+    const { app } = await buildTestApp();
+    await app.ready();
+    try {
+      const corpo = [
+        '--limite',
+        'Content-Disposition: form-data; name="orders"; filename="o.json"',
+        'Content-Type: application/json',
+        '',
+        '{"purchase_orders":[]}',
+        '--limite--',
+        '',
+      ].join('\r\n');
+
+      const resposta = await app.inject({
+        method: 'POST',
+        url: '/clients/alfa/ingestions',
+        headers: {
+          'x-format-version': '1',
+          'content-type': 'multipart/form-data; boundary=limite',
+        },
+        payload: corpo,
+      });
+
+      assert.equal(resposta.statusCode, 200);
+      assert.equal(resposta.json().ordersAccepted, 0);
+    } finally {
+      await app.close();
+    }
+  });
+});

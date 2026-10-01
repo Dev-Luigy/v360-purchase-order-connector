@@ -1,0 +1,169 @@
+### Chamadas do vídeo — na ordem da gravação
+###
+### Só o que entra na demonstração de 3 minutos, na sequência exata. A coleção
+### completa, com todas as rotas e todos os casos de recusa, é `requests.http`
+### na raiz do repositório.
+###
+### As falas de cada bloco estão em `falas.md`, neste diretório.
+###
+### Antes de gravar:
+###   docker compose up -d
+###   curl -s -o /dev/null -w '%{http_code}\n' localhost:3000/ready    # 200
+###
+### Neovim/Kulala: execute cada bloco com <leader>Rs, na ordem da gravação.
+### Os caminhos das fixtures são relativos a este arquivo.
+
+@host = http://localhost:3000
+
+### ╔══════════════════════════════════════════════════════════════╗
+### ║  0:15 – 0:40 · as quatro cargas                              ║
+### ╚══════════════════════════════════════════════════════════════╝
+
+### 1 · Alfa — JSON com os itens aninhados. Uma parte: "orders"
+POST {{host}}/clients/alfa/ingestions
+X-Format-Version: 1
+Content-Type: multipart/form-data; boundary=limite
+
+--limite
+Content-Disposition: form-data; name="orders"; filename="purchase-orders.json"
+Content-Type: application/json
+
+< ../../tests/fixtures/alfa/purchase-orders.json
+
+--limite--
+
+### 2 · Beta — dois CSV em português, ligados pelo número do pedido
+POST {{host}}/clients/beta/ingestions
+X-Format-Version: 1
+Content-Type: multipart/form-data; boundary=limite
+
+--limite
+Content-Disposition: form-data; name="headers"; filename="cabecalho.csv"
+Content-Type: text/csv
+
+< ../../tests/fixtures/beta/cabecalho.csv
+
+--limite
+Content-Disposition: form-data; name="items"; filename="itens.csv"
+Content-Type: text/csv
+
+< ../../tests/fixtures/beta/itens.csv
+
+--limite--
+
+### 3 · Gama — achatado: timestamp Unix, centavos, situação numérica
+POST {{host}}/clients/gama/ingestions
+X-Format-Version: 1
+Content-Type: multipart/form-data; boundary=limite
+
+--limite
+Content-Disposition: form-data; name="lines"; filename="purchase-order-lines.json"
+Content-Type: application/json
+
+< ../../tests/fixtures/gama/purchase-order-lines.json
+
+--limite--
+
+### 4 · Delta — duas consultas independentes, enviadas juntas
+POST {{host}}/clients/delta/ingestions
+X-Format-Version: 1
+Content-Type: multipart/form-data; boundary=limite
+
+--limite
+Content-Disposition: form-data; name="orders"; filename="orders.json"
+Content-Type: application/json
+
+< ../../tests/fixtures/delta/orders.json
+
+--limite
+Content-Disposition: form-data; name="items"; filename="items.json"
+Content-Type: application/json
+
+< ../../tests/fixtures/delta/items.json
+
+--limite--
+
+### ╔══════════════════════════════════════════════════════════════╗
+### ║  0:40 – 1:15 · requisito 1, consulta unificada               ║
+### ╚══════════════════════════════════════════════════════════════╝
+
+### 5 · Os quatro clientes, no mesmo contrato
+GET {{host}}/purchase-orders?limit=100
+
+### 6 · Achar pelo número que o cliente usa, não pelo UUID
+GET {{host}}/purchase-orders?clientId=gama&externalNumber=GL-778
+
+### ╔══════════════════════════════════════════════════════════════╗
+### ║  1:15 – 2:00 · requisito 2, conferência                      ║
+### ╚══════════════════════════════════════════════════════════════╝
+
+### 7 · Nota conforme → 201, aprovada, sem divergência
+POST {{host}}/conferences
+Content-Type: application/json
+
+{
+  "clientId": "alfa",
+  "purchaseOrderNumber": "4500001234",
+  "supplierTaxId": "23456789000101",
+  "lines": [{ "material": "MAT-1001", "quantity": "40", "totalValue": "1836.00" }]
+}
+
+### 8 · Nota divergente → devolve TODAS as divergências, não a primeira
+POST {{host}}/conferences
+Content-Type: application/json
+
+{
+  "clientId": "alfa",
+  "purchaseOrderNumber": "4500001234",
+  "supplierTaxId": "23456789000101",
+  "lines": [{ "material": "MAT-1001", "quantity": "500", "totalValue": "1.00" }]
+}
+
+### 9 · Gama: a nota fala em unidades, o pedido está em caixas de 12.
+###     24 unidades = 2 caixas a R$ 1.200,00 → aprova
+POST {{host}}/conferences
+Content-Type: application/json
+
+{
+  "clientId": "gama",
+  "purchaseOrderNumber": "GL-778",
+  "supplierTaxId": "34567890000112",
+  "lines": [{ "material": "TRP-01", "quantity": "24", "totalValue": "2400.00" }]
+}
+
+### ╔══════════════════════════════════════════════════════════════╗
+### ║  2:00 – 2:25 · a parte difícil: Delta sem cabeçalho          ║
+### ╚══════════════════════════════════════════════════════════════╝
+
+### 10 · Só os itens. DL-2026-0099 aponta para um pedido que não veio:
+###      vai para espera com reason "cabecalho-ausente", e não vira
+###      pedido inventado
+POST {{host}}/clients/delta/ingestions
+X-Format-Version: 1
+Content-Type: multipart/form-data; boundary=limite
+
+--limite
+Content-Disposition: form-data; name="items"; filename="items.json"
+Content-Type: application/json
+
+< ../../tests/fixtures/delta/items.json
+
+--limite--
+
+### ╔══════════════════════════════════════════════════════════════╗
+### ║  2:25 – 2:45 · requisito 3 e paginação                       ║
+### ╚══════════════════════════════════════════════════════════════╝
+
+### 11 · Quantas passaram, quantas travaram, por quais motivos
+GET {{host}}/conferences/summary
+
+### 12 · Paginação por cursor: veja `page.nextCursor` e `page.hasMore`
+GET {{host}}/purchase-orders?limit=2
+
+### ╔══════════════════════════════════════════════════════════════╗
+### ║  2:45 – 3:00 · fechamento                                    ║
+### ╚══════════════════════════════════════════════════════════════╝
+
+### 13 · O documento OpenAPI, gerado dos mesmos schemas que validam.
+###      Na gravação, mostre a página: http://localhost:3000/docs
+GET {{host}}/docs/json
